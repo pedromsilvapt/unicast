@@ -1,0 +1,33 @@
+{
+    name: StreamCast
+
+    server: {
+        port: 3000
+    }
+
+    devices: {
+        scan: false
+        custom: [ {
+            name: ChromeSilvas
+            address: 192.168.0.16
+        } ]
+    }
+
+    providers: {
+        youtube: {
+            captions: {
+                url: http://downsub.com/
+                middleware: {
+                    path: D:\\Pedro Silva\\Desktop\\node\\last-resort-es6\\app.es5.js
+                    rule: youtube
+                }
+                language: pt
+            }
+        }
+    }
+
+    ffmpeg: {
+        // Optional: If ffmpeg is not in PATH ENV, set a custom path
+        // path: C:\Programs\ffmpeg\bin
+    }
+}
