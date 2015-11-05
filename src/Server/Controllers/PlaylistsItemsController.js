@@ -34,7 +34,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* list () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -42,7 +42,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* get () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -66,7 +66,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* playList () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -78,7 +78,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* play () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -88,7 +88,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* clear () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -108,7 +108,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* create () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -130,7 +130,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* remove () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -150,7 +150,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* getCurrent () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -158,17 +158,15 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* getNext () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let nextItems = yield Playlist.nextItems( { device: device.name, _id: this.params.playlist } );
-
-		//let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
 		return nextItems[ 0 ] || null;
 	}
 
 	* playNext () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -184,7 +182,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* getPrevious () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -200,7 +198,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* playPrevious () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 

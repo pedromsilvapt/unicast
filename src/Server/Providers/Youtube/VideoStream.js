@@ -1,4 +1,4 @@
-import YoutubeVideo from '../../Utilities/YoutubeVideo';
+import YoutubeVideo from './YoutubeVideo';
 import rangeParser from 'range-parser';
 import fs from 'fs-promise';
 import li from 'link-id';

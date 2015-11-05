@@ -27,7 +27,7 @@ export default class DeviceController extends Controller {
 	}
 
 	* play () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let source = this.request.body.source;
 
@@ -52,7 +52,7 @@ export default class DeviceController extends Controller {
 	}
 
 	* toggle () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let status = yield device.getStatus();
 
@@ -68,25 +68,25 @@ export default class DeviceController extends Controller {
     }
 
 	* pause () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		return device.pause();
     }
 
 	* unpause () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		return device.unpause();
     }
 
 	* stop () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		return device.stop();
     }
 
 	* seek () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let percentage = parseFloat( this.params.percentage.replace( ',', '.' ) );
 
@@ -94,7 +94,7 @@ export default class DeviceController extends Controller {
     }
 
 	* status () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let status = yield device.getStatus();
 
@@ -102,7 +102,7 @@ export default class DeviceController extends Controller {
 	}
 
 	* close () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		return yield device.close();
 	}

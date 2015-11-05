@@ -1,4 +1,4 @@
-import RemoteVideo from './RemoteVideo';
+import RemoteVideo from '../../Utilities/RemoteVideo';
 import ytdl from 'ytdl-core';
 import fs from 'fs-promise';
 

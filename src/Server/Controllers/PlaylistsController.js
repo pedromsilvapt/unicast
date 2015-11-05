@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs-promise';
 import moment from 'moment';
+import config from 'config';
 import sortBy from 'sort-by';
 import Controller from './Controller';
 import PlaylistsItemsController from './PlaylistsItemsController';
@@ -28,7 +29,7 @@ export default class PlaylistsController extends Controller {
 	}
 
 	* list () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlists = yield Playlist.loadMany( { device: device.name } );
 
@@ -66,7 +67,7 @@ export default class PlaylistsController extends Controller {
 	}
 
 	* last () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let query = { device: device.name };
 
@@ -90,13 +91,13 @@ export default class PlaylistsController extends Controller {
     }
 
 	* get () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		return Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
     }
 
 	* create () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = Playlist.create( {
 			device: device.name
@@ -108,7 +109,7 @@ export default class PlaylistsController extends Controller {
     }
 
 	* remove () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -118,7 +119,7 @@ export default class PlaylistsController extends Controller {
 	}
 
 	* removeAll () {
-		let device = yield DevicesManager.get( 'ChromeSilvas' );
+		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
 
 		let playlists = yield Playlist.loadMany( { device: device.name } );
 

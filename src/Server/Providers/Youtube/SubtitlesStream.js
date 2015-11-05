@@ -1,5 +1,5 @@
 import SubtitlesStream from '../Local/SubtitlesStream';
-import YoutubeCaptions from '../../Utilities/YoutubeCaptions';
+import YoutubeCaptions from './YoutubeCaptions';
 import { promise as retry } from 'rerun';
 import fs from 'fs-promise';
 import co from 'co';
@@ -15,8 +15,7 @@ export default class YoutubeSubtitlesStream extends SubtitlesStream {
 		return retry( () => {
 			return this.captions.download( filepath, {
 				language: 'pt',
-				allowAutomaticCaptions: true,
-				middleware: true
+				allowAutomaticCaptions: true
 			} ) ;
 		}, {
 			retries: 5,

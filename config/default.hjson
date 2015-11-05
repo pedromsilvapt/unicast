@@ -7,10 +7,9 @@
 
     devices: {
         scan: false
-        custom: [ {
-            name: ChromeSilvas
-            address: 192.168.0.16
-        } ]
+        default: null
+        // An array of objects containing two properties: 'name' and 'address' (ip) of the devices
+        custom: []
     }
 
     providers: {
@@ -18,8 +17,7 @@
             captions: {
                 url: http://downsub.com/
                 middleware: {
-                    path: D:\\Pedro Silva\\Desktop\\node\\last-resort-es6\\app.es5.js
-                    rule: youtube
+                    active: false
                 }
                 language: pt
             }

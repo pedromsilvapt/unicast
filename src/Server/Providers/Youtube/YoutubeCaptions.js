@@ -112,6 +112,10 @@ export default class YoutubeCaptions {
 	download ( video, options ) {
 		options.language = options.language || config.get( 'providers.youtube.captions.language' );
 
+		if ( !( 'middleware' in options ) ) {
+			options.middleware = config.get( 'providers.youtube.captions.middleware.active' );
+		}
+
 		return this.list( video ).then( ( result ) => {
 			let caption = result.captions.filter( ( caption ) => {
 				if ( caption.language !== options.language ) {
