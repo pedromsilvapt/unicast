@@ -33,3 +33,6 @@ node_modules
 /.idea
 /bin
 /storage
+
+/config/local.*
+/config/local-*.*
