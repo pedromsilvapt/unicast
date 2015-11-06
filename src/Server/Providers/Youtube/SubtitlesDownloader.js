@@ -12,7 +12,7 @@ import is from 'is';
 
 throat( Promise );
 
-export default class YoutubeCaptions {
+export default class SubtitlesDownloader {
 
 	constructor ( concurrency = 5 ) {
 		this.concurrency = concurrency;

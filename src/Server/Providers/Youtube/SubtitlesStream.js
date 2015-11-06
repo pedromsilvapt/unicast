@@ -1,5 +1,5 @@
 import SubtitlesStream from '../Local/SubtitlesStream';
-import YoutubeCaptions from './YoutubeCaptions';
+import SubtitlesDownloader from './SubtitlesDownloader';
 import { promise as retry } from 'rerun';
 import fs from 'fs-promise';
 import co from 'co';
@@ -8,7 +8,7 @@ export default class YoutubeSubtitlesStream extends SubtitlesStream {
 	constructor ( filepath ) {
 		super( filepath );
 
-		this.captions = new YoutubeCaptions();
+		this.captions = new SubtitlesDownloader();
 	}
 
 	download ( filepath ) {
