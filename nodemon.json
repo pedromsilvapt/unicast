@@ -1,0 +1,10 @@
+{
+	"script": "app.js",
+	"ext": "js peg",
+	"watch": [ "bin" ],
+	"delay": "2",
+	"execMap": {
+		"js": "node --harmony-proxies"
+	},
+	"env": { "NODE_ENV": "development" }
+}
