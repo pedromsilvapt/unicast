@@ -1,14 +1,10 @@
 import PlaylistItem from './Server/Models/PlaylistItem';
 import Dictionary from './Server/Utilities/Dictionary';
-import MediaFactory from './MediaFactory';
-import internalIp from 'internal-ip';
-import guid from 'guid';
 import co from 'co';
 
 export default class MediaManager {
 	constructor () {
 		this.devices = new Map();
-		this.mediaFactory = new MediaFactory();
 	}
 
 	has ( id ) {
@@ -17,10 +13,6 @@ export default class MediaManager {
 
 	get ( id ) {
 		return PlaylistItem.loadOne( { _id: id } );
-	}
-
-	makeMessage ( id, data, server ) {
-		return this.mediaFactory.make( data.type, data, server );
 	}
 
 	make ( media, server, device ) {
@@ -49,15 +41,7 @@ export default class MediaManager {
 				yield media.save();
 			}
 
-			if ( device.current && device.current.status ) {
-				yield device.current.status.stop( device.current );
-			}
-
-			let message = this.make( media, server, device );
-
-			yield device.play( message, media.status ? media.status.currentTime : 0 );
-
-			device.current = media;
+			let message = yield device.play( media, server );
 
 			this.setup( device );
 
@@ -68,7 +52,7 @@ export default class MediaManager {
 	stop ( device ) {
 		return co( function * () {
 			if ( device.current ) {
-				let playlist = Playlist.loadOne( { device: device.name, current: device.current.id } );
+				let playlist = yield device.playlist;
 
 				if ( playlist ) {
 					playlist.current = null;
@@ -87,7 +71,6 @@ export default class MediaManager {
 		}
 
 		this.devices.set( device, true );
-
 
 		device.status.on( 'update', this.update.bind( this, device ) );
 	}
