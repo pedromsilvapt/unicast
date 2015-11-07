@@ -21,6 +21,30 @@ export default class PlaylistItem extends Document {
 		};
 	}
 
+	get currentTime () {
+		if ( !this.status || !this.status.currentTime ) {
+			return 0;
+		}
+
+		return +this.status.currentTime;
+	}
+
+	playlist ( device = null ) {
+		if ( is.object( device ) ) {
+			device = device.name;
+		}
+
+		let query = {
+			items: { $in: this.id }
+		};
+
+		if ( device ) {
+			query.device = device;
+		}
+
+		return Playlist.loadOne( query );
+	}
+
 	static maxOrder ( playlist ) {
 		return playlist.items.reduce( ( memo, item ) => ( item && item.order >= memo ) ? item.order + 1 : memo, 0 );
 	}

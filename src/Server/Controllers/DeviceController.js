@@ -1,18 +1,19 @@
 import fs from 'fs-promise';
 import path from 'path';
-import Controller from './Controller';
+import config from 'config';
+import ReceiverController from './ReceiverController';
 import PlaylistsController from './PlaylistsController';
-import DevicesManager from '../../DevicesManager';
 import MediaManager from '../../MediaManager';
 
-export default class DeviceController extends Controller {
+export default class DeviceController extends ReceiverController {
 	static routes ( router, make ) {
 		let device = make();
 
 		device.post( '/play', this.action( 'play' ) );
 		device.post( '/toggle', this.action( 'toggle' ) );
 		device.post( '/pause', this.action( 'pause' ) );
-		device.post( '/unpause', this.action( 'unpause' ) );
+		device.post( '/unpause', this.action( 'resume' ) );
+		device.post( '/resume', this.action( 'resume' ) );
 		device.post( '/stop', this.action( 'stop' ) );
 		device.post( '/seek/:percentage', this.action( 'seek' ) );
 		device.post( '/close', this.action( 'close' ) );
@@ -27,7 +28,7 @@ export default class DeviceController extends Controller {
 	}
 
 	* play () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let source = this.request.body.source;
 
@@ -52,7 +53,7 @@ export default class DeviceController extends Controller {
 	}
 
 	* toggle () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let status = yield device.getStatus();
 
@@ -63,30 +64,30 @@ export default class DeviceController extends Controller {
 		if ( status.playerState == 'PLAYING' ) {
 			return device.pause();
 		} else {
-			return device.unpause();
+			return device.resume();
 		}
     }
 
 	* pause () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		return device.pause();
     }
 
-	* unpause () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+	* resume () {
+		let device = yield this.receiver;
 
-		return device.unpause();
+		return device.resume();
     }
 
 	* stop () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		return device.stop();
     }
 
 	* seek () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let percentage = parseFloat( this.params.percentage.replace( ',', '.' ) );
 
@@ -94,7 +95,7 @@ export default class DeviceController extends Controller {
     }
 
 	* status () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let status = yield device.getStatus();
 
@@ -102,7 +103,7 @@ export default class DeviceController extends Controller {
 	}
 
 	* close () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		return yield device.close();
 	}

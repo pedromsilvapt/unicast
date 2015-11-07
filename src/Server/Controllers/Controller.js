@@ -8,9 +8,13 @@ export default class Controller {
 		return function * ( next ) {
 			let controller = new ControllerClass( this );
 
-			this.controller = controller;
+			controller.ctx = this;
+			controller.request = this.request;
+			controller.response = this.response;
+			controller.params = this.params;
+			controller.server = this.server;
 
-			let result = yield controller[ name ].bind( this )( next );
+			let result = yield controller[ name ]( next );
 
 			if ( output === 'raw' ) {
 				this.body = result;

@@ -1,18 +1,12 @@
 import fs from 'fs-promise';
 import path from 'path';
-import Controller from './Controller';
+import config from 'config';
+import ReceiverController from './ReceiverController';
 import Playlist from '../Models/Playlist';
 import PlaylistItem from '../Models/PlaylistItem';
-import DevicesManager from '../../DevicesManager';
 import MediaManager from '../../MediaManager';
 
-function pad(n, width, z) {
-	z = z || '0';
-	n = n + '';
-	return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
-}
-
-export default class PlaylistsItemsController extends Controller {
+export default class PlaylistsItemsController extends ReceiverController {
 	static routes ( router, make ) {
 		let items = make();
 
@@ -34,7 +28,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* list () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -42,7 +36,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* get () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -66,7 +60,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* playList () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -74,21 +68,21 @@ export default class PlaylistsItemsController extends Controller {
 
 		let item = nextItems[ 0 ] || null;
 
-		return yield this.controller.playItem.bind( this )( playlist, item, device );
+		return yield this.playItem( playlist, item, device );
 	}
 
 	* play () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
 		let item = playlist.items.filter( item => item && item.id === this.params.item )[ 0 ] || null;
 
-		return yield this.controller.playItem.bind( this )( playlist, item, device );
+		return yield this.playItem( playlist, item, device );
 	}
 
 	* clear () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -108,7 +102,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* create () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -130,7 +124,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* remove () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -150,7 +144,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* getCurrent () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -158,7 +152,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* getNext () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let nextItems = yield Playlist.nextItems( { device: device.name, _id: this.params.playlist } );
 
@@ -166,7 +160,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* playNext () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -178,11 +172,11 @@ export default class PlaylistsItemsController extends Controller {
 
 		let nextItems = playlist.items.filter( i => i && i.order > current.order ).sort( ( a, b ) => a.order - b.order );
 
-		return yield this.controller.playItem.bind( this )( playlist, nextItems[ 0 ] || null, device );
+		return yield this.playItem( playlist, nextItems[ 0 ] || null, device );
 	}
 
 	* getPrevious () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -198,7 +192,7 @@ export default class PlaylistsItemsController extends Controller {
 	}
 
 	* playPrevious () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -206,6 +200,6 @@ export default class PlaylistsItemsController extends Controller {
 
 		let previousItems = playlist.items.filter( i => i && ( !current || i.order < current.order ) ).sort( ( a, b ) => b.order - a.order );
 
-		return yield this.controller.playItem.bind( this )( playlist, previousItems[ 0 ] || null, device );
+		return yield this.playItem( playlist, previousItems[ 0 ] || null, device );
 	}
 }

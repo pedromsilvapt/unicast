@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events';
 
-export default class DeviceStatus extends EventEmitter {
-	constructor ( device ) {
+export default class ReceiverStatus extends EventEmitter {
+	constructor ( receiver ) {
 		super();
 
-		this.device = device;
+		this.receiver = receiver;
 
-		this.changed();
+		this.changedAsync();
 	}
 
 	setNextUpdate ( status ) {
@@ -38,12 +38,18 @@ export default class DeviceStatus extends EventEmitter {
 	}
 
 	changed () {
-		return this.device.getStatus().then( status => {
+		return this.receiver.getStatus().then( status => {
 			this.emit( 'update', status );
 
 			this.setNextUpdate( status );
 
 			return status;
 		} );
+	}
+
+	changedAsync () {
+		setTimeout( () => {
+			this.changed();
+		}, 1000 );
 	}
 }

@@ -6,6 +6,7 @@ import body from 'koa-body';
 import { connect } from 'camo';
 import internalIp from 'internal-ip';
 import ProvidersManager from './Providers/Manager';
+import ReceiversManager from '../Receivers/Manager';
 
 import { Logger } from './Logger';
 
@@ -15,6 +16,7 @@ export default class Server {
 		this.router = this.makeRouter();
 
 		this.providers = new ProvidersManager();
+		this.receivers = new ReceiversManager();
 
 		this.ports = [];
 	}
@@ -25,6 +27,18 @@ export default class Server {
 
 	get port () {
 		return this.ports[ 0 ] || null;
+	}
+
+	url ( segments ) {
+		let serverUrl = 'http://' + this.ip + ':' + this.port;
+
+		let part = segments.filter( s => s ).join( '/' );
+
+		if ( part ) {
+			serverUrl += '/' + part;
+		}
+
+		return serverUrl;
 	}
 
 	use ( middleware ) {

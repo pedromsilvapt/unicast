@@ -3,14 +3,13 @@ import fs from 'fs-promise';
 import moment from 'moment';
 import config from 'config';
 import sortBy from 'sort-by';
-import Controller from './Controller';
+import ReceiverController from './ReceiverController';
 import PlaylistsItemsController from './PlaylistsItemsController';
 import Playlist from '../Models/Playlist';
 import PlaylistItem from '../Models/PlaylistItem';
-import DevicesManager from '../../DevicesManager';
 import MediaManager from '../../MediaManager';
 
-export default class PlaylistsController extends Controller {
+export default class PlaylistsController extends ReceiverController {
 	static routes ( router, make ) {
 		let playlists = make();
 		let playlistDetails = make();
@@ -29,7 +28,7 @@ export default class PlaylistsController extends Controller {
 	}
 
 	* list () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlists = yield Playlist.loadMany( { device: device.name } );
 
@@ -67,7 +66,7 @@ export default class PlaylistsController extends Controller {
 	}
 
 	* last () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let query = { device: device.name };
 
@@ -91,13 +90,13 @@ export default class PlaylistsController extends Controller {
     }
 
 	* get () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		return Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
     }
 
 	* create () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = Playlist.create( {
 			device: device.name
@@ -109,7 +108,7 @@ export default class PlaylistsController extends Controller {
     }
 
 	* remove () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlist = yield Playlist.loadOne( { device: device.name, _id: this.params.playlist } );
 
@@ -119,7 +118,7 @@ export default class PlaylistsController extends Controller {
 	}
 
 	* removeAll () {
-		let device = yield DevicesManager.get( config.get( 'devices.default' ) );
+		let device = yield this.receiver;
 
 		let playlists = yield Playlist.loadMany( { device: device.name } );
 

@@ -12,10 +12,10 @@ export default class DTSAudio extends Transcoder {
 			return true;
 		}
 
-		return true;
+		return false;
 	}
 
 	process ( ffmpeg ) {
-		return ffmpeg.videoCodec( 'libx264' ).audioCodec( 'ac3' ).custom( 'af', 'aresample=async=1000' ).format( 'matroska' );
+		return ffmpeg.videoCodec( 'copy' ).audioCodec( 'ac3' ).custom( 'af', 'aresample=async=1000' ).format( 'matroska' );
 	}
 }
