@@ -1,3 +1,4 @@
+import { Buffered, Live } from '../../Server/Providers/StreamTypes';
 import MediaFactory from './MediaFactory';
 import BaseReceiver from '../Receiver';
 import { Client } from 'castv2-client';
@@ -64,6 +65,10 @@ export default class Receiver extends BaseReceiver {
 
 	connect () {
 		this.waitingForConnection = this.client.connect().then( ( result ) => {
+			//this.client.client.receiver.on( 'status', ( status ) => {
+			//	console.log( 'status', status );
+			//} );
+
 			this.connected = true;
 
 			return result;
@@ -81,7 +86,7 @@ export default class Receiver extends BaseReceiver {
 	 * @param updateStatus A boolean indicating whether after the action is complete, the status should be updated
 	 * @returns {*}
 	 */
-	callNative ( method, args = [], updateStatus = true ) {
+	async callNative ( method, args = [], updateStatus = true ) {
 		return co( function * () {
 			yield this.connection;
 
@@ -97,7 +102,7 @@ export default class Receiver extends BaseReceiver {
 
 			return result;
 		}.bind( this ) ).catch( ( error ) => {
-			console.log( typeof error, error.message, error.stack );
+			console.log( typeof error, error, error.message, error.stack );
 
 			return Promise.reject( error );
 		} );
@@ -114,37 +119,43 @@ export default class Receiver extends BaseReceiver {
 
 	}
 
-	play ( item, server, options = {}, media = {} ) {
-		return co( function * () {
-			if ( !is.object( options ) ) {
-				options = { currentTime: options };
+	async play ( item, server, sender = null, options = {}, media = {} ) {
+		if ( !is.object( options ) ) {
+			options = { currentTime: options };
+		}
+
+		options = extend( {
+			autoplay: true,
+			currentTime: item.currentTime
+		}, options );
+
+		media = this.mediaFactory.make( item, server, media );
+
+		if ( sender ) {
+			let type = await sender.type;
+
+			if ( type == Live ) {
+				//media.contentType = 'application/x-mpegurl';
+				//media.streamType = 'LIVE';
+				console.log( media );
 			}
+		}
 
-			options = extend( {
-				autoplay: true,
-				currentTime: item.currentTime
-			}, options );
+		if ( media.tracks && media.tracks.length ) {
+			options.activeTrackIds = [ 0 ];
+		}
 
-			media = this.mediaFactory.make( item, server, media );
+		if ( media.textTrackStyle ) {
+			this.subtitles_style = media.textTrackStyle;
+		} else {
+			media.textTrackStyle = this.getSubtitlesStyle();
+		}
 
-			if ( media.tracks && media.tracks.length ) {
-				options.activeTrackIds = [ 0 ];
-			}
+		await this.load( media, options );
 
-			console.log( media.tracks, options, 1 );
+		super.play( item, server );
 
-			if ( media.textTrackStyle ) {
-				this.subtitles_style = media.textTrackStyle;
-			} else {
-				media.textTrackStyle = this.getSubtitlesStyle();
-			}
-
-			yield this.load( media, options );
-
-			super.play( item, server );
-
-			return media;
-		}.bind( this ) );
+		return media;
 	}
 
 	getSubtitlesStyle () {
@@ -153,7 +164,7 @@ export default class Receiver extends BaseReceiver {
 			foregroundColor: '#FFFFFFFF', // see http://dev.w3.org/csswg/css-color/#hex-notation
 			edgeType: 'DROP_SHADOW', // can be: "NONE", "OUTLINE", "DROP_SHADOW", "RAISED", "DEPRESSED"
 			edgeColor: '#000000FF', // see http://dev.w3.org/csswg/css-color/#hex-notation
-			fontScale: 1.3, // transforms into "font-size: " + (fontScale*100) +"%"
+			fontScale: 1.5, // transforms into "font-size: " + (fontScale*100) +"%"
 			fontStyle: 'BOLD', // can be: "NORMAL", "BOLD", "BOLD_ITALIC", "ITALIC",
 			fontFamily: 'Droid Sans',
 			fontGenericFamily: 'CURSIVE', // can be: "SANS_SERIF", "MONOSPACED_SANS_SERIF", "SERIF", "MONOSPACED_SERIF", "CASUAL", "CURSIVE", "SMALL_CAPITALS",
@@ -190,10 +201,10 @@ export default class Receiver extends BaseReceiver {
 					this.client.getStatus( ( status ) => {
 						resolve( status );
 					} );
-				} catch ( err ) {
-					reject( err );
+				} catch ( error ) {
+					reject( error );
 				}
-			} );
+			} )
 		}, args, false );
 	}
 

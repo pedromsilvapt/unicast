@@ -67,7 +67,7 @@ export default class MediaFactory extends Factory {
 		}, custom ) );
 	}
 
-	makeMovieRequest ( media, server ) {
+	makeMovieRequest ( media, server, custom = {} ) {
 		return this.makeDefaultMedia( media, server, extend( true, {
 			metadata: {
 				metadataType: 1,
@@ -76,7 +76,7 @@ export default class MediaFactory extends Factory {
 		}, custom ) );
 	}
 
-	makeShowRequest ( media, server ) {
+	makeShowRequest ( media, server, custom = {} ) {
 		return this.makeDefaultMedia( media, server, extend( true, {
 			metadata: {
 				metadataType: 2,
@@ -84,7 +84,7 @@ export default class MediaFactory extends Factory {
 				episode: media.data.episode,
 				season: media.data.season
 			}
-		} ) );
+		}, custom ) );
 	}
 
 	make ( media = null, ...options ) {

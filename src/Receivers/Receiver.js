@@ -1,8 +1,11 @@
 import ReceiverStatus from './ReceiverStatus';
+import Evented from '../Server/Utilities/Evented';
 import co from 'co';
 
-export default class Receiver {
+export default class Receiver extends Evented {
 	constructor ( name ) {
+		super();
+
 		this.name = name;
 
 		this.status = new ReceiverStatus( this );
