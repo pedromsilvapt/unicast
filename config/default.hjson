@@ -13,6 +13,13 @@
     }
 
     providers: {
+
+        local {
+            subtitles: {
+                defaultLanguage: por
+            }
+        }
+
         youtube: {
             captions: {
                 url: http://downsub.com/
@@ -22,6 +29,7 @@
                 language: pt
             }
         }
+
     }
 
     ffmpeg: {

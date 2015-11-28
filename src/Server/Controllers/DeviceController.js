@@ -32,20 +32,9 @@ export default class DeviceController extends ReceiverController {
 
 		let source = this.request.body.source;
 
-		let subtitles = path.join( path.dirname( source ), path.basename( source, path.extname( source ) ) + '.srt' );
+		let item = yield this.server.providers.item( source, null, this.request );
 
-		if ( !( yield fs.exists( subtitles ) ) ) {
-			subtitles = null;
-		}
-
-		let media = yield MediaManager.getInstance().store( {
-			type: this.request.body.type,
-			source: source,
-			subtitles: subtitles,
-			title: this.request.body.title,
-			cover: this.request.body.cover,
-			data: this.request.body.data || {}
-		} );
+		let media = yield MediaManager.getInstance().store( item );
 
 		let status = yield MediaManager.getInstance().play( media, device, this.server );
 

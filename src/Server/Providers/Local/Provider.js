@@ -1,5 +1,6 @@
 import PlaylistItem from '../../Models/PlaylistItem';
 import Provider from '../Provider';
+import config from 'config';
 import fs from 'fs-promise';
 import path from 'path';
 import co from 'co';
@@ -7,14 +8,37 @@ import is from 'is';
 
 import LocalVideoStream from './VideoStream';
 import LocalSubtitlesStream from './SubtitlesStream';
+import LocalEmbeddedSubtitlesStream from './EmbeddedSubtitlesStream';
 
 export default class LocalProvider extends Provider {
 	get identity () {
 		return 'local';
 	}
 
-	identify ( source ) {
+	identify ( source, type ) {
+		if ( type == 'subtitles' ) {
+			if ( source.startsWith( 'embed://' ) ) {
+				return this.identity + '-embed';
+			}
+		}
+
 		return true;
+	}
+
+	async itemEmbeddedSubtitles ( source, language = null ) {
+		let stream = this.video( source );
+
+		if ( !language && config.has( 'providers.local.subtitles.defaultLanguage' ) ) {
+			language = config.get( 'providers.local.subtitles.defaultLanguage' );
+		}
+
+		let metadata = await stream.embedded.subtitles( language );
+
+		if ( metadata.length ) {
+			return metadata[ 0 ];
+		}
+
+		return null;
 	}
 
 	async itemSubtitles ( source, subtitles = null ) {
@@ -27,13 +51,7 @@ export default class LocalProvider extends Provider {
 		}
 
 		if ( !subtitles ) {
-			let stream = this.video( source );
-
-			let metadata = await stream.embedded.subtitles( 'por' );
-
-			if ( metadata.length ) {
-				subtitles = metadata[ 0 ];
-			}
+			subtitles = await this.itemEmbeddedSubtitles( source );
 		}
 
 		return subtitles;
@@ -53,7 +71,7 @@ export default class LocalProvider extends Provider {
 			subtitles: subtitles,
 			title: request.body.title,
 			cover: request.body.cover,
-			order: PlaylistItem.maxOrder( playlist ),
+			order: PlaylistItem.maxOrder( playlist ) || 0,
 			data: request.body.data || {}
 		};
 	}
@@ -62,7 +80,19 @@ export default class LocalProvider extends Provider {
 		return new LocalVideoStream( source );
 	}
 
-	subtitles ( source ) {
+	subtitlesExternal ( source ) {
 		return new LocalSubtitlesStream( source );
+	}
+
+	subtitlesEmbedded ( source, media ) {
+		return new LocalEmbeddedSubtitlesStream( this.video( media.source ), source );
+	}
+
+	register ( manager ) {
+		super.register( manager );
+
+		manager.subtitles.define( this.identity, this.subtitlesExternal.bind( this ) );
+
+		manager.subtitles.define( this.identity + '-embed', this.subtitlesEmbedded.bind( this ) );
 	}
 }

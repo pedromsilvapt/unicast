@@ -23,14 +23,12 @@ export default class MediaManager {
 		return media;
 	}
 
-	store ( data ) {
-		return co( function * () {
-			let item = PlaylistItem.create( data );
+	async store ( data ) {
+		let item = PlaylistItem.create( data );
 
-			item = yield item.save();
+		item = await item.save();
 
-			return item;
-		}.bind( this ) );
+		return item;
 	}
 
 	play ( media, device, server, reset = false ) {
@@ -41,7 +39,9 @@ export default class MediaManager {
 				yield media.save();
 			}
 
-			let message = yield device.play( media, server );
+			let sender = server.providers.video( media.source, media );
+
+			let message = yield device.play( media, server, sender );
 
 			this.setup( device );
 

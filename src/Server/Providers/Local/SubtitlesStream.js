@@ -29,28 +29,24 @@ export default class SubtitlesStream {
 		return result;
 	}
 
-	getVTT () {
-		return co( function * () {
-			let subtitles = yield fs.readFile( this.filepath );
+	async get () {
+		let subtitles = await fs.readFile( this.filepath );
 
-			if ( !this.isSRT( this.filepath ) ) {
-				return subtitles;
-			}
+		if ( !this.isSRT( this.filepath ) ) {
+			return subtitles;
+		}
 
-			return this.convert( subtitles.toString( 'utf-8' ) );
-		}.bind( this ) );
+		return this.convert( subtitles.toString( 'utf-8' ) );
     }
 
-	serve ( request, response ) {
-		return co( function * () {
-			let data = yield this.getVTT();
+	async serve ( request, response ) {
+		let data = await this.get();
 
-			response.status = 200;
-			response.set( 'Access-Control-Allow-Origin', '*' );
-			response.set( 'Content-Length', data.length );
-			response.set( 'Content-type', 'text/vtt;charset=utf-8' );
+		response.status = 200;
+		response.set( 'Access-Control-Allow-Origin', '*' );
+		response.set( 'Content-Length', data.length );
+		response.set( 'Content-type', 'text/vtt;charset=utf-8' );
 
-			return data;
-		}.bind( this ) );
+		return data;
 	}
 }

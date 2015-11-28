@@ -46,6 +46,10 @@ export default class PlaylistItem extends Document {
 	}
 
 	static maxOrder ( playlist ) {
+		if ( !playlist ) {
+			return null;
+		}
+
 		return playlist.items.reduce( ( memo, item ) => ( item && item.order >= memo ) ? item.order + 1 : memo, 0 );
 	}
 }

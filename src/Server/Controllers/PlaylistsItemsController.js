@@ -94,11 +94,11 @@ export default class PlaylistsItemsController extends ReceiverController {
 	* youtube () {
 		this.request.body.source = 'http://www.youtube.com/watch?v=' + this.params.video;
 
-		let item = yield this.controller.create.bind( this )();
+		let item = yield this.create();
 
 		this.params.item = item.id;
 
-		return yield this.controller.play.bind( this )();
+		return yield this.play();
 	}
 
 	* create () {
