@@ -14,7 +14,7 @@
 
     providers: {
 
-        local {
+        local: {
             subtitles: {
                 defaultLanguage: por
             }
