@@ -1,22 +1,13 @@
 import co from 'co';
 import koa from 'koa';
-import config from 'config';
 import router from 'koa-router';
 import body from 'koa-body';
-import { connect } from 'camo';
 import internalIp from 'internal-ip';
-import ProvidersManager from './Providers/Manager';
-import ReceiversManager from '../Receivers/Manager';
-
-import { Logger } from './Logger';
 
 export default class Server {
 	constructor () {
 		this.app = koa();
 		this.router = this.makeRouter();
-
-		this.providers = new ProvidersManager();
-		this.receivers = new ReceiversManager();
 
 		this.ports = [];
 	}
@@ -60,50 +51,37 @@ export default class Server {
 		controller.routes( this.router, this.makeRouter.bind( this ) );
 	}
 
-	initialize () {
-		return co( function * () {
-			let server = this;
+	async initialize () {
+		let server = this;
 
-			this.use( Logger.koa() );
-			this.app.on( 'error', Logger.koaError() );
+		this.use( body() );
 
-			this.use( function * ( next ) {
-				this.server = server;
+		this.use( function * ( next ) {
+			this.response.set( 'Access-Control-Allow-Origin', '*' );
+			this.response.set( 'Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS' );
 
-				yield next;
-			} );
+			yield next;
+		} );
 
-			this.use( function * ( next ) {
-				this.response.set( 'Access-Control-Allow-Origin', '*' );
-				this.response.set( 'Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS' );
+		this.use( function * ( next ) {
+			this.server = server;
 
-				yield next;
-			} );
+			yield next;
+		} );
 
-			this.use( body() );
-
-			this.useRoutes();
-		}.bind( this ) );
+		this.useRoutes();
 	}
 
-	listen ( port = null ) {
-		return co( function * () {
-			if ( !port ) {
-				port = config.get( 'server.port' );
-			}
+	async listen ( port = null ) {
+		await this.initialize();
 
-			this.database = yield connect( 'nedb://storage/database' );
+		this.app.listen( port );
 
-			yield this.initialize();
+		this.ports.push( port );
 
-			this.app.listen( port );
-
-			this.ports.push( port );
-
-			return {
-				ip: this.ip,
-				port: port
-			};
-		}.bind( this ) );
+		return {
+			ip: this.ip,
+			port: port
+		};
 	}
 }

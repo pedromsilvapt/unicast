@@ -2,7 +2,13 @@
     name: StreamCast
 
     server: {
-        port: 3000
+        master: {
+            port: 9223
+        }
+
+        worker: {
+            port: 3000
+        }
     }
 
     devices: {
