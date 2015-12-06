@@ -1,4 +1,5 @@
 import StreamCache from 'stream-cache';
+import tailingStream from 'tailing-stream';
 import fs from 'fs-promise';
 
 export default class RemoteVideo {
@@ -31,9 +32,11 @@ export default class RemoteVideo {
 			this.dispatchWatchers();
 		} );
 
-		this.cache = new StreamCache();
+		//this.cache = new StreamCache();
+		//
+		//this.incoming.pipe( this.cache );
 
-		this.incoming.pipe( this.cache );
+		//this.incoming.on( 'data', s => console.log( 'dw', s.length ) );
 
 		this.incoming.pipe( this.outgoing );
 	}
@@ -70,13 +73,15 @@ export default class RemoteVideo {
 		} );
 	}
 
-	read ( options ) {
+	read ( options = {} ) {
+		//return this.cache;
 		if ( !this.finished ) {
-			return this.cache;
-			return fs.createReadStream( 'D:\\Pedro Silva\\Desktop\\video.mp4' );
+			return tailingStream.createReadStream( 'D:\\Pedro Silva\\Desktop\\video.mp4', options );
+			return fs.createReadStream( 'D:\\Pedro Silva\\Desktop\\video.mp4', options );
 		}
 
-		return this.cache;
+		//return this.cache;
+		return tailingStream.createReadStream( 'D:\\Pedro Silva\\Desktop\\video.mp4', options );
 		return fs.createReadStream( 'D:\\Pedro Silva\\Desktop\\video.mp4', options );
 	}
 }

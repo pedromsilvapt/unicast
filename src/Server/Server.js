@@ -60,6 +60,10 @@ export default class Server {
 			this.response.set( 'Access-Control-Allow-Origin', '*' );
 			this.response.set( 'Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS' );
 
+			this.response.set( 'Cache-Control', 'no-cache, no-store, must-revalidate' );
+			this.response.set( 'Pragma', 'no-cache' );
+			this.response.set( 'Expires', '0' );
+
 			yield next;
 		} );
 

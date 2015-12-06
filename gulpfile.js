@@ -38,7 +38,7 @@ gulp.task( 'watch', function () {
 	watch( path.join( FOLDERS.source, '**', '*.js' ), function ( vinyl ) {
 		if ( vinyl.event === 'unlink' ) {
 			delete cache.caches[ 'es6' ][ vinyl.path ];       // gulp-cached remove api
-			remember.forget( 'es6', vinyl.path );             // gulp-remember remove api
+			//remember.forget( 'es6', vinyl.path );             // gulp-remember remove api
 		}
 
 		runSequence( 'build' );

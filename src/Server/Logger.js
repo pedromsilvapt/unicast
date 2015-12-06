@@ -3,11 +3,16 @@ import scribe from 'scribe-js';
 import bunyan from 'bunyan';
 import config from 'config';
 
-export default class LoggerService {
+export class LoggerService {
 	constructor ( name ) {
 		this.name = name;
 		//this.bunyan = bunyan.createLogger( { name: name } );
 		this.scribe = scribe();
+
+
+		this.defaultTags = [];
+
+		this.addTag( { msg: this.name, colors: 'cyan' } );
 	}
 
 	get console () {
@@ -16,6 +21,10 @@ export default class LoggerService {
 
 	time ( ...args ) {
 		return this.console.time( ...args );
+	}
+
+	addTag ( tag ) {
+		this.defaultTags.push( tag );
 	}
 
 	tag ( ...args ) {
@@ -38,6 +47,10 @@ export default class LoggerService {
 		return this.console.error( ...args );
 	}
 
+	message ( ...messages ) {
+		return this.time().tag( ...this.defaultTags ).log( ...messages );
+	}
+
 	koa ( validate = null ) {
 		let logger = this;
 		let Console2 = this.scribe.Console2;
@@ -53,7 +66,7 @@ export default class LoggerService {
 				console
 					.time()
 					.tag(
-						{ msg: logger.name, colors: 'cyan' },
+						...logger.defaultTags,
 						{ msg: this.request.ip, colors: 'red' },
 						{ msg: this.request.method.toUpperCase(), colors: 'green' },
 						{
@@ -76,4 +89,6 @@ export default class LoggerService {
 	}
 }
 
-export var Logger = new LoggerService( config.get( 'name' ) );
+var Logger = new LoggerService( config.get( 'name' ) );
+
+export default Logger;

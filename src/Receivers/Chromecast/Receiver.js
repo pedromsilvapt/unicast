@@ -162,9 +162,9 @@ export default class Receiver extends BaseReceiver {
 		return {
 			backgroundColor: '#FFFFFF00', // see http://dev.w3.org/csswg/css-color/#hex-notation
 			foregroundColor: '#FFFFFFFF', // see http://dev.w3.org/csswg/css-color/#hex-notation
-			edgeType: 'DROP_SHADOW', // can be: "NONE", "OUTLINE", "DROP_SHADOW", "RAISED", "DEPRESSED"
+			edgeType: 'OUTLINE', // can be: "NONE", "OUTLINE", "DROP_SHADOW", "RAISED", "DEPRESSED"
 			edgeColor: '#000000FF', // see http://dev.w3.org/csswg/css-color/#hex-notation
-			fontScale: 1.5, // transforms into "font-size: " + (fontScale*100) +"%"
+			fontScale: 1.6, // transforms into "font-size: " + (fontScale*100) +"%"
 			fontStyle: 'BOLD', // can be: "NORMAL", "BOLD", "BOLD_ITALIC", "ITALIC",
 			fontFamily: 'Droid Sans',
 			fontGenericFamily: 'CURSIVE', // can be: "SANS_SERIF", "MONOSPACED_SANS_SERIF", "SERIF", "MONOSPACED_SERIF", "CASUAL", "CURSIVE", "SMALL_CAPITALS",

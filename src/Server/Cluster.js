@@ -3,7 +3,6 @@ import cluster from 'cluster';
 import Server from './Server';
 import MediaServer from './MediaServer';
 
-
 // Controllers
 import MasterController from './Controllers/MasterController';
 
@@ -11,11 +10,13 @@ export default class Cluster extends Server {
 	constructor () {
 		super();
 
+		this.startCluster = true;
+
 		this.workers = [];
 	}
 
 	get isMaster () {
-		return cluster.isMaster;
+		return cluster.isMaster && this.startCluster;
 	}
 
 	get isSlave () {
@@ -56,6 +57,18 @@ export default class Cluster extends Server {
 		this.fork();
 	}
 
+	listenWorker () {
+		let mediaServer = new MediaServer();
+
+		return mediaServer.listen().then( status => {
+			process.send( { cmd: 'listening', status: status } );
+
+			status.server = mediaServer;
+
+			return status;
+		} );
+	}
+
 	async listen ( port = null ) {
 		if ( this.isMaster ) {
 			if ( !port ) {
@@ -64,13 +77,7 @@ export default class Cluster extends Server {
 
 			return super.listen( port );
 		} else {
-			let mediaServer = new MediaServer();
-
-			return mediaServer.listen().then( status => {
-				process.send( { cmd: 'listening', status: status } );
-
-				return status;
-			} );
+			return this.listenWorker();
 		}
 	}
 }

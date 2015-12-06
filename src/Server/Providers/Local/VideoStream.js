@@ -27,8 +27,6 @@ export default class VideoStream {
 		return FFMpeg.probe( this.filepath );
 	}
 
-
-
 	get type () {
 		return this.metadata.then( metadata => {
 			let transcoder = new Transcoder();

@@ -1,4 +1,5 @@
 import path from 'path';
+import is from 'is';
 import Controller from './Controller';
 import MediaManager from '../../MediaManager';
 
@@ -17,7 +18,19 @@ export default class WatchController extends Controller {
 
 		let stream = this.server.providers.video( media.source, media );
 
- 		return yield Promise.resolve( stream.serve( this.request, this.response ) );
+ 		let result = yield Promise.resolve( stream.serve( this.request, this.response ) );
+
+		let closeResult = () => {
+			if ( is.fn( result.end ) ) {
+				console.log( 'terminate' );
+				result.end();
+			}
+		};
+
+		this.ctx.res.on( 'close', closeResult );
+		this.ctx.res.on( 'end', closeResult );
+
+		return result;
 	}
 
 	* subtitles () {

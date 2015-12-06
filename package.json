@@ -60,6 +60,7 @@
     "stream-to-promise": "^1.0.4",
     "stream-transcoder": "0.0.5",
     "string-to-stream": "^1.0.1",
+    "subtitler": "^2.4.0",
     "subtitles-parser": "0.0.2",
     "tailing-stream": "^0.1.1",
     "throat": "^2.0.2",

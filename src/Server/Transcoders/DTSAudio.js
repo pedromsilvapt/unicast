@@ -16,6 +16,6 @@ export default class DTSAudio extends Transcoder {
 	}
 
 	process ( ffmpeg ) {
-		return ffmpeg.videoCodec( 'copy' ).audioCodec( 'ac3' ).custom( 'af', 'aresample=async=1000' ).format( 'matroska' );
+		return ffmpeg.videoCodec( 'copy' ).audioCodec( 'ac3' ).custom( 'af', 'aresample=async=1000' );
 	}
 }
