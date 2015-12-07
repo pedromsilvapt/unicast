@@ -14,11 +14,11 @@ import Deferred from '../../Utilities/Deferred';
 
 // Transcoders
 import Transcoder from '../../Transcoders/Transcoder';
-import DTSAudio from '../../Transcoders/DTSAudio';
 
 export default class VideoStream {
-	constructor ( filepath ) {
+	constructor ( filepath, receiver = null ) {
 		this.filepath = filepath;
+		this.receiver = receiver;
 
 		this.embedded = new EmbeddedObjects( this );
 	}
@@ -29,16 +29,11 @@ export default class VideoStream {
 
 	get type () {
 		return this.metadata.then( metadata => {
-			let transcoder = new Transcoder();
+			let transcoder = new Transcoder( this.receiver.transcoders );
 
-			return transcoder.valid( metadata, this.getTranscoders() ).length === 0 ? Buffered : Live;
+			return transcoder.matches( metadata ).length === 0 ? Buffered : Live;
 		} );
 	}
-
-	getTranscoders () {
-		return [ new DTSAudio() ];
-	}
-
 	async serve ( request, response ) {
 		let metadata = await this.metadata;
 
@@ -74,9 +69,9 @@ export default class VideoStream {
 			response.status = 206;
 		}
 
-		let transcoder = new Transcoder();
+		let transcoder = new Transcoder( this.receiver.transcoders );
 
-		return transcoder.run( file, part, metadata, [ new DTSAudio() ] );
+		return transcoder.run( file, metadata );
 	}
 }
 

@@ -4,12 +4,8 @@ import fs from 'fs-promise';
 import co from 'co';
 
 export default class Transcoder {
-	valid ( metadata ) {
-		return false;
-	}
-
-	process ( transcoder ) {
-
+	constructor ( codec ) {
+		this.codec = codec;
 	}
 
 	compileArgs ( streamTranscoder ) {
@@ -25,16 +21,8 @@ export default class Transcoder {
 		return args;
 	}
 
-	valid ( metadata, list ) {
-		let valid = [];
-
-		for ( let transcoder of list ) {
-			if ( transcoder.valid( metadata ) ) {
-				valid.push( transcoder );
-			}
-		}
-
-		return valid;
+	matches ( metadata ) {
+		return this.codec && this.codec.matches( metadata );
 	}
 
 	exec ( streamTranscoder ) {
@@ -45,21 +33,17 @@ export default class Transcoder {
 		return streamTranscoder._exec( args );
 	}
 
-	run ( stream, metadata, list ) {
+	run ( stream, metadata ) {
 		let streamTranscoder = new StreamTranscoder( stream );
 
-		list = this.valid( metadata, list );
-
-		if ( list.length == 0 ) {
+		if ( !this.matches( metadata ) ) {
 			return stream;
 		}
 
-		for ( let transcoder of list ) {
-			streamTranscoder = transcoder.process( streamTranscoder ) || streamTranscoder;
-		}
+		streamTranscoder = this.codec.convert( streamTranscoder, metadata );
 
-		streamTranscoder.format( 'matroska' );
-		streamTranscoder.custom( 'movflags', '+faststart' );
+		//streamTranscoder.format( 'matroska' );
+		//streamTranscoder.custom( 'movflags', '+faststart' );
 
 		streamTranscoder.on( 'error', function ( error ) {
 			if ( error.message !== 'FFmpeg error: Stream mapping:' ) {
@@ -90,57 +74,4 @@ export default class Transcoder {
 
 		return result;
 	}
-
-	//run ( stream, part, metadata, list ) {
-	//	return co( function * () {
-	//		let streamTranscoder = ff( stream );
-	//
-	//		list = this.valid( metadata, list );
-	//
-	//		if ( list.length == 0 ) {
-	//			return stream;
-	//		}
-	//
-	//		for ( let transcoder of list ) {
-	//			streamTranscoder = transcoder.process( streamTranscoder ) || streamTranscoder;
-	//		}
-	//
-	//		streamTranscoder.on( 'error', function ( error ) {
-	//			if ( error.message !== 'FFmpeg error: Stream mapping:' ) {
-	//				throw error;
-	//			}
-	//		} );
-	//
-	//
-	//		let out = 'storage/video.m3u8';
-	//		streamTranscoder.outputOptions( [
-	//			'-hls_time 10', // each .ts file has a length of 3 seconds
-	//			'-hls_list_size 0', // each .ts file has a length of 3 seconds
-	//			'-hls_base_url http://192.168.0.4:3000/segments/', // each .ts file has a length of 3 seconds
-	//			//'-hls_segment_filename 0', // store all pieces in the .m3u8 file
-	//			'-bsf:v h264_mp4toannexb' // ffmpeg aborts trasncoding in some cases without this
-	//		] ).output( out ).run();
-	//
-	//		yield new Promise( ( resolve, reject ) => {
-	//			streamTranscoder.on( 'progress', function ( progress ) {
-	//				//console.log( progress.progress || progress );
-	//				resolve();
-	//			} );
-	//		} );
-	//
-	//		streamTranscoder.on( 'finish', function ( progress ) {
-	//			console.log( 'finish' );
-	//		} );
-	//
-	//		//streamTranscoder.format( 'hls' );
-	//		//streamTranscoder.custom( 'hls_time', '3' );
-	//		//streamTranscoder.custom( 'hls_segment_filename', 'file%03d.ts' );
-	//		//streamTranscoder.custom( 'bsf:v', 'h264_mp4toannexb' );
-	//		//streamTranscoder.stream().pipe( fs.createWriteStream( out ) );
-	//
-	//		console.log( 'yeahhhhhhh' );
-	//		fs.createReadStream( 'storage/video.m3u8', 'utf8' ).on( 'data', c => console.log( c ) ).on( 'error', (e) => console.error( 'error', e ) );
-	//
-	//		return fs.createReadStream( 'storage/video2.m3u8' );
-	//	}.bind( this ) );
 }

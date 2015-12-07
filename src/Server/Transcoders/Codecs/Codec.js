@@ -1,5 +1,9 @@
 export default class Codec {
-	static matches ( metadata ) {
+	matches ( metadata ) {
+		return true;
+	}
 
+	convert ( transcoder ) {
+		return transcoder;
 	}
 }

@@ -8,6 +8,15 @@ import extend from 'extend';
 import co from 'co';
 import is from 'is';
 
+// Codecs
+import RulesSet from '../../Server/Transcoders/Rules/Set';
+import SharedRule from '../../Server/Transcoders/Rules/Shared';
+import ConditionalRule from '../../Server/Transcoders/Rules/Conditional';
+import CopyCodec from '../../Server/Transcoders/Codecs/Copy';
+import MKVFormat from '../../Server/Transcoders/Codecs/Formats/MKV';
+import DTSCodec from '../../Server/Transcoders/Codecs/Audio/DTS';
+import AC3Codec from '../../Server/Transcoders/Codecs/Audio/AC3';
+
 export default class Receiver extends BaseReceiver {
 	static get defaultMediaFactory () {
 		if ( !this._mediaFactory ) {
@@ -33,6 +42,13 @@ export default class Receiver extends BaseReceiver {
 		this.promisifyClientMethods();
 
 		this.mediaFactory = Receiver.defaultMediaFactory;
+
+		this.transcoders = new RulesSet( [
+			new ConditionalRule( new DTSCodec(), new AC3Codec() )
+		], {
+			prepend: [ new CopyCodec() ],
+			append: [ new MKVFormat() ]
+		} );
 	}
 
 	get type () {
@@ -137,7 +153,7 @@ export default class Receiver extends BaseReceiver {
 			if ( type == Live ) {
 				//media.contentType = 'application/x-mpegurl';
 				//media.streamType = 'LIVE';
-				console.log( media );
+				//console.log( media );
 			}
 		}
 
@@ -233,11 +249,11 @@ export default class Receiver extends BaseReceiver {
 	}
 
 	changeVolume ( ...args ) {
-		return this.callNative( 'changeVolume', args );
+		return this.callNative( 'setVolume', args );
 	}
 
 	changeVolumeMuted ( ...args ) {
-		return this.callNative( 'changeVolumeMuted', args );
+		return this.callNative( 'setVolumeMuted', args );
 	}
 
 	stop ( ...args ) {

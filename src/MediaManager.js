@@ -39,7 +39,7 @@ export default class MediaManager {
 				yield media.save();
 			}
 
-			let sender = server.providers.video( media.source, media );
+			let sender = server.providers.video( media.source, media, device );
 
 			let message = yield device.play( media, server, sender );
 

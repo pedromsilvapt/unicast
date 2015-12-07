@@ -54,15 +54,15 @@ export default class Manager {
 		return Promise.resolve( this.items.make( identity, playlist, request ) );
 	}
 
-	video ( source, media ) {
+	video ( source, media, receiver = null ) {
 		let identity = this.identify( source, 'video' );
 
-		return this.videos.make( identity, source, media );
+		return this.videos.make( identity, source, media, receiver );
 	}
 
-	subtitle ( source, media ) {
+	subtitle ( source, media, receiver = null ) {
 		let identity = this.identify( source, 'subtitles' );
 
-		return this.subtitles.make( identity, source, media );
+		return this.subtitles.make( identity, source, media, receiver );
 	}
 }

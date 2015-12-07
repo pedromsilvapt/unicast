@@ -18,6 +18,7 @@ export default class DeviceController extends ReceiverController {
 		device.post( '/seek/:percentage', this.action( 'seek' ) );
 		device.post( '/close', this.action( 'close' ) );
 		device.get( '/volume', this.action( 'getVolume' ) );
+		device.post( '/volume/mute', this.action( 'setVolumeMute' ) );
 		device.post( '/volume/:volume', this.action( 'setVolume' ) );
 		device.post( '/mute', this.action( 'setVolumeMute' ) );
 		device.get( '/status', this.action( 'status' ) );
@@ -89,6 +90,32 @@ export default class DeviceController extends ReceiverController {
 		let status = yield device.getStatus();
 
 		return status || { mediaSessionIn: null };
+	}
+
+	* getVolume () {
+		return ( yield this.status() ).volume || {};
+	}
+
+	* setVolume () {
+		let device = yield this.receiver;
+
+		let volume = this.params.volume / 100;
+
+		yield device.changeVolume( volume );
+
+		return this.getVolume();
+	}
+
+	* setVolumeMute () {
+		let device = yield this.receiver;
+
+		//let volume = yield this.getVolume();
+
+		yield device.changeVolumeMuted( !device.muted );
+
+		device.muted = !device.muted;
+
+		return this.getVolume();
 	}
 
 	* close () {

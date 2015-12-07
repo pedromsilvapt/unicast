@@ -76,8 +76,8 @@ export default class LocalProvider extends Provider {
 		};
 	}
 
-	video ( source ) {
-		return new LocalVideoStream( source );
+	video ( source, media, receiver ) {
+		return new LocalVideoStream( source, receiver );
 	}
 
 	subtitlesExternal ( source ) {

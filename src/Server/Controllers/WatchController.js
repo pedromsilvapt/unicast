@@ -1,9 +1,9 @@
 import path from 'path';
 import is from 'is';
-import Controller from './Controller';
+import ReceiverController from './ReceiverController';
 import MediaManager from '../../MediaManager';
 
-export default class WatchController extends Controller {
+export default class WatchController extends ReceiverController {
 	static routes ( router ) {
 		router.get( '/watch/:id', this.action( 'watch', 'raw' ) );
 		router.get( '/subtitles/:id', this.action( 'subtitles', 'raw' ) );
@@ -14,9 +14,11 @@ export default class WatchController extends Controller {
 	}
 
 	* watch () {
+		let receiver = yield this.receiver;
+
 		let media = yield MediaManager.getInstance().get( this.params.id );
 
-		let stream = this.server.providers.video( media.source, media );
+		let stream = this.server.providers.video( media.source, media, receiver );
 
  		let result = yield Promise.resolve( stream.serve( this.request, this.response ) );
 
@@ -34,9 +36,11 @@ export default class WatchController extends Controller {
 	}
 
 	* subtitles () {
+		let receiver = yield this.receiver;
+
 		let media = yield MediaManager.getInstance().get( this.params.id );
 
-		let stream = this.server.providers.subtitle( media.subtitles, media );
+		let stream = this.server.providers.subtitle( media.subtitles, media, receiver );
 
 		return yield Promise.resolve( stream.serve( this.request, this.response ) );
     }
