@@ -1,7 +1,8 @@
-import Codec from '../Codec';
+import TrackCodec from '../TrackCodec';
+import extend from 'extend';
 
-export default class Audio extends Codec {
-	audioTracks ( metadata ) {
-		return metadata.streams.filter( stream => stream.codec_type === 'audio' );
+export default class Audio extends TrackCodec {
+	constructor ( criteria ) {
+		super( extend( { codec_type: 'audio' }, criteria ) );
 	}
 }

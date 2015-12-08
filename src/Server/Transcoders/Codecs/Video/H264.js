@@ -1,12 +1,9 @@
 import VideoCodec from './Video';
+import extend from 'extend';
 
 export default class H264 extends VideoCodec {
-	matches ( metadata ) {
-		let video = this.videoTracks( metadata );
-
-		//console.log( video );
-
-		return video.length > 0 && video.some( stream => stream.codec_name == 'h264' );
+	constructor () {
+		super( { codec_name: 'h264' } );
 	}
 
 	convert ( transcoder ) {

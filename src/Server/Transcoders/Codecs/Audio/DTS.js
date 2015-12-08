@@ -1,9 +1,8 @@
 import AudioCodec from './Audio';
+import extend from 'extend';
 
 export default class DTS extends AudioCodec {
-	matches ( metadata ) {
-		let audio = this.audioTracks( metadata );
-
-		return audio.length > 0 && audio.some( stream => stream.codec_name == 'dca' );
+	constructor () {
+		super( { codec_name: 'dca' } );
 	}
 }
