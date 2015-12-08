@@ -20,6 +20,8 @@ export default class DeviceController extends ReceiverController {
 		device.get( '/volume', this.action( 'getVolume' ) );
 		device.post( '/volume/mute', this.action( 'setVolumeMute' ) );
 		device.post( '/volume/:volume', this.action( 'setVolume' ) );
+		device.post( '/subtitles/size/:size', this.action( 'setSubtitlesSize' ) );
+		device.post( '/subtitles/track/:index', this.action( 'setSubtitlesIndex' ) );
 		device.post( '/mute', this.action( 'setVolumeMute' ) );
 		device.get( '/status', this.action( 'status' ) );
 
@@ -116,6 +118,14 @@ export default class DeviceController extends ReceiverController {
 		device.muted = !device.muted;
 
 		return this.getVolume();
+	}
+
+	* setSubtitlesSize () {
+		let device = yield this.receiver;
+
+		yield device.changeSubtitlesSize( parseInt( this.params.size, 10 ) / 100 );
+
+		return { success: true };
 	}
 
 	* close () {

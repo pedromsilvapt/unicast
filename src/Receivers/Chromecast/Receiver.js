@@ -1,4 +1,5 @@
 import { Buffered, Live } from '../../Server/Providers/StreamTypes';
+import chromecastTranscoder from './Transcoder';
 import MediaFactory from './MediaFactory';
 import BaseReceiver from '../Receiver';
 import { Client } from 'castv2-client';
@@ -7,15 +8,6 @@ import promisify from 'es6-promisify';
 import extend from 'extend';
 import co from 'co';
 import is from 'is';
-
-// Codecs
-import RulesSet from '../../Server/Transcoders/Rules/Set';
-import SharedRule from '../../Server/Transcoders/Rules/Shared';
-import ConditionalRule from '../../Server/Transcoders/Rules/Conditional';
-import CopyCodec from '../../Server/Transcoders/Codecs/Copy';
-import MKVFormat from '../../Server/Transcoders/Codecs/Formats/MKV';
-import DTSCodec from '../../Server/Transcoders/Codecs/Audio/DTS';
-import AC3Codec from '../../Server/Transcoders/Codecs/Audio/AC3';
 
 export default class Receiver extends BaseReceiver {
 	static get defaultMediaFactory () {
@@ -43,12 +35,7 @@ export default class Receiver extends BaseReceiver {
 
 		this.mediaFactory = Receiver.defaultMediaFactory;
 
-		this.transcoders = new RulesSet( [
-			new ConditionalRule( new DTSCodec(), new AC3Codec() )
-		], {
-			prepend: [ new CopyCodec() ],
-			append: [ new MKVFormat() ]
-		} );
+		this.transcoders = chromecastTranscoder();
 	}
 
 	get type () {
@@ -161,11 +148,11 @@ export default class Receiver extends BaseReceiver {
 			options.activeTrackIds = [ 0 ];
 		}
 
-		if ( media.textTrackStyle ) {
-			this.subtitles_style = media.textTrackStyle;
-		} else {
+		if (! media.textTrackStyle ) {
 			media.textTrackStyle = this.getSubtitlesStyle();
 		}
+
+		this.client.subtitles_style = media.textTrackStyle;
 
 		await this.load( media, options );
 
@@ -180,7 +167,7 @@ export default class Receiver extends BaseReceiver {
 			foregroundColor: '#FFFFFFFF', // see http://dev.w3.org/csswg/css-color/#hex-notation
 			edgeType: 'OUTLINE', // can be: "NONE", "OUTLINE", "DROP_SHADOW", "RAISED", "DEPRESSED"
 			edgeColor: '#000000FF', // see http://dev.w3.org/csswg/css-color/#hex-notation
-			fontScale: 1.6, // transforms into "font-size: " + (fontScale*100) +"%"
+			fontScale: 1.5, // transforms into "font-size: " + (fontScale*100) +"%"
 			fontStyle: 'BOLD', // can be: "NORMAL", "BOLD", "BOLD_ITALIC", "ITALIC",
 			fontFamily: 'Droid Sans',
 			fontGenericFamily: 'CURSIVE', // can be: "SANS_SERIF", "MONOSPACED_SANS_SERIF", "SERIF", "MONOSPACED_SERIF", "CASUAL", "CURSIVE", "SMALL_CAPITALS",
@@ -217,6 +204,8 @@ export default class Receiver extends BaseReceiver {
 					this.client.getStatus( ( status ) => {
 						resolve( status );
 					} );
+
+					setTimeout( resolve.bind( null, { 'mediaSessionIn': null } ), 5000 );
 				} catch ( error ) {
 					reject( error );
 				}

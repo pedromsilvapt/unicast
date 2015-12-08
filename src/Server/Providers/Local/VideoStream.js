@@ -4,6 +4,7 @@ import FFMpeg from '../../Utilities/FFMpeg';
 import rangeParser from 'range-parser';
 import multi from 'multi-write-stream';
 import { Stream, PassThrough } from 'stream';
+import TempFile from '../../Utilities/TempFile';
 import fs from 'fs-promise';
 import through2 from 'through2';
 import mime from 'mime';

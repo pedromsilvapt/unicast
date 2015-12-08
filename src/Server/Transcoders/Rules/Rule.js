@@ -1,9 +1,6 @@
-export default class Rule {
-	constructor ( criteria, codecs ) {
-		this.criteria = criteria;
-		this.codec = codecs;
-	}
+import Codec from '../Codecs/Codec';
 
+export default class Rule extends Codec {
 	matches ( metadata ) {
 		return true;
 	}

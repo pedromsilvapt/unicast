@@ -1,10 +1,10 @@
 import AudioCodec from './Audio';
 
-export default class AC3 extends AudioCodec {
+export default class AAC extends AudioCodec {
 	matches ( metadata ) {
 		let audio = this.audioTracks( metadata );
 
-		return audio.length > 0 && audio.some( stream => stream.codec_name == 'ac3' );
+		return audio.length > 0 && audio.some( stream => stream.codec_name == 'aac' );
 	}
 
 	convert ( transcoder ) {

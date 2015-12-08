@@ -51,8 +51,46 @@ export default class Transcoder {
 			}
 		} );
 
+		var formatTime = ( duration ) => {
+			let milliseconds = duration % 1000;
+
+			let seconds = parseInt( duration / 1000, 10 ) % 60;
+
+			let minutes = parseInt( duration / ( 60 * 1000 ), 10 ) % 60;
+
+			let hours = parseInt( duration / ( 60 * 60 * 1000 ), 10 );
+
+			return [ hours, minutes, seconds, milliseconds ];
+		};
+
+		var elapsed_time = ( start, precision = 3 ) => {
+			let elapsed = process.hrtime( start ); // divide by a million to get nano to milli
+
+			let milliseconds = elapsed[ 1 ] / 1000000;
+
+			//process.hrtime( start )[0] + " s, " + elapsed.toFixed(precision) + " ms - " + note); // print message + time
+			return ( elapsed[ 0 ] * 1000 ) + parseFloat( milliseconds.toFixed( precision ) ); // reset the timer
+		};
+
+		let lastBench = null;
+		let lastTime = null;
 		streamTranscoder.on( 'progress', function ( progress ) {
-			//console.log( progress.progress || progress );
+			try {
+				if ( lastBench !== null ) {
+					let diff = elapsed_time( lastBench );
+
+					let speed = ( progress.time ) / diff;
+					console.log( speed + ' /s', formatTime( progress.time  ).join( ':' ), progress.time, progress.frame );
+				} else {
+					console.log( progress.time );
+					lastBench = process.hrtime();
+				}
+
+				lastTime = progress.time;
+
+			} catch ( error ) {
+				console.log( error.message, error.stack )
+			}
 		} );
 
 		streamTranscoder.on( 'finish', function ( progress ) {

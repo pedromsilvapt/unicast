@@ -6,4 +6,8 @@ export default class Codec {
 	convert ( transcoder ) {
 		return transcoder;
 	}
+
+	static make ( ...args ) {
+		return new this( ...args );
+	}
 }

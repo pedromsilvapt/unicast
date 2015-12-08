@@ -3,22 +3,34 @@ import RulesSet from './Set';
 import is from 'is';
 
 export default class Delegate extends Rule {
-	constructor ( rule, options = {} ) {
+	constructor ( ...rules ) {
 		super();
 
-		this.rule = rule;
+		this.rules = rules;
+	}
+
+	get rules () {
+		return this._rules;
+	}
+
+	set rules ( rules ) {
+		rules = rules.map( rule => {
+			if ( is.array( rule ) ) {
+				rule = new RulesSet( rule, { all: true } );
+			}
+
+			return rule;
+		} );
+
+		this._rules = rules;
 	}
 
 	get rule () {
-		return this._rule;
+		return this.rules[ 0 ];
 	}
 
-	set rule ( rule ) {
-		if ( is.array( rule ) ) {
-			rule = new RulesSet( rule, { all: true } );
-		}
-
-		this._rule = rule;
+	set rule ( value ) {
+		this.rules[ 0 ] = value;
 	}
 
 	matches ( metadata ) {

@@ -1,37 +1,18 @@
-import Rule from './Rule';
+import Delegate from './Delegate';
 import RulesSet from './Set';
 import is from 'is';
 
-export default class Conditional extends Rule {
+export default class Conditional extends Delegate {
 	constructor ( conditions, codecs ) {
-		super();
-
-		this.conditions = conditions;
-		this.codecs = codecs;
+		super( conditions, codecs );
 	}
 
 	get conditions () {
-		return this._conditions;
-	}
-
-	set conditions ( conditions ) {
-		if ( is.array( conditions ) ) {
-			conditions = new RulesSet( conditions, { all: true } );
-		}
-
-		this._conditions = conditions;
+		return this.rules[ 0 ];
 	}
 
 	get codecs () {
-		return this._codecs;
-	}
-
-	set codecs ( codecs ) {
-		if ( is.array( codecs ) ) {
-			codecs = new RulesSet( codecs, { all: true } );
-		}
-
-		this._codecs = codecs;
+		return this.rules[ 1 ];
 	}
 
 	matches ( metadata ) {
