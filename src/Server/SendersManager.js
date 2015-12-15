@@ -6,17 +6,21 @@ export default class SendersManager {
 		this.prefix = '/receiver/:receiver/send/:media';
 
 		this.methods = {};
-		this.senders = [];
+		this.senders = new Map();
 	}
 
 	register ( receiver ) {
 		let router = new SenderRouter( receiver, this );
 
-		this.senders.push( router.sender );
+		this.senders.set( receiver, router.sender );
 
 		router.sender.register();
 
 		return router;
+	}
+
+	get ( receiver ) {
+		return this.senders.get( receiver );
 	}
 
 	getByMethod ( method ) {

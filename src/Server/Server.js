@@ -20,7 +20,7 @@ export default class Server {
 		return this.ports[ 0 ] || null;
 	}
 
-	url ( segments ) {
+	url ( segments = [] ) {
 		let serverUrl = 'http://' + this.ip + ':' + this.port;
 
 		let part = segments.filter( s => s ).join( '/' );

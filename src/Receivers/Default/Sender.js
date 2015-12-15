@@ -5,6 +5,8 @@ export default class Sender {
 		this.router = router;
 		this.receiver = router.receiver;
 		this.server = router.manager.server;
+
+		this.urlStore = {};
 	}
 
 	async stream ( stream, ctx ) {
@@ -35,14 +37,21 @@ export default class Sender {
 		return stream.serve( request, response );
 	}
 
+	registerUrl ( name, layer ) {
+		this.urlStore[ name ] = layer;
+	}
+
+	url ( name, params = {} ) {
+		let url = this.urlStore[ name ].url( params );
+
+		if ( url ) {
+			return this.server.url( url.split( '/' ) );
+		}
+	}
+
 	register () {
-		let result = this.router.get( '/video', this.video.bind( this ) );
+		this.registerUrl( 'video', this.router.get( '/video', this.video.bind( this ) ) );
 
-		console.log( result.url( {
-			receiver: 'ChromeSilvas',
-			media: 'B82SSzcQeGWOv7kB'
-		} ) );
-
-		this.router.get( '/subtitles', this.subtitles.bind( this ) );
+		this.registerUrl( 'subtitles', this.router.get( '/subtitles', this.subtitles.bind( this ) ) );
 	}
 }

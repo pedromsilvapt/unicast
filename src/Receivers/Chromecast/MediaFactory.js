@@ -12,10 +12,14 @@ export default class MediaFactory extends Factory {
 	}
 
 	makeDefaultMedia ( media, server, receiver, custom = {} ) {
-		let senderUrl = [ 'receiver', receiver.name, 'send', media.id ];
+		let sender = server.sender( receiver );
+		let urlParams = {
+			receiver: receiver.name,
+			media: media.id
+		};
 
 		let message = {
-			contentId: server.url( senderUrl.concat( [ 'video' ] ) ),
+			contentId: sender.url( 'video', urlParams ),
 			contentType: 'video/mp4',
 			tracks: null,
 			metadata: {
@@ -45,7 +49,7 @@ export default class MediaFactory extends Factory {
 				tracks.push( {
 					trackId: subtitles.id || index,
 					type: 'TEXT',
-					trackContentId: server.url( senderUrl.concat( [ 'subtitles' ] ) ),
+					trackContentId: sender.url( 'subtitles', urlParams ),
 					trackContentType: subtitles.type || 'text/vtt',
 					name: subtitles.name || 'Português',
 					language: subtitles.language || 'pt-PT',

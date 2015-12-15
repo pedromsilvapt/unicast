@@ -1,12 +1,13 @@
 import Server from './Server';
 import ProvidersManager from './Providers/Manager';
 import ReceiversManager from '../Receivers/Manager';
+import SendersManager from './SendersManager';
+import MediaManager from '../MediaManager';
 import config from 'config';
 import { connect } from 'camo';
-import { Logger } from './Logger';
+import Logger from './Logger';
 
 // Controllers
-import WatchController from './Controllers/WatchController';
 import DeviceController from './Controllers/DeviceController';
 
 // Providers
@@ -22,10 +23,15 @@ export default class MediaServer extends Server {
 
 		this.providers = new ProvidersManager();
 		this.receivers = new ReceiversManager();
+		this.senders = new SendersManager( this, this.makeRouter.bind( this ) );
+		this.media = new MediaManager( this );
+	}
+
+	sender ( receiver ) {
+		return this.senders.get( receiver );
 	}
 
 	components () {
-		this.controller( WatchController );
 		this.controller( DeviceController );
 
 		this.providers.defaultProvider = 'local';
