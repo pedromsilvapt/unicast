@@ -11,9 +11,11 @@ export default class MediaFactory extends Factory {
 		this.define( 'show', this.makeShowRequest.bind( this ) );
 	}
 
-	makeDefaultMedia ( media, server, custom = {} ) {
+	makeDefaultMedia ( media, server, receiver, custom = {} ) {
+		let senderUrl = [ 'receiver', receiver.name, 'send', media.id ];
+
 		let message = {
-			contentId: server.url( [ 'watch', media.id ] ),
+			contentId: server.url( senderUrl.concat( [ 'video' ] ) ),
 			contentType: 'video/mp4',
 			tracks: null,
 			metadata: {
@@ -43,7 +45,7 @@ export default class MediaFactory extends Factory {
 				tracks.push( {
 					trackId: subtitles.id || index,
 					type: 'TEXT',
-					trackContentId: server.url( [ 'subtitles', media.id ] ),
+					trackContentId: server.url( senderUrl.concat( [ 'subtitles' ] ) ),
 					trackContentType: subtitles.type || 'text/vtt',
 					name: subtitles.name || 'Português',
 					language: subtitles.language || 'pt-PT',
@@ -59,16 +61,16 @@ export default class MediaFactory extends Factory {
 		return extend( true, message, custom );
 	}
 
-	makeGenericRequest ( media, server, custom = {} ) {
-		return this.makeDefaultMedia( media, server, extend( true, {
+	makeGenericRequest ( media, server, receiver, custom = {} ) {
+		return this.makeDefaultMedia( media, server, receiver, extend( true, {
 			metadata: {
 				metadataType: 0
 			}
 		}, custom ) );
 	}
 
-	makeMovieRequest ( media, server, custom = {} ) {
-		return this.makeDefaultMedia( media, server, extend( true, {
+	makeMovieRequest ( media, server, receiver, custom = {} ) {
+		return this.makeDefaultMedia( media, server, receiver, extend( true, {
 			metadata: {
 				metadataType: 1,
 				releaseDate: '2015-05-06'
@@ -76,8 +78,8 @@ export default class MediaFactory extends Factory {
 		}, custom ) );
 	}
 
-	makeShowRequest ( media, server, custom = {} ) {
-		return this.makeDefaultMedia( media, server, extend( true, {
+	makeShowRequest ( media, server, receiver, custom = {} ) {
+		return this.makeDefaultMedia( media, server, receiver, extend( true, {
 			metadata: {
 				metadataType: 2,
 				seriesTitle: media.data.showTitle,

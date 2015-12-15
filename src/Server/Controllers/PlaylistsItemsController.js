@@ -4,7 +4,6 @@ import config from 'config';
 import ReceiverController from './ReceiverController';
 import Playlist from '../Models/Playlist';
 import PlaylistItem from '../Models/PlaylistItem';
-import MediaManager from '../../MediaManager';
 
 export default class PlaylistsItemsController extends ReceiverController {
 	static routes ( router, make ) {
@@ -56,7 +55,7 @@ export default class PlaylistsItemsController extends ReceiverController {
 
 		yield playlist.save();
 
-		return MediaManager.getInstance().play( item, device, this.server );
+		return this.server.media.play( item, device );
 	}
 
 	* playList () {
@@ -117,7 +116,7 @@ export default class PlaylistsItemsController extends ReceiverController {
 		playlist = yield playlist.save();
 
 		if ( +this.request.body.autoplay ) {
-			yield MediaManager.getInstance().play( item, device, this.server );
+			yield this.server.media.play( item, device );
 		}
 
 		return item;

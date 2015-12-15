@@ -43,8 +43,8 @@ export default class Server {
 			.use( this.router.allowedMethods() );
 	}
 
-	makeRouter () {
-		return router();
+	makeRouter ( options ) {
+		return router( options );
 	}
 
 	controller ( controller ) {

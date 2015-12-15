@@ -8,8 +8,11 @@ export default class Factory {
 		this.default = [ name, options ];
 	}
 
-	define ( name, creator ) {
-		this.creators[ name ] = creator;
+	define ( name, creator, singleton = false ) {
+		this.creators[ name ] = {
+			fn: creator,
+			singleton: singleton
+		};
 
 		return this;
 	}
@@ -24,9 +27,21 @@ export default class Factory {
 		}
 
 		if ( !this.has( name ) ) {
-			throw new Error( 'The Factory could not make a "' + name + '" ' );
+			throw new Error( 'The Factory could not make a "' + name + '"' );
 		}
 
-		return this.creators[ name ]( ...options );
+		let creator = this.creators[ name ];
+
+		if ( creator.singleton && creator.instance ) {
+			return creator.instance;
+		}
+
+		let instance = creator.fn( ...options );
+
+		if ( creator.singleton ) {
+			this.creators[ name ].instance = instance;
+		}
+
+		return instance;
 	}
 }

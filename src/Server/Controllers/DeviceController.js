@@ -3,7 +3,6 @@ import path from 'path';
 import config from 'config';
 import ReceiverController from './ReceiverController';
 import PlaylistsController from './PlaylistsController';
-import MediaManager from '../../MediaManager';
 
 export default class DeviceController extends ReceiverController {
 	static routes ( router, make ) {
@@ -37,9 +36,9 @@ export default class DeviceController extends ReceiverController {
 
 		let item = yield this.server.providers.item( source, null, this.request );
 
-		let media = yield MediaManager.getInstance().store( item );
+		let media = yield this.server.media.store( item );
 
-		let status = yield MediaManager.getInstance().play( media, device, this.server );
+		let status = yield this.server.media.play( media, device );
 
 		return media;
 	}

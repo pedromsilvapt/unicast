@@ -1,6 +1,7 @@
 import ReceiverStatus from './ReceiverStatus';
-import Evented from '../Server/Utilities/Evented';
-import RulesSet from '../Server/Transcoders/Rules/Set';
+import Evented from '../../Server/Utilities/Evented';
+import RulesSet from '../../Server/Transcoders/Rules/Set';
+import Sender from './Sender';
 import co from 'co';
 
 export default class Receiver extends Evented {
@@ -12,6 +13,10 @@ export default class Receiver extends Evented {
 		this.status = new ReceiverStatus( this );
 
 		this.transcoders = new RulesSet();
+	}
+
+	createSender ( router ) {
+		return new Sender( router );
 	}
 
 	get current () {

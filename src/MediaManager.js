@@ -3,8 +3,13 @@ import Dictionary from './Server/Utilities/Dictionary';
 import co from 'co';
 
 export default class MediaManager {
-	constructor () {
-		this.devices = new Map();
+	constructor ( server ) {
+		this.server = server;
+
+		this.devices = {
+			senders: new Map(),
+			status: new Map()
+		};
 	}
 
 	has ( id ) {
@@ -15,14 +20,6 @@ export default class MediaManager {
 		return PlaylistItem.loadOne( { _id: id } );
 	}
 
-	make ( media, server, device ) {
-		media = this.makeMessage( media.id, media, server );
-
-		media.subtitles_style = device.getSubtitlesStyle();
-
-		return media;
-	}
-
 	async store ( data ) {
 		let item = PlaylistItem.create( data );
 
@@ -31,22 +28,22 @@ export default class MediaManager {
 		return item;
 	}
 
-	play ( media, device, server, reset = false ) {
-		return co( function * () {
-			if ( reset ) {
-				media.status.reset();
+	async play ( media, receiver, reset = false ) {
+		if ( reset ) {
+			media.status.reset();
 
-				yield media.save();
-			}
+			await media.save();
+		}
 
-			let sender = server.providers.video( media.source, media, device );
+		let sender = this.server.providers.video( media.source, media, receiver );
 
-			let message = yield device.play( media, server, sender );
+		await this.listen( receiver );
 
-			this.setup( device );
+		let message = await receiver.play( media, this.server, sender );
 
-			return message;
-		}.bind( this ) );
+		await this.setup( receiver );
+
+		return message;
 	}
 
 	stop ( device ) {
@@ -65,24 +62,34 @@ export default class MediaManager {
 		}.bind( this ) );
 	}
 
-	setup ( device ) {
-		if ( this.devices.has( device ) ) {
+	async listen ( receiver ) {
+		if ( !this.devices.senders.has( receiver ) ) {
+			let router = this.server.senders.register( receiver );
+
+			this.devices.senders.set( receiver, router );
+
+			return router;
+		}
+
+		return this.devices.senders.get( receiver );
+	}
+
+	async setup ( receiver ) {
+		if ( this.devices.status.has( receiver ) ) {
 			return;
 		}
 
-		this.devices.set( device, true );
+		this.devices.status.set( receiver, true );
 
-		device.status.on( 'update', this.update.bind( this, device ) );
+		receiver.status.on( 'update', this.update.bind( this, receiver ) );
 	}
 
-	update ( device, status ) {
-		return co( function * () {
-			if ( device.current ) {
-				yield device.current.status.update( device.current, status );
+	async update ( device, status ) {
+		if ( device.current ) {
+			await device.current.status.update( device.current, status );
 
-				console.log( device.current.status.state, device.current.status.percentage, device.current.status.currentTime, device.current.status.duration );
-			}
-		}.bind( this ) );
+			console.log( device.current.status.state, device.current.status.percentage, device.current.status.currentTime, device.current.status.duration );
+		}
 	}
 
 	static getInstance () {

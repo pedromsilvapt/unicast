@@ -1,5 +1,6 @@
 import Codec from './Codec';
 import _ from 'lodash';
+import is from 'is';
 
 export default class TrackCodec extends Codec {
 	constructor ( criteria = {} ) {
@@ -8,8 +9,12 @@ export default class TrackCodec extends Codec {
 		this.criteria = criteria;
 	}
 
-	tracks ( metadata ) {
-		return _.where( metadata.streams, this.criteria );
+	tracks ( metadata, criteria ) {
+		if ( is.undef( criteria ) ) {
+			criteria = this.criteria;
+		}
+
+		return _.where( metadata.streams, criteria );
 	}
 
 	matches ( metadata ) {

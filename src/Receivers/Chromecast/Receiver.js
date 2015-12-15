@@ -1,7 +1,7 @@
 import { Buffered, Live } from '../../Server/Providers/StreamTypes';
 import chromecastTranscoder from './Transcoder';
 import MediaFactory from './MediaFactory';
-import BaseReceiver from '../Receiver';
+import BaseReceiver from '../Default//Receiver';
 import { Client } from 'castv2-client';
 import { Device } from 'chromecast-js';
 import promisify from 'es6-promisify';
@@ -132,7 +132,7 @@ export default class Receiver extends BaseReceiver {
 			currentTime: item.currentTime
 		}, options );
 
-		media = this.mediaFactory.make( item, server, media );
+		media = this.mediaFactory.make( item, server, this, media );
 
 		if ( sender ) {
 			let type = await sender.type;

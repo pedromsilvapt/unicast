@@ -3,35 +3,45 @@ import co from 'co';
 import is from 'is';
 
 export default class Manager {
-	constructor () {
+	constructor ( server ) {
 		this.types = {};
+
+		this.server = server;
 	}
 
-	load ( Receiver ) {
-		return co( function * () {
-			let receiver = this.getType( Receiver );
+	async load ( Receiver ) {
+		let receiver = this.getType( Receiver );
 
-			if ( is.string( Receiver ) ) {
-				Receiver = receiver.constructor;
+		if ( is.string( Receiver ) ) {
+			Receiver = receiver.constructor;
+		}
+
+		if ( config.has( 'devices.custom' ) ) {
+			let custom = config.get( 'devices.custom' );
+
+			custom = custom.filter( device => device.type == Receiver.type );
+
+			for ( let device of custom ) {
+				this.registerDevice( new Receiver( device.name, device ) );
 			}
 
-			if ( config.has( 'devices.custom' ) ) {
-				let custom = config.get( 'devices.custom' );
+			receiver.loaded = true;
+		}
 
-				custom = custom.filter( device => device.type == Receiver.type );
+		if ( !config.has( 'devices.scan' ) || config.get( 'devices.scan' ) ) {
+			// TODO scan devices
+			receiver.scanned = true;
+		}
+	}
 
-				for ( let device of custom ) {
-					this.registerDevice( new Receiver( device.name, device ) );
-				}
+	async listen ( Receiver ) {
+		let receiver = this.getType( Receiver );
 
-				receiver.loaded = true;
-			}
+		if ( is.string( Receiver ) ) {
+			Receiver = receiver.constructor;
+		}
 
-			if ( !config.has( 'devices.scan' ) || config.get( 'devices.scan' ) ) {
-				// TODO scan devices
-				receiver.scanned = true;
-			}
-		}.bind( this ) );
+		await Promise.resolve( Receiver.senders.listen() );
 	}
 
 	register ( receiver ) {
@@ -58,19 +68,29 @@ export default class Manager {
 		return this.types[ type ];
 	}
 
-	get ( type, name ) {
-		return co( function * () {
-			let receiver = this.getType( type );
+	all () {
+		return Object.keys( this.types ).map( key => this.types[ key ] );
+	}
 
+	async get ( name, type ) {
+		let types;
+
+		if ( !type ) {
+			types = this.all();
+		} else {
+			types = [ this.getType( type ) ];
+		}
+
+		for ( let receiver of types ) {
 			if ( !receiver.loaded ) {
-				yield this.load( receiver.type );
+				await this.load( receiver.type );
 			}
 
-			if ( !( name in receiver.devices ) ) {
-				throw new Error( 'No device found with the name "' + name + '".' );
+			if ( name in receiver.devices ) {
+				return receiver.devices[ name ];
 			}
+		}
 
-			return receiver.devices[ name ];
-		}.bind( this ) );
+		throw new Error( 'No device found with the name "' + name + '".' );
 	}
 }

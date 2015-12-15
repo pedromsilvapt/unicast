@@ -7,7 +7,6 @@ import ReceiverController from './ReceiverController';
 import PlaylistsItemsController from './PlaylistsItemsController';
 import Playlist from '../Models/Playlist';
 import PlaylistItem from '../Models/PlaylistItem';
-import MediaManager from '../../MediaManager';
 
 export default class PlaylistsController extends ReceiverController {
 	static routes ( router, make ) {
