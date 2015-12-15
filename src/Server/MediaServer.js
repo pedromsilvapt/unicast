@@ -1,4 +1,6 @@
 import Server from './Server';
+import StayAwake from './Utilities/StayAwake/Command';
+import Deconstructor from './Utilities/Deconstructor';
 import ProvidersManager from './Providers/Manager';
 import ReceiversManager from '../Receivers/Manager';
 import SendersManager from './SendersManager';
@@ -20,6 +22,9 @@ import ChromecastReceiver from '../Receivers/Chromecast/Receiver';
 export default class MediaServer extends Server {
 	constructor () {
 		super();
+
+		this.stayAwake = new StayAwake();
+		this.deconstructor = new Deconstructor( () => this.stayAwake.sleep( true ) );
 
 		this.providers = new ProvidersManager();
 		this.receivers = new ReceiversManager();
@@ -57,6 +62,8 @@ export default class MediaServer extends Server {
 		}
 
 		this.database = await connect( 'nedb://storage/database' );
+
+		await this.stayAwake.awake();
 
 		return super.listen( port );
 	}
