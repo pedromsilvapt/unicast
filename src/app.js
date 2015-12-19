@@ -1,11 +1,8 @@
-import Cluster from './Server/Cluster';
-import logger from './Server/Logger';
+import Application from './Application';
+import ServerCommand from './Commands/Server';
 
-let cluster = new Cluster();
+let app = new Application();
 
-logger.addTag( { msg: cluster.isMaster ? 'Master' : 'Worker', colors: 'red' } );
-cluster.listen().then( status => {
-	logger.message( 'Server listening on http://' + status.ip + ':' + status.port );
-} ).catch( ( error ) => {
-	console.error( 'ERROR', error.message, error.stack );
-} );
+app.register( new ServerCommand() );
+
+app.parse();
