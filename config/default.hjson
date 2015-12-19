@@ -51,7 +51,7 @@
 
             startup: {
                 args: -startoff
-                wait: false
+                wait: 500
             }
 
             activate:{

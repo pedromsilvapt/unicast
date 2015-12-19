@@ -3,6 +3,6 @@ import config from 'config';
 
 export default class ReceiverController extends Controller {
 	get receiver () {
-		return this.server.receivers.get( config.get( 'devices.default' ).name, config.get( 'devices.default' ).type );
+		return this.server.receivers.get( this.params.receiver );
 	}
 }

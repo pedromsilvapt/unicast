@@ -14,7 +14,7 @@ export default class Controller {
 			controller.params = this.params;
 			controller.server = this.server;
 
-			let result = yield controller[ name ]( next );
+			let result = yield Promise.resolve( controller[ name ]( next ) );
 
 			if ( output === 'raw' ) {
 				this.body = result;

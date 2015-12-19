@@ -26,27 +26,27 @@ export default class DeviceController extends ReceiverController {
 
 		PlaylistsController.routes( device, make );
 
-		router.use( '/device', device.routes() );
+		router.use( '/device/:receiver', device.routes() );
 	}
 
-	* play () {
-		let device = yield this.receiver;
+	async play () {
+		let device = await this.receiver;
 
 		let source = this.request.body.source;
 
-		let item = yield this.server.providers.item( source, null, this.request );
+		let item = await this.server.providers.item( source, null, this.request );
 
-		let media = yield this.server.media.store( item );
+		let media = await this.server.media.store( item );
 
-		let status = yield this.server.media.play( media, device );
+		let status = await this.server.media.play( media, device );
 
 		return media;
 	}
 
-	* toggle () {
-		let device = yield this.receiver;
+	async toggle () {
+		let device = await this.receiver;
 
-		let status = yield device.getStatus();
+		let status = await device.getStatus();
 
 		if ( !status || !status.playerState ) {
 			return;
@@ -59,77 +59,77 @@ export default class DeviceController extends ReceiverController {
 		}
     }
 
-	* pause () {
-		let device = yield this.receiver;
+	async pause () {
+		let device = await this.receiver;
 
 		return device.pause();
     }
 
-	* resume () {
-		let device = yield this.receiver;
+	async resume () {
+		let device = await this.receiver;
 
 		return device.resume();
     }
 
-	* stop () {
-		let device = yield this.receiver;
+	async stop () {
+		let device = await this.receiver;
 
 		return device.stop();
     }
 
-	* seek () {
-		let device = yield this.receiver;
+	async seek () {
+		let device = await this.receiver;
 
 		let percentage = parseFloat( this.params.percentage.replace( ',', '.' ) );
 
 		return device.seekToPercentage( percentage );
     }
 
-	* status () {
-		let device = yield this.receiver;
+	async status () {
+		let device = await this.receiver;
 
-		let status = yield device.getStatus();
+		let status = await device.getStatus();
 
 		return status || { mediaSessionIn: null };
 	}
 
-	* getVolume () {
-		return ( yield this.status() ).volume || {};
+	async getVolume () {
+		return ( await this.status() ).volume || {};
 	}
 
-	* setVolume () {
-		let device = yield this.receiver;
+	async setVolume () {
+		let device = await this.receiver;
 
 		let volume = this.params.volume / 100;
 
-		yield device.changeVolume( volume );
+		await device.changeVolume( volume );
 
 		return this.getVolume();
 	}
 
-	* setVolumeMute () {
-		let device = yield this.receiver;
+	async setVolumeMute () {
+		let device = await this.receiver;
 
-		//let volume = yield this.getVolume();
+		//let volume = await this.getVolume();
 
-		yield device.changeVolumeMuted( !device.muted );
+		await device.changeVolumeMuted( !device.muted );
 
 		device.muted = !device.muted;
 
 		return this.getVolume();
 	}
 
-	* setSubtitlesSize () {
-		let device = yield this.receiver;
+	async setSubtitlesSize () {
+		let device = await this.receiver;
 
-		yield device.changeSubtitlesSize( parseInt( this.params.size, 10 ) / 100 );
+		await device.changeSubtitlesSize( parseInt( this.params.size, 10 ) / 100 );
 
 		return { success: true };
 	}
 
-	* close () {
-		let device = yield this.receiver;
+	async close () {
+		let device = await this.receiver;
 
-		return yield device.close();
+		return device.close();
 	}
 }

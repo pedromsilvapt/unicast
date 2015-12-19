@@ -33,14 +33,6 @@ export default class Command extends StayAwake {
 					wait: true
 				} }, defaultCommand, command );
 
-				//return exec( command.cmd + ' ' + command.args.join( ' ' ), command.options, ( error, stdout, stderr ) => {
-				//	if ( error ) {
-				//		return reject( error );
-				//	}
-				//
-				//	resolve( stdout.toString( 'utf8' ) );
-				//} );
-
 				let child = spawn( command.cmd, command.args, command.options );
 				child.on( 'error', e => reject( e ) );
 				child.on( 'close', e => resolve() );
@@ -49,8 +41,12 @@ export default class Command extends StayAwake {
 
 				child.unref();
 
-				if ( !command.wait ) {
+				if ( command.wait === false ) {
 					resolve();
+				} else if ( is.number( command.wait ) ) {
+					setTimeout( () => {
+						resolve();
+					}, command.wait );
 				}
 			} catch ( error ) {
 				reject( error );
@@ -73,6 +69,8 @@ export default class Command extends StayAwake {
 	async turnOn () {
 		if ( !this.ranOnce ) {
 			await this.start();
+
+			this.ranOnce = true;
 		}
 
 		await this.runCommandNamed( 'activate' );
