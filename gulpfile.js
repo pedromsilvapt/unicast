@@ -56,6 +56,7 @@ gulp.task( 'watch', function () {
 gulp.task( 'server', function () {
 	nodemon( {
 		script: 'app.js',
+		args: [ 'server' ],
 		ext: 'js peg',
 		watch: [ 'bin' ],
 		delay: '2',
