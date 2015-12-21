@@ -1,6 +1,8 @@
 {
     name: StreamCast
 
+    storage: storage
+
     server: {
         master: {
             port: 9223

@@ -47,6 +47,8 @@ export default class MediaServer extends Server {
 	}
 
 	async initialize () {
+		this.database = await connect( 'nedb://storage/database' );
+
 		this.app.on( 'error', Logger.koaError() );
 
 		this.use( Logger.koa() );
@@ -60,8 +62,6 @@ export default class MediaServer extends Server {
 		if ( !port ) {
 			port = config.get( 'server.worker.port' );
 		}
-
-		this.database = await connect( 'nedb://storage/database' );
 
 		await this.stayAwake.awake();
 

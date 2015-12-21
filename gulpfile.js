@@ -64,9 +64,13 @@ gulp.task( 'server', function () {
 			'js': 'node --harmony-proxies'
 		},
 		env: { 'NODE_ENV': 'development' }
-	} )
+	} );
+} );
+
+gulp.task( 'dev:server', function ( done ) {
+	runSequence( 'default', 'server', done );
 } );
 
 gulp.task( 'default', function ( done ) {
-	runSequence( 'build', 'copy', 'watch', 'server', done );
+	runSequence( 'build', 'copy', 'watch', done );
 } );

@@ -17,7 +17,9 @@ export default class Application {
 	}
 
 	execute ( name, ...args ) {
-		this.commands[ name ].execute( ...args );
+		Promise.resolve( this.commands[ name ].execute( ...args ) ).catch( ( error ) => {
+			console.error( 'ERROR', error.message, error.stack );
+		} );
 	}
 
 	parse ( argv = null ) {

@@ -1,7 +1,6 @@
 import StreamTranscoder from 'stream-transcoder';
 import ff from 'fluent-ffmpeg';
 import fs from 'fs-promise';
-import co from 'co';
 
 export default class Transcoder {
 	constructor ( codec ) {
@@ -87,7 +86,6 @@ export default class Transcoder {
 				}
 
 				lastTime = progress.time;
-
 			} catch ( error ) {
 				console.log( error.message, error.stack )
 			}

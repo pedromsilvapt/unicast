@@ -1,78 +1,80 @@
-//import streamToPromise from 'stream-to-promise';
+import DefaultVideoStream from '../Default/VideoStream';
+import WritePromise from '../../Utilities/WritePromise';
+import LiveVideo from '../../Utilities/LiveVideo';
+import Deferred from '../../Utilities/Deferred';
 import { Buffered, Live } from '../StreamTypes';
 import FFMpeg from '../../Utilities/FFMpeg';
-import rangeParser from 'range-parser';
-import multi from 'multi-write-stream';
-import { Stream, PassThrough } from 'stream';
-import TempFile from '../../Utilities/TempFile';
+import extend from 'extend';
 import fs from 'fs-promise';
-import through2 from 'through2';
 import mime from 'mime';
 import is from 'is';
-import extend from 'extend';
-import WritePromise from '../../Utilities/WritePromise';
-import Deferred from '../../Utilities/Deferred';
 
 // Transcoders
 import Transcoder from '../../Transcoders/Transcoder';
 
-export default class VideoStream {
-	constructor ( filepath, receiver = null ) {
-		this.filepath = filepath;
-		this.receiver = receiver;
+export default class VideoStream extends DefaultVideoStream {
+	constructor ( filePath, receiver = null ) {
+		super( receiver );
+		this.filePath = filePath;
+		this.transcodeStartDelay = 4000;
 
 		this.embedded = new EmbeddedObjects( this );
 	}
 
 	get metadata () {
-		return FFMpeg.probe( this.filepath );
+		return FFMpeg.probe( this.filePath );
 	}
 
-	get type () {
+	get streamType () {
 		return this.metadata.then( metadata => {
 			let transcoder = new Transcoder( this.receiver.transcoders );
 
 			return transcoder.matches( metadata ).length === 0 ? Buffered : Live;
 		} );
 	}
-	async serve ( request, response ) {
+
+	get live () {
+		return this.streamType.then( type => type == Live );
+	}
+
+	get size () {
+		return fs.stat( this.filePath ).then( stat => stat.size );
+	}
+
+	get type () {
+		return this.streamType;
+	}
+
+	get mime () {
+		return mime.lookup( this.filePath );
+	}
+
+	async transcode ( transcoders = null ) {
+		let transcoder = new Transcoder( transcoders || this.receiver.transcoders );
+
 		let metadata = await this.metadata;
 
-		//console.log( metadata.streams.filter( s => s.codec_type === 'audio' ) );
+		let stream = transcoder.run( fs.createReadStream( this.filePath ), metadata ).pipe( new LiveVideo() );
 
-		let stat = fs.statSync( this.filepath );
-		let total = stat.size;
-		let range = request.headers.range;
-		let type = mime.lookup( this.filepath );
-
-		response.set( 'Content-Type', type );
-		response.set( 'Access-Control-Allow-Origin', '*' );
-
-		let file;
-		let part;
-		if ( !range ) {
-			console.log( 'norange', total );
-			response.set( 'Content-Length', total );
-			response.status = 200;
-
-			file = fs.createReadStream( this.filepath );
-		} else {
-			part = rangeParser( total, range )[ 0 ];
-			let chunksize = ( part.end - part.start ) + 1;
-
-			file = fs.createReadStream( this.filepath, { start: part.start, end: part.end } );
-
-			console.log( 'with range', part, total );
-
-			response.set( 'Content-Range', 'bytes ' + part.start + '-' + part.end + '/' + total );
-			response.set( 'Accept-Ranges', 'bytes' );
-			response.set( 'Content-Length', chunksize );
-			response.status = 206;
+		if ( is.number( this.transcodeStartDelay ) ) {
+			await ( new Promise( ( resolve ) => setTimeout( resolve, this.transcodeStartDelay ) ) );
 		}
 
-		let transcoder = new Transcoder( this.receiver.transcoders );
+		return stream;
+	}
 
-		return transcoder.run( file, metadata );
+	async read ( offset = null ) {
+		if ( this.live ) {
+			return this.transcode();
+		}
+
+		if ( offset ) {
+			return fs.createReadStream( this.filePath, {
+				start: offset.start, end: offset.end
+			} );
+		}
+
+		return fs.createReadStream( this.filePath )
 	}
 }
 
@@ -143,7 +145,7 @@ export class EmbeddedSubtitle {
 	extract ( destinations = null, onProgress = null, options = {} ) {
 		[ destinations, onProgress, options ] = this.extractParams( destinations, onProgress, options );
 
-		let command = FFMpeg.open( this.stream.filepath );
+		let command = FFMpeg.open( this.stream.filePath );
 
 		command.outputOptions( [
 			'-map 0:s:' + this.index,
