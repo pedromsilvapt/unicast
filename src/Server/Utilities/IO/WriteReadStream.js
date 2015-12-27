@@ -12,13 +12,11 @@ export default class WriteReadStream extends Duplex {
 			this.writer = this.createWriter( destination );
 		}
 
-		this.sent = 0;
-		this.waiting = 0;
+		this.reader = this.createReader();
+
 		this.written = 0;
 		this.received = 0;
 		this.writingEnded = false;
-
-		this.sendQueue = Promise.resolve( null );
 
 		this.watchers = [];
 		this.requests = [];
@@ -36,10 +34,6 @@ export default class WriteReadStream extends Duplex {
 
 		writer.on( 'finish', () => {
 			this.writingEnded = true;
-
-			if ( this.sent == this.received ) {
-				this.push( null );
-			}
 
 			this.releaseAllRequests();
 		} );
@@ -94,24 +88,9 @@ export default class WriteReadStream extends Duplex {
 			this.dispatchWatchers();
 		} );
 
-
-		if ( this.waiting > 0 ) {
-			this.sendQueue = this.sendQueue.then( () => {
-				let sending = Math.min( this.waiting, chunk.length );
-				this.waiting -= sending;
-				this.sent += sending;
-
-				this.push( chunk.slice( 0, sending ) );
-
-				if ( this.writingEnded && this.sent == this.received ) {
-					this.push( null );
-				}
-			} );
-		}
-
 		for ( let request of this.requests ) {
-			let prefixOver = Math.max( 0, request.start - this.sent );
-			let suffixOver = Math.max( 0, this.sent + chunk.length - request.end );
+			let prefixOver = Math.max( 0, request.start - this.received - chunk.length );
+			let suffixOver = Math.max( 0, this.received - request.end );
 
 			let length = chunk.length - prefixOver - suffixOver;
 
@@ -143,36 +122,6 @@ export default class WriteReadStream extends Duplex {
 		this.requests = [];
 	}
 
-	readBuffer ( start, end ) {
-		let source = this.readBufferChunks( start, end );
-
-		source.onValue( d => this.push( d ) );
-		source.onEnd( () => {
-			if ( this.writingEnded && end == this.written ) {
-				this.push( null );
-			}
-		} );
-
-		return source.toPromise().then( () => null );
-		//return new Promise( ( resolve, reject ) => {
-		//	try {
-		//		fs.createReadStream( this.destination, { start: start, end: end - 1 } ).on( 'data', ( d ) => {
-		//			this.push( d );
-		//		} ).on( 'error', ( error ) => {
-		//			reject( error );
-		//		} ).on( 'end', () => {
-		//			if ( this.writingEnded && end == this.written ) {
-		//				this.push( null );
-		//			}
-		//
-		//			resolve();
-		//		} );
-		//	} catch ( error ) {
-		//		reject( error );
-		//	}
-		//} );
-	}
-
 	readBufferChunks ( start, end ) {
 		return Kefir.stream( emitter => {
 			fs.createReadStream( this.destination, { start: start, end: end - 1 } ).on( 'data', ( d ) => {
@@ -182,14 +131,6 @@ export default class WriteReadStream extends Duplex {
 			} ).on( 'end', () => {
 				emitter.end();
 			} );
-		} );
-	}
-
-	async send ( start, end ) {
-		this.sendQueue = this.sendQueue.then( () => {
-			return this.when( end );
-		} ).then( () => {
-			return this.readBuffer( start, end );
 		} );
 	}
 
@@ -242,17 +183,11 @@ export default class WriteReadStream extends Duplex {
 	}
 
 	_read ( size ) {
-		let have = Math.max( 0, Math.min( this.received - this.sent, size ) );
-
-		if ( have > 0 ) {
-			this.send( this.sent, this.sent + have );
-
-			this.sent += have;
-		}
-
-		if ( !this.writingEnded ) {
-			this.waiting += size - have;
-		}
+		this.reader.readAsync( size ).then( data => {
+			for ( let chunk of data ) {
+				this.push( chunk );
+			}
+		} )
 	}
 }
 
@@ -276,8 +211,8 @@ export class ReadStream extends Readable {
 		this.emit( 'close' );
 	}
 
-	_read ( size ) {
-		this.sendingQueue = this.sendingQueue.then( ()  => {
+	readAsync ( size ) {
+		return this.sendingQueue = this.sendingQueue.then( ()  => {
 			let start = this.sent + this.offset.start;
 
 			if ( this.offset.end ) {
@@ -286,21 +221,33 @@ export class ReadStream extends Readable {
 
 			return this.source.request( start, start + size ).then( ( data ) => {
 				if ( this.destroyed ) {
-					return;
+					return [];
 				}
 
-				this.push( data );
+				let result = [];
+
+				result.push( data );
 
 				if ( data ) {
 					this.sent += data.length;
 
 					if ( this.offset.end ) {
 						if ( this.sent + this.offset.start == this.offset.end ) {
-							this.push( null );
+							result.push( null );
 						}
 					}
 				}
+
+				return result;
 			} ).catch( e => console.error( e.message, e.stack ) );
+		} );
+	}
+
+	_read ( size ) {
+		this.readAsync( size ).then( data => {
+			for ( let chunk of data ) {
+				this.push( chunk );
+			}
 		} );
 	}
 }

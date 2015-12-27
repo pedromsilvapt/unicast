@@ -35,7 +35,6 @@ export default class VideoStream extends DefaultVideoStream {
 	}
 
 	get live () {
-		return true;
 		return this.streamType.then( type => type === Live );
 	}
 
