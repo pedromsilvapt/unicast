@@ -3,7 +3,6 @@ import PlaylistItem from '../../Models/PlaylistItem';
 import promisify from 'es6-promisify';
 import ytdl from 'ytdl-core';
 import li from 'link-id';
-import co from 'co';
 
 import YoutubeVideoStream from './VideoStream';
 import YoutubeSubtitlesStream from './SubtitlesStream';
@@ -21,22 +20,20 @@ export default class YoutubeProvider extends Provider {
 		}
 	}
 
-	item ( playlist, request ) {
-		return co( function * () {
-			let source = request.body.source;
+	async item ( playlist, request ) {
+		let source = request.body.source;
 
-			let info = yield promisify( ytdl.getInfo.bind( ytdl ) )( source );
+		let info = await promisify( ytdl.getInfo.bind( ytdl ) )( source );
 
-			return {
-				type: 'generic',
-				source: source,
-				subtitles: source,
-				title: info.title,
-				cover: info.iurlmaxres,
-				order: PlaylistItem.maxOrder( playlist ),
-				data: request.body.data || {}
-			};
-		}.bind( this ) );
+		return {
+			type: 'generic',
+			source: source,
+			subtitles: source,
+			title: info.title,
+			cover: info.iurlmaxres,
+			order: PlaylistItem.maxOrder( playlist ),
+			data: request.body.data || {}
+		};
 	}
 
 	video ( source ) {

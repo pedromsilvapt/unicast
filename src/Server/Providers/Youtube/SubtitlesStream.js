@@ -2,7 +2,6 @@ import SubtitlesStream from '../Local/SubtitlesStream';
 import SubtitlesDownloader from './SubtitlesDownloader';
 import { promise as retry } from 'rerun';
 import fs from 'fs-promise';
-import co from 'co';
 
 export default class YoutubeSubtitlesStream extends SubtitlesStream {
 	constructor ( filepath ) {
@@ -24,15 +23,13 @@ export default class YoutubeSubtitlesStream extends SubtitlesStream {
 		} ).catch( ( error ) => { console.error( 'Subtitles', error.message, error.stack );  return null } );
 	}
 
-	getVTT () {
-		return co( function * () {
-			let contents = yield this.download( this.filepath );
+	async get () {
+		let contents = await this.download( this.filepath );
 
-			if ( !contents ) {
-				contents = 'WEBVTT';
-			}
+		if ( !contents ) {
+			contents = 'WEBVTT';
+		}
 
-			return this.convert( contents );
-		}.bind( this ) );
+		return this.convert( contents );
     }
 }
