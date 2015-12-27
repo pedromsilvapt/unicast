@@ -1,6 +1,5 @@
 import PlaylistItem from './Server/Models/PlaylistItem';
 import Dictionary from './Server/Utilities/Dictionary';
-import co from 'co';
 
 export default class MediaManager {
 	constructor ( server ) {
@@ -46,20 +45,18 @@ export default class MediaManager {
 		return message;
 	}
 
-	stop ( device ) {
-		return co( function * () {
-			if ( device.current ) {
-				let playlist = yield device.playlist;
+	async stop ( device ) {
+		if ( device.current ) {
+			let playlist = await device.playlist;
 
-				if ( playlist ) {
-					playlist.current = null;
+			if ( playlist ) {
+				playlist.current = null;
 
-					yield playlist.save();
-				}
+				await playlist.save();
 			}
+		}
 
-			device.stop();
-		}.bind( this ) );
+		device.stop();
 	}
 
 	async listen ( receiver ) {

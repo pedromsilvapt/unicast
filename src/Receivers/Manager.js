@@ -1,5 +1,4 @@
 import config from 'config';
-import co from 'co';
 import is from 'is';
 
 export default class Manager {

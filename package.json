@@ -14,7 +14,6 @@
     "castv2-client": "^1.1.0",
     "chromecast-js": "^0.1.7",
     "chromecast-scanner": "^0.4.3",
-    "co": "^4.6.0",
     "commander": "^2.9.0",
     "config": "^1.16.0",
     "del": "^2.0.2",

@@ -1,7 +1,6 @@
 import PlaylistItem from './PlaylistItem';
 import Document from './Document';
 import sortBy from 'sort-by';
-import co from 'co';
 
 export default class Playlist extends Document {
 	constructor () {
@@ -16,20 +15,18 @@ export default class Playlist extends Document {
 		};
 	}
 
-	static followingItems ( filter, sorter, query, length = null ) {
-		return co( function * () {
-			let playlist = yield this.loadOne( query );
+	static async followingItems ( filter, sorter, query, length = null ) {
+		let playlist = await this.loadOne( query );
 
-			let current = playlist.current;
+		let current = playlist.current;
 
-			let nextItems = playlist.items.filter( i => filter( i, current ) ).sort( sorter );
+		let nextItems = playlist.items.filter( i => filter( i, current ) ).sort( sorter );
 
-			if ( length !== null ) {
-				nextItems = nextItems.slice( 0, length );
-			}
+		if ( length !== null ) {
+			nextItems = nextItems.slice( 0, length );
+		}
 
-			return nextItems;
-		}.bind( this ) );
+		return nextItems;
 	}
 
 	static previousItems ( query, length = null ) {
@@ -44,49 +41,45 @@ export default class Playlist extends Document {
 		this.items = this.items.filter( i => i );
 	}
 
-	remove ( item, index = null ) {
-		return co( function * () {
-			let playlist = this;
+	async remove ( item, index = null ) {
+		let playlist = this;
 
-			if ( is.number( item ) ) {
-				index = item;
+		if ( is.number( item ) ) {
+			index = item;
 
-				item = this.items[ index ];
-			}
+			item = this.items[ index ];
+		}
 
-			if ( !item ) {
-				return;
-			}
+		if ( !item ) {
+			return;
+		}
 
-			if ( this.current == item ) {
-				this.current = null;
+		if ( this.current == item ) {
+			this.current = null;
 
-				playlist = yield this.save();
-			} else if ( item ) {
-				yield item.delete();
-			}
+			playlist = await this.save();
+		} else if ( item ) {
+			yield item.delete();
+		}
 
-			if ( index === null ) {
-				index = this.items.indexOf( item );
-			}
+		if ( index === null ) {
+			index = this.items.indexOf( item );
+		}
 
-			if ( index >= 0 ) {
-				this.items[ index ] = null;
-			}
+		if ( index >= 0 ) {
+			this.items[ index ] = null;
+		}
 
-			return playlist;
-		}.bind( this ) );
+		return playlist;
 	}
 
-	clear () {
-		return co( function * () {
-			let playlist = this;
+	async clear () {
+		let playlist = this;
 
-			for ( let [ index, item ] of ( this.items || [] ).entries() ) {
-				playlist = yield this.remove( item, index );
-			}
+		for ( let [ index, item ] of ( this.items || [] ).entries() ) {
+			playlist = await this.remove( item, index );
+		}
 
-			return playlist;
-		}.bind( this ) );
+		return playlist;
 	}
 }

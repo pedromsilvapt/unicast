@@ -1,4 +1,3 @@
-import co from 'co';
 import koa from 'koa';
 import router from 'koa-router';
 import body from 'koa-body';

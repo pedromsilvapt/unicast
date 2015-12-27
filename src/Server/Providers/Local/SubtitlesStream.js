@@ -1,5 +1,4 @@
 import path from 'path';
-import co from 'co';
 import fs from 'fs-promise';
 import promisify from 'es6-promisify';
 import parser from 'subtitles-parser';
