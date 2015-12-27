@@ -1,9 +1,9 @@
 import PlaylistItem from '../../Models/PlaylistItem';
 import Provider from '../Provider';
+import TranscodersManager from '../../Transcoders/Manager';
 import config from 'config';
 import fs from 'fs-promise';
 import path from 'path';
-import co from 'co';
 import is from 'is';
 
 import LocalVideoStream from './VideoStream';
@@ -11,6 +11,12 @@ import LocalSubtitlesStream from './SubtitlesStream';
 import LocalEmbeddedSubtitlesStream from './EmbeddedSubtitlesStream';
 
 export default class LocalProvider extends Provider {
+	constructor () {
+		super();
+
+		this.transcodingProcesses = new TranscodersManager();
+	}
+
 	get identity () {
 		return 'local';
 	}

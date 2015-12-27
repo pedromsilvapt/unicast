@@ -6,6 +6,8 @@ export default class Sender {
 		this.receiver = router.receiver;
 		this.server = router.manager.server;
 
+		this.streamEndMethods = [ 'end', 'close', 'destroy' ];
+
 		this.urlStore = {};
 	}
 
@@ -13,9 +15,18 @@ export default class Sender {
 		stream = await Promise.resolve( stream );
 
 		let closeResult = () => {
-			if ( is.fn( stream.end ) ) {
+			if ( is.fn( this.streamEndMethods ) ) {
+				this.streamEndMethods( stream );
+
 				console.log( 'terminate' );
-				stream.end();
+			} else {
+				for ( let method of this.streamEndMethods ) {
+					if ( is.fn( stream[ method ] ) ) {
+						console.log( 'terminate' );
+						stream[ method ]();
+						break;
+					}
+				}
 			}
 		};
 

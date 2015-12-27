@@ -4,6 +4,7 @@ import LiveVideo from '../../Utilities/LiveVideo';
 import Deferred from '../../Utilities/Deferred';
 import { Buffered, Live } from '../StreamTypes';
 import FFMpeg from '../../Utilities/FFMpeg';
+import { PassThrough } from 'stream';
 import extend from 'extend';
 import fs from 'fs-promise';
 import mime from 'mime';
@@ -27,14 +28,15 @@ export default class VideoStream extends DefaultVideoStream {
 
 	get streamType () {
 		return this.metadata.then( metadata => {
-			let transcoder = new Transcoder( this.receiver.transcoders );
+			let transcoder = this.receiver.transcoders;
 
-			return transcoder.matches( metadata ).length === 0 ? Buffered : Live;
+			return transcoder.matches( metadata ) ? Live : Buffered;
 		} );
 	}
 
 	get live () {
-		return this.streamType.then( type => type == Live );
+		return true;
+		return this.streamType.then( type => type === Live );
 	}
 
 	get size () {
@@ -50,11 +52,11 @@ export default class VideoStream extends DefaultVideoStream {
 	}
 
 	async transcode ( transcoders = null ) {
-		let transcoder = new Transcoder( transcoders || this.receiver.transcoders );
-
 		let metadata = await this.metadata;
 
-		let stream = transcoder.run( fs.createReadStream( this.filePath ), metadata ).pipe( new LiveVideo() );
+		let transcoder = this.receiver.transcoders;
+
+		let stream = transcoder.request( fs.createReadStream( this.filePath ), metadata, this.filePath, new LiveVideo() ).createReader();
 
 		if ( is.number( this.transcodeStartDelay ) ) {
 			await ( new Promise( ( resolve ) => setTimeout( resolve, this.transcodeStartDelay ) ) );
@@ -64,8 +66,8 @@ export default class VideoStream extends DefaultVideoStream {
 	}
 
 	async read ( offset = null ) {
-		if ( this.live ) {
-			return this.transcode();
+		if ( await this.streamType == Live ) {
+			return this.transcode( offset || {} );
 		}
 
 		if ( offset ) {

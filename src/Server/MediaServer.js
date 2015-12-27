@@ -3,6 +3,7 @@ import StayAwake from './Utilities/StayAwake/Command';
 import Deconstructor from './Utilities/Deconstructor';
 import ProvidersManager from './Providers/Manager';
 import ReceiversManager from '../Receivers/Manager';
+import TranscodersManager from './Transcoders/Manager';
 import SendersManager from './SendersManager';
 import MediaManager from '../MediaManager';
 import config from 'config';
@@ -30,6 +31,7 @@ export default class MediaServer extends Server {
 		this.receivers = new ReceiversManager();
 		this.senders = new SendersManager( this, this.makeRouter.bind( this ) );
 		this.media = new MediaManager( this );
+		this.transcoders = new TranscodersManager( this );
 	}
 
 	sender ( receiver ) {
