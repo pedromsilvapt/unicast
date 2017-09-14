@@ -1,0 +1,27 @@
+name: unicast
+
+storage: storage
+
+primaryLanguage: eng
+
+secondaryLanguages: []
+
+server: 
+    port: 3030
+
+database:
+    db: unicast
+    host: "127.0.0.1"
+    port: 28015
+
+receivers:
+    scan: false
+    default: false
+    # An array of objects containing two properties: 'name' and 'address' (ip) of the devices
+    list: []        
+
+providers: []
+
+ffmpeg:
+    # Optional: If ffmpeg is not in PATH ENV, set a custom path
+    #path: C:\path\to\ffmpeg\bin
