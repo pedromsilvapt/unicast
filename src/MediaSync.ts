@@ -15,6 +15,20 @@ export class MediaSync {
         this.repositories = repositories;
     }
 
+    async clean ( task : BackgroundTask = null, kinds : MediaKind[] = null ) : Promise<void> {
+        task = task || new BackgroundTask();
+        
+        if ( !kinds ) {
+            kinds = AllMediaKinds;
+        }
+
+        for ( let kind of kinds ) {
+            await task.do( this.cleanKind( kind, task ) );
+        }
+
+        task.finish();
+    }
+
     async sync ( task : BackgroundTask = null, kinds : MediaKind[] = null ) : Promise<void> {
         task = task || new BackgroundTask();
         
@@ -34,21 +48,38 @@ export class MediaSync {
             .filter( repository => repository.indexable );
 
         for ( let repository of indexable ) {
-            switch ( kind ) {
-                case MediaKind.Movie:
-                    await task.do( new MediaSyncMovie( this, repository as IMovieMediaRepository ).run( task, null ) );
+            const remote = this.getKindRemote( repository, kind );
 
-                    break;
-                case MediaKind.TvShow:
-                    await task.do( new MediaSyncTvShow( this, repository as ITvShowMediaRepository ).run( task, null ) );
-
-                    break;
+            if ( remote ) {
+                remote.run( task, null );
             }
+        }
+    }
+
+    protected async cleanKind ( kind : MediaKind, task : BackgroundTask = null ) : Promise<void> {
+        const indexable = this.repositories.getByKind( kind )
+            .filter( repository => repository.indexable );
+
+        for ( let repository of indexable ) {
+            const remote = this.getKindRemote( repository, kind );
+
+            if ( remote ) {
+                remote.clean( task, null );
+            }
+        }
+    }
+
+    protected getKindRemote ( repository : IMediaRepository, kind ) : MediaSyncKind {
+        switch ( kind ) {
+            case MediaKind.Movie:
+                return new MediaSyncMovie( this, repository as IMovieMediaRepository );
+            case MediaKind.TvShow:
+                return new MediaSyncTvShow( this, repository as ITvShowMediaRepository );
         }
     }
 }
 
-export abstract class MediaSyncKind<M extends MediaRecord, R extends IMediaRepository<M>> {
+export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R extends IMediaRepository<M> = IMediaRepository<M>> {
     engine : MediaSync;
 
     repository : R;
@@ -108,7 +139,11 @@ export abstract class MediaSyncKind<M extends MediaRecord, R extends IMediaRepos
 
     abstract async create ( record : M ) : Promise<M>;
 
+    abstract async delete ( record : M ) : Promise<void>;
+
     async syncResources ( task : BackgroundTask, record : M ) : Promise<void> {}
+
+    async cleanResources ( task : BackgroundTask, record : M ) : Promise<void> {}
 
     abstract compare ( a : M, b : M )  : boolean;
 
@@ -162,6 +197,38 @@ export abstract class MediaSyncKind<M extends MediaRecord, R extends IMediaRepos
 
         await Promise.all( tasks );
     }
+
+    async cleanRecord ( task : BackgroundTask, record : M ) : Promise<void> {
+        await this.delete( record );
+
+        task.addDone();
+
+        await this.cleanResources( task, record );
+    }
+
+    async clean ( task : BackgroundTask, id ?: string ) : Promise<void> {
+        const indexed = await this.loadIndexed( id );
+
+        task.addTotal( indexed.length );
+
+        const remote = await this.loadRemote( id );
+
+        const existing = new Set( remote.map( record => record.internalId ) );
+
+        const missing = indexed.filter( record => !existing.has( record.internalId ) );
+
+        task.addDone( indexed.length - missing.length );
+
+        const tasks : Promise<any>[] = [];
+
+        for ( let record of remote ) {
+            tasks.push( 
+                task.do( this.cleanRecord( task, record ) )
+            );
+        }
+
+        await Promise.all( tasks );
+    }
 }
 
 export class MediaSyncMovie extends MediaSyncKind<MovieMediaRecord, IMovieMediaRepository> {
@@ -176,6 +243,10 @@ export class MediaSyncMovie extends MediaSyncKind<MovieMediaRecord, IMovieMediaR
 
     compare ( a : MovieMediaRecord, b : MovieMediaRecord ) : boolean {
         return this.equalFields( a, b, [ "title", "rating", "trailer", "parentalRating", "plot", "year", "tagline", "runtime", "art", "external", 'quality', "genres" ] );
+    }
+
+    async delete ( record : MovieMediaRecord ) : Promise<void> {
+        await this.engine.database.tables.movies.delete( record.id );
     }
 
     async create ( record : MovieMediaRecord ) : Promise<MovieMediaRecord> {
@@ -211,6 +282,10 @@ export class MediaSyncTvShow extends MediaSyncKind<TvShowMediaRecord, ITvShowMed
 
     compare ( a : TvShowMediaRecord, b : TvShowMediaRecord ) : boolean {
         return this.equalFields( a, b, [ "title", "rating", "parentalRating", "plot", "year", "art", "external", "genres" ] );
+    }
+    
+    async delete ( record : TvShowMediaRecord ) : Promise<void> {
+        await this.engine.database.tables.shows.delete( record.id );
     }
 
     async create ( record : TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
@@ -248,6 +323,14 @@ export class MediaSyncTvShow extends MediaSyncKind<TvShowMediaRecord, ITvShowMed
             await new MediaSyncTvSeason( this.engine, repository, show ).run( task );
         }
     }
+
+    async cleanResources ( task : BackgroundTask, show : TvShowMediaRecord ) : Promise<void> {
+        const repository = this.engine.repositories.get( this.repository.name, MediaKind.TvSeason ) as ITvSeasonMediaRepository;
+
+        if ( repository ) {
+            await new MediaSyncTvSeason( this.engine, repository, show ).clean( task );
+        }
+    }
 }
 
 export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSeasonMediaRepository> {
@@ -276,6 +359,10 @@ export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSea
 
     compare ( a : TvSeasonMediaRecord, b : TvSeasonMediaRecord ) : boolean {
         return this.equalFields( a, b, [ "art", "number", "external" ] );
+    }
+
+    async delete ( record : TvSeasonMediaRecord ) : Promise<void> {
+        await this.engine.database.tables.seasons.delete( record.id );
     }
 
     async create ( record : TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
@@ -314,7 +401,14 @@ export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSea
 
         if ( repository ) {
             await new MediaSyncTvEpisode( this.engine, repository, this.show, season ).run( task );
-            // console.log( `${ this.show.title } Season ${ season.number }` );
+        }
+    }
+
+    async cleanResources ( task : BackgroundTask, season : TvSeasonMediaRecord ) : Promise<void> {
+        const repository = this.engine.repositories.get( this.repository.name, MediaKind.TvEpisode ) as ITvEpisodeMediaRepository;
+
+        if ( repository ) {
+            await new MediaSyncTvEpisode( this.engine, repository, this.show, season ).clean( task );
         }
     }
 }
@@ -346,6 +440,10 @@ export class MediaSyncTvEpisode extends MediaSyncKind<TvEpisodeMediaRecord, ITvE
 
     compare ( a : TvEpisodeMediaRecord, b : TvEpisodeMediaRecord ) : boolean {
         return this.equalFields( a, b, [ "art", "quality", "external", "rating", "seasonNumber", "runtime", "watched" ] );
+    }
+    
+    async delete ( record : TvEpisodeMediaRecord ) : Promise<void> {
+        await this.engine.database.tables.episodes.delete( record.id );
     }
 
     async create ( record : TvEpisodeMediaRecord ) : Promise<TvEpisodeMediaRecord> {

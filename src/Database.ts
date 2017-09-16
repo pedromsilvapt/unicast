@@ -481,6 +481,11 @@ export class CustomMediaTable extends BaseTable<CustomMediaRecord> {
 
 export class PlaylistsTable extends BaseTable<PlaylistRecord> {
     readonly tableName : string = 'playlists';
+
+    indexesSchema : IndexSchema[] = [ 
+        { name: 'createdAt' },
+        { name: 'updatedAt' }
+    ];
 }
 
 export class HistoryTable extends BaseTable<HistoryRecord> {
@@ -507,6 +512,7 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
 export interface PlaylistRecord {
     id ?: string;
     references : { kind : MediaKind, id : string }[];
+    device : string;
     createdAt : Date;
     updatedAt : Date;
 }

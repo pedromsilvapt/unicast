@@ -74,6 +74,10 @@ export abstract class BaseTableController<R> extends BaseController {
         return item;
     }
 
+    async transformDocument ( req : Request, res : Response, item : any, isNew : boolean ) : Promise<any> {
+        return item;
+    }
+
     @Route( 'get', '/' )
     async list ( req : Request, res : Response ) : Promise<R[]> {
         if ( !this.allowedActions.includes( 'list' ) ) {
@@ -108,7 +112,7 @@ export abstract class BaseTableController<R> extends BaseController {
             throw new NotAuthorizedError();
         }
 
-        const body = req.body;
+        const body = this.transformDocument( req, res, req.body, true );
 
         const item : R = await this.table.create( body );
 
@@ -125,7 +129,7 @@ export abstract class BaseTableController<R> extends BaseController {
             throw new NotAuthorizedError();
         }
 
-        const body = req.body;
+        const body = this.transformDocument( req, res, req.body, false );
 
         const item : R = await this.table.update( req.params.id, body );
 

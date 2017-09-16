@@ -11,7 +11,7 @@ export class InvalidDeviceArgumentError extends InvalidArgumentError {
 }
 
 export class PlayerController extends BaseController {
-    @Controller( PlaylistsController, '/playlists' )
+    @Controller( PlaylistsController, '/:device/playlists' )
     playlists : PlaylistsController;
 
     @Route( 'get', '/list' )

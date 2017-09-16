@@ -6,6 +6,7 @@ import { TvSeasonsController } from "./MediaControllers/TvSeasonsController";
 import { TvEpisodesController } from "./MediaControllers/TvEpisodesController";
 import { CollectionsController } from "./MediaControllers/CollectionsController";
 import { ArtworkController } from "./MediaControllers/ArtworkController";
+import { SyncController } from "./MediaControllers/SyncController";
 
 export class ApiController extends BaseController {
     @Controller( PlayerController, '/player' )
@@ -28,4 +29,7 @@ export class ApiController extends BaseController {
 
     @Controller( ArtworkController, '/media/artwork' )
     artwork : ArtworkController;
+
+    @Controller( SyncController, '/media/providers' )
+    sync : SyncController;
 }

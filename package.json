@@ -1,12 +1,13 @@
 {
   "name": "unicast",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "description": "21st Century Media Center",
   "main": "index.js",
   "scripts": {
+    "start": "node lib/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Pedro M. Silva <pemiolsi@gmail.com>",
+  "author": "Pedro M. Silva <pemiolsi@hotmail.com>",
   "license": "ISC",
   "devDependencies": {
     "@types/config": "0.0.32",
@@ -15,13 +16,13 @@
     "@types/node": "^8.0.20",
     "@types/object-path": "^0.9.28",
     "@types/restify": "^5.0.1",
-    "@types/sha1": "^1.1.0"
-  },
-  "dependencies": {
+    "@types/sha1": "^1.1.0",
     "@types/jimp": "^0.2.1",
     "@types/restify-errors": "^4.3.2",
     "@types/rethinkdb": "^2.3.3",
-    "@types/superagent": "^3.5.5",
+    "@types/superagent": "^3.5.5"
+  },
+  "dependencies": {
     "await-semaphore": "^0.1.1",
     "castv2-client": "^1.2.0",
     "chalk": "^2.1.0",
