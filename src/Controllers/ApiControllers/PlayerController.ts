@@ -51,7 +51,11 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.get( kind, id );
     
-            const session = await device.sessions.register( device.name, record );
+            const { playlistId, playlistPosition } = req.body;
+
+            const options = playlistId ? { playlistId, playlistPosition } : null;
+
+            const session = await device.sessions.register( device.name, record, options );
 
             return device.play( session );
         } else {

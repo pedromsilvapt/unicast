@@ -112,7 +112,7 @@ export abstract class BaseTableController<R> extends BaseController {
             throw new NotAuthorizedError();
         }
 
-        const body = this.transformDocument( req, res, req.body, true );
+        const body = await this.transformDocument( req, res, req.body, true );
 
         const item : R = await this.table.create( body );
 
@@ -138,5 +138,20 @@ export abstract class BaseTableController<R> extends BaseController {
         }
 
         return this.transform( req, res, item );
+    }
+
+    @Route( 'del', '/:id', null, true )
+    async delete ( req : Request, res : Response ) : Promise< { success : boolean } > {
+        if ( !this.allowedActions.includes( 'delete' ) ) {
+            throw new NotAuthorizedError();
+        }
+
+        const success : boolean = await this.table.delete( req.params.id );
+
+        if ( !success ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        return { success };
     }
 }

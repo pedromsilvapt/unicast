@@ -43,15 +43,13 @@ export class ArtworkController extends BaseController {
             }
         }
         
-        if ( req.query.width && false ) {
+        if ( req.query.width ) {
             const cachePathResized = path.resolve( process.cwd(), path.join( storage, 'artwork', 'originals', kind, id, property + '-w_' + req.query.width +  '.jpg' ) );
 
             if ( !( await fs.exists( cachePathResized ) ) ) {
                 const release = await this.semaphore.acquire();
                 
                 try {
-                    console.log( 1 );
-        
                     const image = await sharp( cachePath );
         
                     const metadata = await image.metadata();
@@ -62,16 +60,9 @@ export class ArtworkController extends BaseController {
         
                     const buffer = await image.resize( width, height ).toFormat( 'jpeg', { quality: 100 } ).toBuffer();
         
-                    console.log( 2, buffer.length );
                     await fs.writeFile( cachePathResized, buffer );
-    
-                    return {
-                        length: buffer.length,
-                        mime: 'image/jpeg',
-                        data: buffer
-                    };
                 } catch ( err ) {
-                    console.log( 3 );
+                    console.error( err );
                 } finally {
                     release();
                 }
@@ -84,22 +75,6 @@ export class ArtworkController extends BaseController {
                     data: fs.createReadStream( cachePathResized )
                 };
             }
-            // const image = await jimp.read( cachePath );
-
-            // return new Promise<FileInfo>( ( resolve, reject ) => {
-            //     image.resize( +req.query.width, jimp.AUTO ).getBuffer( jimp.MIME_JPEG, ( err, buffer ) => {
-            //         if ( err ) {
-            //             return reject( err );
-            //         }
-
-            //         resolve( {
-            //             length: buffer.length,
-            //             mime: jimp.MIME_JPEG,
-            //             data: buffer
-            //         } );
-            //     } );
-            // } );
-
         }
 
         const stats = await fs.stat( cachePath );
