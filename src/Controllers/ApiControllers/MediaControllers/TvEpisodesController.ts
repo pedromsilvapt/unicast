@@ -35,7 +35,10 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
     }
 
     async transform ( req : Request, res : Response, episode : TvEpisodeMediaRecord ) : Promise<any> {
-        ( episode as any ).cachedArtwork = this.cacheArtwork( episode.kind, episode.id, episode.art );
+        const url = await this.server.getMatchingUrl( req );
+        
+        ( episode as any ).cachedArtwork = this.cacheArtwork( url, episode.kind, episode.id, episode.art );
+        
         
         return episode;
     }

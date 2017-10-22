@@ -9,6 +9,13 @@ secondaryLanguages: []
 server: 
     port: 3030
 
+    ssl:
+        enabled: true
+        key: server.key
+        certificate: server.cert
+        passphrase: server
+        port: 3033
+
 database:
     db: unicast
     host: "127.0.0.1"

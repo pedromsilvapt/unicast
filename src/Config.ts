@@ -2,7 +2,7 @@ import * as yaml from 'js-yaml'
 import * as path from 'path';
 import * as fs from 'mz/fs';
 import * as ObjectPath from 'object-path';
-import * extend from 'extend';
+import * as extend from 'extend';
 
 function loadYamlFile ( file : string ) : any {
     if ( fs.existsSync( file ) ) {

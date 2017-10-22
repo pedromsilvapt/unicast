@@ -22,7 +22,9 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
     }
 
     async transform ( req : Request, res : Response, movie : MovieMediaRecord ) : Promise<any> {
-        ( movie as any ).cachedArtwork = this.cacheArtwork( movie.kind, movie.id, movie.art );
+        const url = await this.server.getMatchingUrl( req );
+        
+        ( movie as any ).cachedArtwork = this.cacheArtwork( url, movie.kind, movie.id, movie.art );
 
         if ( req.query.collections === 'true' ) {
             ( movie as any ).collections = await this.server.media.getCollections( movie.kind, movie.id );

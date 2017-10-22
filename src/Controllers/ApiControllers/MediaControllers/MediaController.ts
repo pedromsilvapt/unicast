@@ -57,14 +57,14 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
         return query;
     }
 
-    cacheArtwork ( kind : MediaKind, id : string, art : any, prefix ?: string[] ) : any {
+    cacheArtwork ( url : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) : any {
         const cached : any = {};
 
         for ( let key of Object.keys( art ) ) {
             if ( typeof art[ key ] === 'string' ) {
-                cached[ key ] = `http://192.168.0.4:3030/api/media/artwork/${ kind }/${ id }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
+                cached[ key ] = `${url}/api/media/artwork/${ kind }/${ id }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
             } else if ( art[ key ] && typeof art[ key ] === 'object' ) {
-                cached[ key ] = this.cacheArtwork( kind, id, art[ key ], [ ...( prefix || [] ), key ] );
+                cached[ key ] = this.cacheArtwork( url, kind, id, art[ key ], [ ...( prefix || [] ), key ] );
             } else {
                 cached[ key ] = art[ key ];
             }
