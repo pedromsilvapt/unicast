@@ -53,9 +53,9 @@ export class PlayerController extends BaseController {
     
             const { playlistId, playlistPosition } = req.body;
 
-            const options = playlistId ? { playlistId, playlistPosition } : null;
+            const options = playlistId ? { playlistId, playlistPosition } : {};
 
-            const session = await device.sessions.register( device.name, record, options );
+            const session = await device.sessions.register( record, options );
 
             return device.play( session );
         } else {
@@ -72,7 +72,7 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.createFromSources( sources );
     
-            const session = await device.sessions.register( device.name, record );
+            const session = await device.sessions.register( record );
 
             return device.play( session );
         } else {
@@ -141,6 +141,28 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             return device.status();
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'post', '/:device/seek/:time' )
+    async seek ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            return device.seek( +req.params.time );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'post', '/:device/seek-to/:time' )
+    async seekTo ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            return device.seekTo( +req.params.time );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }

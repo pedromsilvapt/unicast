@@ -1,5 +1,6 @@
 import * as uid from 'uid';
 import { CancelToken } from './ES2017/CancelToken';
+import { EventEmitter } from 'events';
 
 export function getMillisecondsProcessTime ( previous ?: [ number, number ] ) : number {
     const [ seconds, nano ] = process.hrtime( previous );
@@ -19,7 +20,7 @@ export function getTimeStatistics ( elapsed : number, done : number, total : num
     return elapsed * total / done;
 }
 
-export class BackgroundTask {
+export class BackgroundTask extends EventEmitter {
     static fromPromise ( fn : ( task : BackgroundTask ) => Promise<void> ) : BackgroundTask {
         const task = new BackgroundTask().start();
 
@@ -34,13 +35,27 @@ export class BackgroundTask {
 
     pausable : boolean = false;
 
-    state : BackgroundTaskState = BackgroundTaskState.Running;
+    state : BackgroundTaskState = BackgroundTaskState.Unstarted;
 
     done : number = 0;
 
     total : number = 0;
     
     errors : any[];
+
+    metrics : BackgroundTaskMetric<any>[] = [];
+
+    children : BackgroundTask[];
+
+    addTaskChild ( child : BackgroundTask ) {
+        this.children.push( child );
+
+        this.emit( 'add-child', child );
+
+        child.on( 'add-done', done => {
+            this.addDone( done );
+        } );
+    }
 
     get percentage () : number {
         if ( this.done === 0 || this.total === 0 ) {
@@ -56,16 +71,10 @@ export class BackgroundTask {
         cancel ?: CancelToken
     }[] = [];
 
-    protected startTime : [ number, number ];
-
-    protected elapsedTimeShelved : number = 0;
+    protected stopwatch : Stopwatch = new Stopwatch;
 
     get elapsedTime () : number {
-        if ( this.state === BackgroundTaskState.Running ) {
-            return this.elapsedTimeShelved + getMillisecondsProcessTime( this.startTime );
-        }
-
-        return this.elapsedTimeShelved;
+        return this.stopwatch.readMilliseconds();
     }
 
     get remainingTime () : number {
@@ -76,74 +85,112 @@ export class BackgroundTask {
         return 0;
     }
 
+    protected onStart () {}
+
     start () : this {
         if ( this.state === BackgroundTaskState.Unstarted ) {
-            this.startTime = process.hrtime();
+            this.stopwatch.resume();
 
             this.state = BackgroundTaskState.Running;
 
             this.triggerIntervals();
+
+            this.onStart();
         }
 
         return this;
     }
+
+    protected onCancel () {}
 
     cancel () : this {
         if ( this.cancelable && this.state !== BackgroundTaskState.Cancelled ) {
-            this.elapsedTimeShelved = this.elapsedTime;
+            this.stopwatch.pause();
 
             this.state = BackgroundTaskState.Cancelled;
+
+            this.onCancel();
         }
 
         return this;
     }
+
+    protected onPause () {}
 
     pause () : this {
         if ( this.pausable && this.state === BackgroundTaskState.Running ) {
-            this.elapsedTimeShelved = this.elapsedTime;
+            this.stopwatch.pause();
 
             this.state = BackgroundTaskState.Paused;
+
+            this.onPause();
         }
 
         return this;
     }
 
+    protected onResume () {}
+
     resume () : this {
         if ( this.pausable && this.state === BackgroundTaskState.Paused ) {
-            this.startTime = process.hrtime();
+            this.stopwatch.resume();
 
             this.state = BackgroundTaskState.Running;
 
+            this.onResume();
+            
             this.triggerIntervals();
         }
 
         return this;
     }
 
+    protected onFinish () {}
+
     finish () : this {
         if ( this.state === BackgroundTaskState.Running ) {
-            this.elapsedTimeShelved = this.elapsedTime;
+            this.stopwatch.pause();
 
             this.state = BackgroundTaskState.Finished;
+
+            this.onFinish();    
         }
 
         return this;
     }
+
+    protected onError( error : any ) {}
 
     addError ( error : any ) : this {
         this.errors.push( error );
 
+        this.onError( error );
+
+        this.emit( 'error', error );
+
         return this;
     }
 
+    protected onProgress () {}
+
     addTotal ( amount : number = 1 ) {
         this.total += amount;
+
+        this.onProgress();
+
+        this.emit( 'progress' );
 
         return this;
     }
 
     addDone ( amount : number = 1 ) : this {
         this.done += amount;
+
+        this.onProgress();
+
+        this.emit( 'progress' );
+
+        this.emit( 'add-done', amount );
 
         return this;
     }
@@ -203,6 +250,7 @@ export class BackgroundTask {
             elapsedTime: this.elapsedTime,
             remainingTime: this.remainingTime,
             errors: this.errors,
+            metrics: this.metrics,
             cancelable: this.cancelable,
             pausable: this.pausable
         };
@@ -232,6 +280,10 @@ export class BackgroundTasksManager {
         return this;
     }
 
+    has ( id : string ) : boolean {
+        return this.tasks.has( id );
+    }
+
     get ( id : string ) : BackgroundTask {
         if ( !this.tasks.has( id ) ) {
             return null;
@@ -239,4 +291,167 @@ export class BackgroundTasksManager {
 
         return this.tasks.get( id );
     }
+}
+
+export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = BackgroundTask> extends EventEmitter {
+    abstract name : string;
+
+    protected points : [ number, V ][] = [];
+
+    protected stopwatch : Stopwatch = new Stopwatch;
+
+    minimum : number = null;
+
+    maximum : number = null;
+
+    debounceTime : number = 0;
+
+    task : T;
+
+    memory : number = 10000;
+    
+    constructor ( task : T ) {
+        super();
+
+        this.task = task;
+    }
+
+    register ( value : V ) {
+        const time = this.getTime();
+
+        this.points.push( [ time, value ] );
+
+        this.emit( 'point', value, time );
+
+        this.freeMemory( time );
+    }
+
+    getTime () : number {
+        return this.stopwatch.readMilliseconds();
+    }
+
+    pause () {
+        this.stopwatch.pause();
+    }
+
+    resume () {
+        this.stopwatch.resume();
+    }
+
+    freeMemory ( time ?: number ) {
+        time = time || this.getTime();
+
+        const threshold = time - this.memory;
+        
+        let i : number = 0;
+
+        while ( i < this.points.length && this.points[ i ][ 0 ] < threshold ) i++;
+
+        if ( i > 10 ) {
+            this.points.splice( 0, i );
+        }
+    }
+
+    abstract valueToNumber ( value : V ) : number;
+
+    abstract valueToString ( value : V ) : string;
+
+    toJSON () {
+        return {
+            name: this.name,
+            minimum: this.minimum,
+            maximum: this.maximum,
+            debounceTime: this.debounceTime,
+            now: this.getTime(),
+            memory: this.memory,
+            points: this.points.map<[number, number, string, V]>( ( [ t, v ] ) => [ t, this.valueToNumber( v ), this.valueToString( v ), v ] )
+        };
+    }
+}
+
+export class PercentageBackgroundTaskMetric extends BackgroundTaskMetric<number> {
+    name : string = 'percentage';
+
+    constructor ( task : BackgroundTask ) {
+        super( task );
+
+        this.task.every( 2000, () => {
+            this.register( this.task.percentage );
+        } );
+    }
+
+    valueToNumber ( value : number ) : number {
+        return value;
+    }
+
+    valueToString ( value : number ) : string {
+        return value.toFixed( 2 );
+    }
+}
+
+export class Stopwatch {
+    static sumTimes ( [ sa, ma ] : [ number, number ], [ sb, mb ] : [ number, number ] ) : [ number, number ] {
+        const second = 1000 * 1000 * 1000;
+
+        const m = ma + mb;
+
+        return [ sa + sb + Math.floor( m / second ), ( m % second ) ];
+    }
+
+    protected startTime : [ number, number ] = null;
+
+    protected bankedTime : [ number, number ] = [ 0, 0 ];
+
+    state  : StopwatchState = StopwatchState.Paused;
+
+    get paused () : boolean {
+        return this.state === StopwatchState.Paused;
+    }
+
+    get running () : boolean {
+        return this.state === StopwatchState.Running;
+    }
+
+    pause () : this {
+        if ( this.state === StopwatchState.Running ) {
+            this.state = StopwatchState.Paused;
+
+            this.bankedTime = Stopwatch.sumTimes( this.bankedTime, process.hrtime( this.startTime ) );
+
+            this.startTime = null;
+        }
+
+        return this;
+    }
+
+    resume () : this {
+        if ( this.state === StopwatchState.Paused ) {
+            this.state = StopwatchState.Running;
+            
+            this.startTime = process.hrtime();
+        }
+
+        return this;
+    }
+
+    read () : [ number, number ] {
+        if ( this.paused ) {
+            return this.bankedTime;
+        }
+
+        const time = process.hrtime( this.startTime );
+
+        return Stopwatch.sumTimes( this.bankedTime, time );
+    }
+
+    readMilliseconds () : number {
+        const [ seconds, nano ] = this.read();
+
+        return seconds * 1000 + ( nano / 1000000 );
+    }
+}
+
+export enum StopwatchState{
+    Paused = 0,
+    Running = 1
 }

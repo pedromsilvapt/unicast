@@ -1,6 +1,7 @@
 import { MediaRecord, MediaKind } from "../../MediaRecord";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaSessionsManager } from "./MediaSessionsManager";
+import { Transcoder } from "../../Transcoding/Transcoder";
 
 export enum ReceiverStatusState {
     Stopped = 'STOPPED',
@@ -38,10 +39,10 @@ export interface ReceiverSubtitlesStyleStatus {
 export interface MediaPlayOptions {
     autostart ?: boolean;
     startTime ?: number;
-    mediaId ?: string;
-    mediaKind ?: MediaKind;
     playlistId ?: string;
     playlistPosition ?: number;
+    mediaKind ?: string;
+    mediaId ?: string;
 }
 
 export interface IMediaReceiver {
@@ -54,6 +55,8 @@ export interface IMediaReceiver {
     readonly server : UnicastServer;
 
     readonly sessions : MediaSessionsManager;
+
+    readonly transcoder : Transcoder<any>;
 
     connect () : Promise<boolean>;
 
@@ -71,6 +74,10 @@ export interface IMediaReceiver {
     stop () : Promise<ReceiverStatus>;
 
     status () : Promise<ReceiverStatus>;
+
+    seek ( time : number ) : Promise<ReceiverStatus>;
+
+    seekTo ( time : number ) : Promise<ReceiverStatus>;
 
     callCommand<R = ReceiverStatus, A = any[]> ( commandName : string, args : A ) : Promise<R>;
 

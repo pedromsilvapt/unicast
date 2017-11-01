@@ -3,14 +3,49 @@ import { spawn } from 'child_process'
 import { Config } from "./Config";
 
 export class MediaTools {
-    protected static probeNormalizeTracks ( tracks : any[] ) {
-        return tracks.map( track => ( {
+    protected static probeNormalizeTracks ( tracks : any[] ) : TrackMediaMetadata[] {
+        const fps = ( str : string ) => {
+            const [ a, b ] = str.split( '/' );
+
+            if ( +b == 0 ) {
+                return null;
+            }
+
+            return +a / +b;
+        };
+
+        for ( let track of tracks ) {
+            if ( !track.tags ) {
+                track.tags = {};
+            }
+        }
+
+        return tracks.map<TrackMediaMetadata>( track => ( {
             index: track.index,
             typeIndex: track.typeIndex,
             file: 0,
             type: track.codec_type,
-            codec: track.codec_name
+            codec: track.codec_name,
+            bitrate: +track.tags.BPS,
+            size: +track.tags.NUMBER_OF_BYTES,
+            frames: +track.tags.NUMBER_OF_FRAMES,
+            width: +track.width,
+            height: +track.height,
+            aspectRatio: track.display_aspect_ratio,
+            framerate: fps( track.r_frame_rate ),
+            // Track each stream's duration as well
+            duration: null
         } ) );
+    }
+
+    protected static probeNormalizeFormat ( format : any ) : FormatMediaMetadata {
+        return {
+            name: format.format_name,
+            startTime: +format.start_time,
+            duration: +format.duration,
+            size: +format.size,
+            bitrate: +format.bit_rate
+        };
     }
 
     protected static probeNormalize ( metadata : any, track : string ) : MediaMetadata {
@@ -18,7 +53,7 @@ export class MediaTools {
             files: [ {
                 id: track,
                 index: 0,
-                format: metadata.format.format_name,
+                format: this.probeNormalizeFormat( metadata.format ),
                 duration: +metadata.format.duration,
                 tracks: this.probeNormalizeTracks( metadata.streams )
             } ],
@@ -36,18 +71,34 @@ export class MediaTools {
 }
 
 export interface TrackMediaMetadata {
-    index: number,
-    typeIndex: string,
-    file: number,
-    type: string,
-    codec: string
+    index: number;
+    typeIndex: string;
+    file: number;
+    type: string;
+    codec: string;
+    bitrate: number;
+    size: number;
+    frames: number;
+    width: number;
+    height: number;
+    aspectRatio: string;
+    framerate: number;
+    duration: number;
+}
+
+export interface FormatMediaMetadata {
+    name : string;
+    startTime : number;
+    duration : number;
+    size : number;
+    bitrate : number;
 }
 
 export interface FileMediaMetadata {
     id : string;
     index : number;
-    format : string;
     duration : number;
+    format : FormatMediaMetadata;
     tracks : TrackMediaMetadata[];
 }
 

@@ -25,7 +25,15 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
         this.metadata = this.metadata || await MediaTools.probe( file );
         this.size = +( await fs.stat( file ) ).size;
         this.mime = mime.lookup( file );
-        this.duration = +this.metadata.files[ 0 ].duration;
+        this.duration = +this.metadata.files[ 0 ].format.duration;
+    }
+
+    getInputForDriver<I = any> ( driver : string ) : I {
+        if ( driver === 'ffmpeg' || driver === 'ffmpeg-hls' ) {
+            return this.file as any;
+        }
+
+        return null;
     }
 
     open ( range : MediaRange = {} ) : NodeJS.ReadableStream {

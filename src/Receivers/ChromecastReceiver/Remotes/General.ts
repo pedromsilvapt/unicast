@@ -157,7 +157,7 @@ export class GeneralRemote extends EventEmitter {
 
     getStatus () {
         return Promise.race( [
-            this.callPlayerMethod( 'getStatus', [], 'status' ),
+            this.callPlayerMethod( 'getStatus', [], 'status' ).catch( () => null ),
             new Promise( ( _, reject ) => setTimeout( reject.bind( null, new Error( 'Chromecast getStatus timeout.' ) ), 5000 ) )
         ] );
     }

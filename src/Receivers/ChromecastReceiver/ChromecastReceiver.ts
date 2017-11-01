@@ -8,6 +8,7 @@ import { MessagesFactory } from "./MessagesFactory";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import { HttpSender } from "../BaseReceiver/HttpSender";
 import { ChromecastHttpSender } from "./ChromecastHttpSender";
+import { ChromecastHlsTranscoder } from "./Transcoders/ChromecastHlsTranscoder";
 
 export class ChromecastReceiver extends BaseReceiver {
     readonly address : string;
@@ -28,6 +29,8 @@ export class ChromecastReceiver extends BaseReceiver {
         this.sender = new ChromecastHttpSender( this );
 
         this.messagesFactory = new MessagesFactory( this.sender );
+
+        this.transcoder = new ChromecastHlsTranscoder( this );
 
         const events : string[] = [ 
             'connected', 'playing', 'played', 'stopping', 'stopped',
@@ -80,20 +83,6 @@ export class ChromecastReceiver extends BaseReceiver {
             currentTime: playOptions.startTime
         };
 
-        // if ( config && config.range && config.range.start ) {
-        //     if ( await video.transcodable ) {
-        //         options.currentTime = 0;
-
-        //         if ( !( 'metadata' in media ) ) {
-        //             media.metadata = {};
-        //         }
-
-        //         media.metadata.offset = config.range.start;
-        //     } else {
-        //         options.currentTime = config.range.start;
-        //     }
-        // }
-
         let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );
 
         if ( media.tracks && media.tracks.length ) {
@@ -106,19 +95,34 @@ export class ChromecastReceiver extends BaseReceiver {
 
         this.client.lastSubtitlesStyle = media.textTrackStyle;
 
-        console.log( media );
-
         await this.client.load( media, options );
 
-        // this.emit( 'playing', id, record, playOptions );
+        this.sessions.current = id;
 
-        // await this.client.load( media, options );
+        // this.emit( 'playing', id, record, playOptions );
 
         // await super.play( item );
 
         // this.emit( 'play', item );
+
+        // TODO Remove
+        
+        // setTimeout( () => this.seekTo( 4 * 60 + 38 * 60 ), 20000 );
+
+        // setTimeout( () => this.seekTo( 3 * 60 + 30 + 38 * 60 ), 45000 );
+
         return this.status();
     }
+
+    // 69.ts - 208,459256
+    // 70.ts - 211,543467 = 3.084211
+    // 79.ts - 238,432589
+
+    // 69.ts - 208.599467
+    // 79.ts - 238.631467
+
+    // 0.021333 * 60 * 3
+
 
     getSubtitlesStyle () {
         return {
@@ -150,6 +154,10 @@ export class ChromecastReceiver extends BaseReceiver {
 
     async stop () : Promise<ReceiverStatus> {
         await this.client.stop();
+
+        this.sessions.release( this.sessions.current );
+
+        this.sessions.current = null;
 
         return this.status();
     }
@@ -232,47 +240,51 @@ export class ChromecastReceiver extends BaseReceiver {
         return status;
     }
 
-    seek ( ...args ) {
-        return this.client.seek( ...args );
+    async seek ( time : number ) : Promise<ReceiverStatus> {
+        await this.client.seek( time );
+
+        return this.status();
     }
 
-    seekTo ( ...args ) {
-        return this.client.seekTo( ...args );
+    async seekTo ( time : number ) : Promise<ReceiverStatus> {
+        await this.client.seekTo( time );
+
+        return this.status();
     }
 
-    async seekToTime ( time ) {
-        let item = await this.current;
+    // async seekToTime ( time ) {
+    //     let item = await this.current;
 
-        if ( !item ) {
-            throw new Error( `No media currently playing in the receiver "${ this.name }"` );
-        }
+    //     if ( !item ) {
+    //         throw new Error( `No media currently playing in the receiver "${ this.name }"` );
+    //     }
 
-        let video = await this.video( item );
+    //     let video = await this.video( item );
 
-        if ( await video.transcodable ) {
-            return this.play( item, {
-                range: {
-                    start: time
-                }
-            } )
-        } else {
-            await this.seekTo( time );
+    //     if ( await video.transcodable ) {
+    //         return this.play( item, {
+    //             range: {
+    //                 start: time
+    //             }
+    //         } )
+    //     } else {
+    //         await this.seekTo( time );
 
-            return this.resume();
-        }
-    }
+    //         return this.resume();
+    //     }
+    // }
 
-    async seekToPercentage ( percentage ) {
-        let status = await this.getStatus();
+    // async seekToPercentage ( percentage ) {
+    //     let status = await this.getStatus();
 
-        let position = status.media.duration * Math.min( 100, Math.max( 0, percentage ) ) / 100;
+    //     let position = status.media.duration * Math.min( 100, Math.max( 0, percentage ) ) / 100;
 
-        await this.pause();
+    //     await this.pause();
 
-        await this.seekTo( position );
+    //     await this.seekTo( position );
 
-        await this.resume();
-    }
+    //     await this.resume();
+    // }
 
     changeVolume ( ...args ) {
         return this.client.setVolume( ...args );

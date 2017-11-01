@@ -9,8 +9,8 @@ export default class DefaultMediaRemote extends GeneralRemote {
 
     lastSubtitlesStyle : any = null;
 
-    seekTo ( newCurrentTime : number ) {
-        return this.callPlayerMethod( 'seek', [ newCurrentTime ] );
+    async seekTo ( newCurrentTime : number ) : Promise<void> {
+        await this.callPlayerMethod( 'seek', [ newCurrentTime ] );
     }
 
     /** Seeks in seconds relative to currentTime
@@ -18,7 +18,7 @@ export default class DefaultMediaRemote extends GeneralRemote {
      * @param offsetSeconds     The number of seconds to add/subtract to the current position
      * @returns                 A promise resolved when the command executes
      */
-    async seek ( offsetSeconds : number ) {
+    async seek ( offsetSeconds : number ) : Promise<void> {
         const status = await this.getStatus();
 
         const newCurrentTime : number = status.currentTime + offsetSeconds;

@@ -76,7 +76,7 @@ export class MessagesFactory {
             contentType: video.mime,
             tracks: tracks.length > 0 ? tracks : null,
             duration: video.duration,
-            streamType: 'LIVE',
+            streamType: 'BUFFERED',
             metadata: {
                 type: 0,
                 metadataType: 0,

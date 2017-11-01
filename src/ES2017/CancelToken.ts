@@ -1,3 +1,5 @@
+import { Deferred } from "./Deferred";
+
 export class CancelToken {
     static source () {
         const token = new CancelToken();
@@ -8,14 +10,24 @@ export class CancelToken {
         }
     }
 
+    protected whenCancelledDeferred : Deferred<void> = new Deferred();
+    
     protected cancelled = false;
+
+    whenCancelled () : Promise<void> {
+        return this.whenCancelledDeferred.promise;
+    }
 
     isCancelled () : boolean {
         return this.cancelled;
     }
 
     cancel () {
-        this.cancelled = true;
+        if ( !this.cancelled ) {
+            this.cancelled = true;
+    
+            this.whenCancelledDeferred.resolve();
+        }
     }
 
     throwIfCancelled () : void {

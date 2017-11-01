@@ -7,8 +7,12 @@ import { TvEpisodesController } from "./MediaControllers/TvEpisodesController";
 import { CollectionsController } from "./MediaControllers/CollectionsController";
 import { ArtworkController } from "./MediaControllers/ArtworkController";
 import { SyncController } from "./MediaControllers/SyncController";
+import { TasksController } from "./TasksController";
 
 export class ApiController extends BaseController {
+    @Controller( TasksController, '/tasks' )
+    tasks : TasksController;
+
     @Controller( PlayerController, '/player' )
     player : PlayerController;
 
