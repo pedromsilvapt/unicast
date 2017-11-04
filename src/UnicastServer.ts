@@ -18,6 +18,7 @@ import { Storage } from "./Storage";
 import { TranscodingManager } from "./Transcoding/TranscodingManager";
 import * as fs from 'mz/fs';
 import { EventEmitter } from "events";
+import { ArtworkCache } from "./ArtworkCache";
 
 export class UnicastServer {
     readonly config : Config;
@@ -34,11 +35,15 @@ export class UnicastServer {
 
     readonly storage : Storage;
 
+    readonly artwork : ArtworkCache;
+    
     readonly transcoding : TranscodingManager;
     
     readonly http : MultiServer;
 
     get repositories () : RepositoriesManager { return this.providers.repositories; }
+
+    protected cachedIpV4 : string;
 
     constructor () {
         this.config = Config.singleton();
@@ -54,6 +59,8 @@ export class UnicastServer {
         this.tasks = new BackgroundTasksManager();
 
         this.storage = new Storage( this );
+
+        this.artwork = new ArtworkCache( this );
 
         this.transcoding = new TranscodingManager( this );
 
@@ -96,8 +103,12 @@ export class UnicastServer {
         } ) );
     }
 
-    getIpV4 () : Promise<string> {
-        return internalIp.v4();
+    async getIpV4 () : Promise<string> {
+        if ( this.cachedIpV4 ) {
+            return this.cachedIpV4;
+        }
+        
+        return this.cachedIpV4 = await internalIp.v4();
     }
 
     async getPort () : Promise<number> {

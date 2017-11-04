@@ -39,7 +39,6 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
         
         ( episode as any ).cachedArtwork = this.cacheArtwork( url, episode.kind, episode.id, episode.art );
         
-        
         return episode;
     }
 }
