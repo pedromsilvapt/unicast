@@ -71,8 +71,10 @@ export abstract class BaseController implements Annotated {
     }
 }
 
-export function handle ( controller : any, method : string ) {
-    return async function ( req, res, next ) {
+export function handle ( controller : { server : UnicastServer }, method : string ) {
+    return async function ( req : Request, res : Response, next : Next ) {
+        const stopwatch = controller.server.diagnostics.stopwatch().resume();
+
         try {
             const result = await controller[ method ]( req, res );
 
@@ -80,10 +82,17 @@ export function handle ( controller : any, method : string ) {
             
             next();
         } catch ( error ) {
-            console.error( error );
+            controller.server.diagnostics.error( error.message, error );
 
             next( error );
         }
+
+        controller.server.diagnostics.register( 'request', stopwatch.pause(), {
+            url: req.url,
+            controllerName: controller.constructor.name,
+            controllerMethod : method,
+            method: req.method
+        } );
     };
 }
 

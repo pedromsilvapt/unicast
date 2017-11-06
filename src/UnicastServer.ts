@@ -19,6 +19,7 @@ import { TranscodingManager } from "./Transcoding/TranscodingManager";
 import * as fs from 'mz/fs';
 import { EventEmitter } from "events";
 import { ArtworkCache } from "./ArtworkCache";
+import { Diagnostics } from "./Diagnostics";
 
 export class UnicastServer {
     readonly config : Config;
@@ -38,12 +39,16 @@ export class UnicastServer {
     readonly artwork : ArtworkCache;
     
     readonly transcoding : TranscodingManager;
-    
+
+    readonly diagnostics : Diagnostics;
+
     readonly http : MultiServer;
 
     get repositories () : RepositoriesManager { return this.providers.repositories; }
 
     protected cachedIpV4 : string;
+
+    isHttpsEnabled : boolean = false;
 
     constructor () {
         this.config = Config.singleton();
@@ -64,6 +69,8 @@ export class UnicastServer {
 
         this.transcoding = new TranscodingManager( this );
 
+        this.diagnostics = new Diagnostics( this );
+
         this.http = new MultiServer( [ restify.createServer() ] );
 
         if ( Config.get<boolean>( 'server.ssl.enabled' ) && fs.existsSync( './server.key' ) ) {
@@ -80,6 +87,8 @@ export class UnicastServer {
                 certificate: fs.readFileSync( certFile ),
                 passphrase: passphrase
             } ) );
+
+            this.isHttpsEnabled = true;
         }
 
         this.http.name = Config.get<string>( 'name', 'unicast' );
@@ -98,7 +107,7 @@ export class UnicastServer {
         // Attach the logger
         this.http.use( logger( 'unicast-simple', {
             skip( req: restify.Request ) {
-                return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) );
+                return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );
             }
         } ) );
     }
@@ -107,7 +116,7 @@ export class UnicastServer {
         if ( this.cachedIpV4 ) {
             return this.cachedIpV4;
         }
-        
+
         return this.cachedIpV4 = await internalIp.v4();
     }
 
@@ -164,7 +173,11 @@ export class UnicastServer {
 
         await this.http.listen( [ port, sslPort ] );
 
-        console.log( this.http.name, 'listening on', this.http.url );
+        this.diagnostics.info( this.http.name + ' listening on ' + await this.getUrl() );
+        
+        if ( this.isHttpsEnabled ) {
+            this.diagnostics.info( this.http.name + ' listening on ' + await this.getSecureUrl() );
+        }
     }
 }
 
