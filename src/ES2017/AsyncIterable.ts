@@ -1,4 +1,5 @@
 import { CancelToken } from "./CancelToken";
+import { Deferred } from './Deferred';
 
 (Symbol as any).asyncIterator = Symbol.asyncIterator || Symbol("Symbol.asyncIterator");
 
@@ -52,4 +53,76 @@ export async function toArray<T> ( iterable : AsyncIterable<T> ) : Promise<T[]> 
     }
 
     return items;
+}
+
+
+export interface PushAsyncIterable<T> {
+    ( value : T ) : void;
+}
+
+export interface EndAsyncIterable {
+    () : void;
+}
+
+export function deferred<T> ( request ?: () => void ) : [ PushAsyncIterable<T>, EndAsyncIterable, AsyncIterableIterator<T> ] {
+    let allDone : boolean = false;
+
+    let waitingQueue : Deferred<IteratorResult<T>>[] = [];
+
+    let buffer : T[] = [];
+
+    const push : PushAsyncIterable<T> = ( value : T ) => {
+        if ( !allDone ) {
+            if ( waitingQueue.length ) {
+                waitingQueue.shift().resolve( { done: false, value } );
+            } else {
+                buffer.push( value )
+            }
+        }
+    };
+
+    const done : EndAsyncIterable = () => {
+        if ( !allDone ) {
+            allDone = true;
+            
+            for ( let waiting of waitingQueue ) {
+                waiting.resolve( { done: true, value: null } );
+            }
+        }
+    };
+
+    
+    const iterable = {
+        [Symbol.asyncIterator] () : AsyncIterableIterator<T> {
+            return iterable;
+        },
+
+        async next () : Promise<IteratorResult<T>> {
+            if ( buffer.length ) {
+                return { done: false, value: buffer.shift() };
+            }
+
+            if ( allDone ) {
+                return { done: true, value: null };
+            }
+
+            const waiting = new Deferred<IteratorResult<T>>();
+
+            waitingQueue.push( waiting );
+
+            if ( request ) {
+                request();
+            }
+
+            const { done, value } = await waiting.promise;
+
+            if ( done ) {
+                return { done: true, value: null };
+            }
+            
+            return { done: false, value: value };
+        }
+    }
+
+    return [ push, done, iterable ];
 }

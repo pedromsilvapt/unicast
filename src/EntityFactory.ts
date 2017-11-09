@@ -10,8 +10,16 @@ export abstract class EntityFactory<E> {
 export abstract class ConfigurableEntityFactory<E> extends EntityFactory<E> {
     abstract getEntitiesConfig () : any[];
 
-    entities ( cancel : CancelToken ) : AsyncIterable<E> {
-        return merge( [ this.entitiesFromConfig( cancel ), this.entitiesFromScan( cancel ) ], cancel );
+    async * entities ( cancel : CancelToken ) : AsyncIterable<E> {
+        const devices : E[] = [];
+
+        for await ( let device of this.entitiesFromConfig( cancel ) ) {
+            devices.push( device );
+            
+            yield device;
+        }
+
+        yield * this.entitiesFromScan( devices, cancel );
     }
 
     entitiesFromConfig ( cancel : CancelToken ) : AsyncIterable<E> {
@@ -24,7 +32,7 @@ export abstract class ConfigurableEntityFactory<E> extends EntityFactory<E> {
         return toIterable( entities );
     }
 
-    async * entitiesFromScan ( cancel : CancelToken ) : AsyncIterable<E> {}
+    async * entitiesFromScan ( hardcoded : E[], cancel : CancelToken ) : AsyncIterable<E> {}
 
     abstract createFromConfig ( config : any ) : Promise<E>;
 }

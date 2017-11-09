@@ -2,22 +2,24 @@ import { ChromecastReceiver } from "./ChromecastReceiver";
 import { ReceiverFactory } from "../BaseReceiver/ReceiverFactory";
 import { CancelToken } from "../../ES2017/CancelToken";
 import { ConfigInstances } from "../../Config";
+import { ChromecastReceiverSSDPScanner, ChromecastReceiverMDNSScanner } from "./ChromecastReceiverScanner";
+import { toArray } from "../../ES2017/AsyncIterable";
 
 export class ChromecastReceiverFactory extends ReceiverFactory<ChromecastReceiver> {
     type: string = 'chromecast';
 
-    async * scan ( token ?: CancelToken ) : AsyncIterable<ChromecastReceiver> {
-        // const instances = new ConfigInstances( this.server.config );
+    async * entitiesFromScan( existingDevices : ChromecastReceiver[], cancel : CancelToken ) : AsyncIterable<ChromecastReceiver> {
+        const scanner = new ChromecastReceiverMDNSScanner( this.server.diagnostics );
 
-        // for ( let instance of instances.get( 'receivers', this.type, { key: 'list' } ) ) {
-        //     yield this.createReceiver( instance );
-        // }
-
-        //yield new ChromecastReceiver( this.server, 'ChromecastSilvas', '192.168.0.60' );
-    }
-
-    async * entitiesFromScan( cancel : CancelToken ) : AsyncIterable<ChromecastReceiver> {
+        for ( let device of existingDevices ) {
+            scanner.addDevice( device.name, device.address );
+        }
         
+        for await ( let device of scanner.devices() ) {
+            if ( device.status === "online" ) {
+                yield new ChromecastReceiver( this.server, device.name, device.address );
+            }
+        }
     }
 
     async createFromConfig ( config : any ) : Promise<ChromecastReceiver> {
