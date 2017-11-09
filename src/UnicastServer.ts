@@ -173,10 +173,10 @@ export class UnicastServer {
 
         await this.http.listen( [ port, sslPort ] );
 
-        this.diagnostics.info( this.http.name + ' listening on ' + await this.getUrl() );
+        this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getUrl() );
         
         if ( this.isHttpsEnabled ) {
-            this.diagnostics.info( this.http.name + ' listening on ' + await this.getSecureUrl() );
+            this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getSecureUrl() );
         }
     }
 }

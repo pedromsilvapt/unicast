@@ -49,34 +49,34 @@ export class Diagnostics {
         return result;
     }
 
-    log ( level : string, message : string, data ?: object ) : void {
+    log ( key : string, level : string, message : string, data ?: object ) : void {
         if ( this.minimumLevel && this.levels.indexOf( level ) >= this.levels.indexOf( this.minimumLevel ) ) {
-            console.log( `[${level.toUpperCase()}]`, message );
+            console.log( `[${ level.toUpperCase() }][${ key }]`, message );
         }
 
         this.logger.write( 'log', {
-            level, message, data
+            level, key, message, data
         } );
     }
 
-    debug ( message : string, data ?: object ) : void {
-        this.log( 'debug', message, data );
+    debug ( key : string, message : string, data ?: object ) : void {
+        this.log( key, 'debug', message, data );
     }
 
-    info ( message : string, data ?: object ) : void {
-        this.log( 'info', message, data );
+    info ( key : string, message : string, data ?: object ) : void {
+        this.log( key, 'info', message, data );
     }
 
-    warning ( message : string, data ?: object ) : void {
-        this.log( 'warning', message, data );
+    warning ( key : string, message : string, data ?: object ) : void {
+        this.log( key, 'warning', message, data );
     }
 
-    error ( message : string, data ?: object ) : void {
-        this.log( 'error', message, data );
+    error ( key : string, message : string, data ?: object ) : void {
+        this.log( key, 'error', message, data );
     }
 
-    fatal ( message : string, data ?: object ) : void {
-        this.log( 'fatal', message, data );
+    fatal ( key : string, message : string, data ?: object ) : void {
+        this.log( key, 'fatal', message, data );
     }
 
     async resources ( pid ?: number ) {
