@@ -1,5 +1,5 @@
 # unicast - The universal media server
-> **Warning** This project is still in alpha state and heavy development, with many features still to be added and bugs to be fixed.
+> **Warning** This project is still in alpha state and under heavy development, with many features still to be added and plenty of bugs to be fixed.
 
 > **Note** The web interface development repository can be found [here](https://gitlab.com/unicast/unicast-interface).
 
@@ -8,7 +8,7 @@
 See [all screenshots](http://pedromsilvapt.github.io/unicast/screenshots.html).
 
 ## Installation
-> **Note** This installation process is temporary, and need some knowledge of how to work with the command line and is intended for advanced users. In the near future, a more simplified version will be created.
+> **Note** This installation process is temporary, and some knowledge of how to work with the command line is needed, and as such it is intended for advanced users only. In the near future, a more simplified version will be created.
 
 Download this repository, either by running the command
 ```bash
@@ -23,15 +23,24 @@ npm install --save-dev
 Finally, download [RethinkDB](https://www.rethinkdb.com/) and save the executable somewhere on your disk. 
 > **Tip** You may want to put it inside the `storage/` folder inside the unicast directory.
 
-After that, the sources need to be compiled to JavaScript. Run the command
+After that, the sources need to be compiled to JavaScript (Really? Sadly, really.). Run the command
 ```bash
 tsc
 ```
 
-## Configuration
-Create a file `config/local.yaml`, and configure the receivers and providers for your application. Right now, the only **receivers** that are implemented are Chromecast and the only **providers** that are implemented are Kodi.
+If the command is not found, try installing Trypescript:
+```bash
+npm install -g typescript
+```
 
-For example, the file can be
+And run `tsc` again.
+
+## Configuration
+Create a file `config/local.yaml`, and configure the receivers and providers for your application. Right now, the only **receivers** that are implemented are the Chromecast receiver and the only **providers** that are implemented are the Kodi provider.
+
+ > **Note** As of now, the server should be able to auto detect the Chromecast devices in your network, so you only need to explicitly add them to the config file if, for some reason, they are not showing up automatically.
+
+For example, the file can be:
 ```yaml
 # Change primary language
 primaryLanguage: por
@@ -42,7 +51,6 @@ secondaryLanguages:
     - eng
 
 receivers:
-    scan: false
     default: false
     list:
         - name: ChromecastName
