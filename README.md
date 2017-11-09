@@ -1,5 +1,11 @@
 # unicast - The universal media server
-> **Warning** This project is still in alpha state and heavy development, with many features still to be added and bugs to be fixed
+> **Warning** This project is still in alpha state and heavy development, with many features still to be added and bugs to be fixed.
+
+> **Note** The web interface development repository can be found [here](https://gitlab.com/unicast/unicast-interface).
+
+[![Screenshot](http://pedromsilvapt.github.io/unicast/images/screenshots/alpha/shows-list.png)](http://pedromsilvapt.github.io/unicast/screenshots.html#lg=1&slide=2)
+
+See [all screenshots](http://pedromsilvapt.github.io/unicast/screenshots.html).
 
 ## Installation
 > **Note** This installation process is temporary, and need some knowledge of how to work with the command line and is intended for advanced users. In the near future, a more simplified version will be created.
