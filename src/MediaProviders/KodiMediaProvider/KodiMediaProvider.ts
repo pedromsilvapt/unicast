@@ -50,3 +50,14 @@ export class KodiMediaProvider extends BaseMediaProvider {
         return new KodiMediaSource( manager, this, source );
     }
 }
+
+// ( async function main () {
+//     const api = new KodiApi();
+
+//     const movies = await api.getMovies( {} );
+
+//     // console.log( movies.length, Object.keys( movies[ 0 ] ) );
+//     movies.filter( movie => movie.file.startsWith( 'L:' ) && movie.playcount === 0 ).forEach( movie => console.log( movie.file ) );
+
+//     console.log( movies.filter( movie => movie.file.startsWith( 'L:' ) && movie.playcount === 0 ).length );
+// } )().catch( err => console.error( err ) );

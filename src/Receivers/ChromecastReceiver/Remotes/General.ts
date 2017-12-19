@@ -28,6 +28,10 @@ export class GeneralRemote extends EventEmitter {
 
     clientAsync : any;
 
+    get name () {
+        throw new Error( `Name retrieval is not implemented yet.` );
+    }
+
     constructor ( address : string ) {
         super();
 
@@ -81,7 +85,7 @@ export class GeneralRemote extends EventEmitter {
         if ( !( name in async ) ) {
             let parent = name.split( '.' ).length > 1 ? objectPath.get( original, name.split( '.' ).slice( 0, -1 ).join( '.' ) ) : original;
             
-            async[ name ] = promisify( objectPath.withInheritedProps.get<any, Function>( original, name ).bind( parent ) );
+            async[ name ] = promisify( ( objectPath as any ).withInheritedProps.get<any, Function>( original, name ).bind( parent ) );
         }
 
         if ( events[ 0 ] ) {

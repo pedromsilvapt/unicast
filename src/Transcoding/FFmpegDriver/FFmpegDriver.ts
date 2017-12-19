@@ -5,6 +5,11 @@ import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream"
 import { UnicastServer } from "../../UnicastServer";
 import { spawn } from 'child_process';
 import { FFmpegTranscodingTask } from "./FFmpegTranscodingTask";
+import { MediaTrigger } from "../../TriggerDb";
+import { boxblur, source, Stream, concat, silence, blackout, mute, sources, filters } from 'composable';
+import { StaticStream } from "composable/lib/Stream";
+import { Compiler, EmissionsFragment, compile } from "composable/lib/Compiler/Compiler";
+import { MediaMetadata, TrackMediaMetadata } from "../../MediaTools";
 
 export class FFmpegDriverFactory extends DriverFactory<FFmpegDriver> {
     constructor () {
@@ -51,7 +56,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
     protected resolution : [number, number] = null;
 
-    protected mappings : string[] = [];
+    protected mappings : (string | Stream)[] = [];
 
     protected disabledSubtitles : boolean = false;
 
@@ -158,8 +163,8 @@ export class FFmpegDriver implements TranscodingDriver {
         }
     }
 
-    addMap ( stream : string ) : this {
-        this.mappings.push( stream );
+    addMap ( ...stream : (string | Stream)[] ) : this {
+        this.mappings.push( ...stream );
         
         return this;
     }
@@ -178,6 +183,39 @@ export class FFmpegDriver implements TranscodingDriver {
 
     setDisabledVideo ( disabled : boolean = true ) : this {
         this.disabledVideo = disabled;
+
+        return this;
+    }
+    
+    setTriggers ( triggers : MediaTrigger[], videoMetadata : TrackMediaMetadata, inputVideo : string, inputAudio : string, duration : number ) : this {
+        const inputAudioStream = new StaticStream( null, inputAudio );
+
+        const inputVideoStream = new StaticStream( null, inputVideo );
+
+        let [ audio, video ] : [ Stream, Stream ] = [ inputAudioStream, inputVideoStream ];
+
+        for ( let trigger of triggers ) {
+            for ( let timestamp of trigger.timestamps ) {
+                const enable = `'between(t,${ timestamp.start },${ timestamp.end })'`;
+
+                if ( timestamp.type === 'lightblur' ) {
+                    video = boxblur( video, { luma_radius: 20, enable } );
+                } else if ( timestamp.type === 'blur' ) {
+                    video = boxblur( video, { luma_radius: 40, enable } );
+                } else if ( timestamp.type === 'heavyblur' ) {
+                    video = boxblur( video, { luma_radius: 60, enable } );
+                } else if ( timestamp.type === 'black' ) {
+                    video = blackout( video, videoMetadata.width, videoMetadata.height, timestamp.start, timestamp.end );
+                }
+
+                if ( timestamp.mute ) {
+                    // audio = volume( audio, 0, { enable } );
+                    audio = mute( audio, timestamp.start, timestamp.end );
+                }
+            }
+        }
+
+        this.addMap( video, audio );
 
         return this;
     }
@@ -239,6 +277,10 @@ export class FFmpegDriver implements TranscodingDriver {
             }
         }
 
+        /*
+        -i K:\Shows\12 Monkeys\Season 2 BluRay\12.Monkeys.S02E01.1080p.BluRay.x264-SHORTBREHD.mkv -c:v libx264 -c:a aac -crf 22 -preset faster -format hls -filter_complex [0:v:0]boxblur=luma_radius=20:enable='between(t,5,10)'[stream0];[stream0]boxblur=luma_radius=40:enable='between(t,15,20)'[stream1];[stream1]boxblur=luma_radius=60:enable='between(t,25,30)'[stream2];color=black:size=1920x1080:rate=24000/1001:duration=5[stream3];[stream2][stream3]overlay=enable='between(t,35,40)'[stream4];color=black:size=1920x1080:rate=24000/1001:duration=5[stream5];[stream4][stream5]overlay=enable='between(t,45,50)'[stream6];[0:a:0]volume=volume=0:enable='between(t,45,50)'[stream7] -map stream6 -map stream0 -start_number 0 -hls_time 3 -hls_base_url http://192.168.0.4:3030/media/send/chromecast/ChromeSilvas/session/f15a8905-a4cd-42e0-91ae-679d1a21fb18/stream/d796a07adb85736c42a5b79fb1f2488c0511197c?part= -hls_list_size 0 -hls_flags split_by_time -hls_playlist_type event -force_key_frames expr:gte(t,n_forced*3) -ac 2
+        */
+
         for ( let [ stream, codec ] of this.audioCodecs ) {
             if ( !stream ) {
                 args.push( '-c:a', codec );
@@ -293,6 +335,34 @@ export class FFmpegDriver implements TranscodingDriver {
 
         if ( this.disabledAudio ) {
             args.push( '-sa' );
+        }
+
+        let filtersComplex : string[] = [];
+
+        let maps : string[] = [];
+
+        if ( this.mappings.length ) {
+            const compiler = new Compiler( [] );
+
+            const dynamicStreams : Stream[] = [];
+
+            for ( let stream of this.mappings ) {
+                if ( typeof stream === 'string' ) {
+                    maps.push( '-map', stream );
+                } else {
+                    maps.push( '-map', '[' + stream.compile( compiler ) + ']' );
+                    
+                    dynamicStreams.push( stream );
+                }
+            }
+
+            filtersComplex.push( filters( dynamicStreams ).compile( compiler ).slice( 1, -1 ) );
+    
+            if ( filtersComplex.length ) {
+                args.push( '-filter_complex', filtersComplex.join( ';' ) );
+            }
+
+            args.push( ...maps );
         }
 
         return args;

@@ -7,7 +7,7 @@ import { BackgroundTask } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
 
 export class SyncController extends BaseController {
-    @Route( 'post', '/sync' )
+    @Route( ['get', 'post'], '/sync' )
     async sync ( req : Request, res : Response ) : Promise<BackgroundTask> {
         const kinds : MediaKind[] = req.query.kinds || null;
         
@@ -15,10 +15,8 @@ export class SyncController extends BaseController {
         
         const sync = new MediaSync( database, this.server.providers.repositories );
 
-        const task = new BackgroundTask();
-
-        const done = sync.sync( task, kinds );
-
+        const [ task, done ] = BackgroundTask.fromPromise( task => sync.sync( task, kinds ) );
+        
         this.server.tasks.register( task );
 
         if ( req.query.wait === 'true' ) {
@@ -35,7 +33,7 @@ export class SyncController extends BaseController {
         return this.server.tasks.get( id );
     }
 
-    @Route( 'post', '/clean' )
+    @Route( [ 'post', 'get' ], '/clean' )
     async clean ( req : Request, res : Response ) : Promise<BackgroundTask> {
         const kinds : MediaKind[] = req.query.kinds || null;
         
@@ -43,9 +41,7 @@ export class SyncController extends BaseController {
         
         const sync = new MediaSync( database, this.server.providers.repositories );
 
-        const task = new BackgroundTask();
-
-        const done = sync.clean( task, kinds );
+        const [ task, done ] = BackgroundTask.fromPromise( task => sync.clean( task, kinds ) );
 
         this.server.tasks.register( task );
 

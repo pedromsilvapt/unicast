@@ -253,10 +253,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
     async install () {
         const conn = await this.pool.acquire();
 
-        const tables : string[] = await r.tableList().run( conn );
+        const tables : string[] = await ( r as any ).tableList().run( conn );
 
         if ( !tables.includes( this.tableName ) ) {
-            await r.tableCreate( this.tableName ).run( conn );
+            await ( r as any ).tableCreate( this.tableName ).run( conn );
         }
 
         await this.pool.release( conn );
@@ -281,7 +281,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
             }
         }
 
-        await this.query().indexWait().run( conn );
+        await ( this.query() as any ).indexWait().run( conn );
 
         await this.pool.release( conn );
     }

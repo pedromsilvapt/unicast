@@ -8,6 +8,7 @@ import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVid
 import { MediaRecord } from "../../../MediaRecord";
 import { HistoryRecord } from "../../../Database";
 import { CancelToken } from "../../../ES2017/CancelToken";
+import { TriggerDbMedia } from "../../../TriggerDb";
 
 export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOptions> {
     receiver : ChromecastReceiver;
@@ -35,6 +36,10 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
     }
 
     async transcodeVideo ( session : HistoryRecord, media : MediaRecord, stream : VideoMediaStream, customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<VideoMediaStream> {
+        const triggers : TriggerDbMedia[] = await this.receiver.server.triggerdb.queryMediaRecord( media );
+
+        console.log( triggers );
+
         const options = { ...this.options, customOptions };
 
         const video = stream.metadata.tracks.find( track => track.type === 'video' );
@@ -45,7 +50,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         const conditionAudioCodec : boolean = options.supportedAudioCodecs.every( c => c !== audio.codec );
         const conditionResolution : boolean = video.width > options.maxResolution.width || video.height > options.maxResolution.height;
 
-        const conditionVideo : boolean = conditionBitrate || conditionVideoCodec || conditionResolution || options.forceVideoTranscoding;
+        const conditionVideo : boolean = conditionBitrate || conditionVideoCodec || conditionResolution || options.forceVideoTranscoding || triggers.length > 0;
         const conditionAudio : boolean = conditionAudioCodec || options.forceAudioTranscoding;
 
         const driver = this.receiver.server.transcoding.getDriverFor<FFmpegHlsDriver>( 'video', 'ffmpeg-hls' );
@@ -70,7 +75,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
 
             driver.setCopyTimestamps( true );
 
-            driver.setDisabledSubtitles( true );
+            driver.setDisabledSubtitles( false );
             
             driver.setHlsFlags( [ FFmpegHlsFlag.SplitByTime ] );
             
@@ -78,10 +83,12 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             
             driver.setHlsPlaylistType( FFmpegHlsPlaylistType.Event );
 
-            driver.addMap( '0:v:0' );
-
-            driver.addMap( '0:a:0' );
-
+            if ( triggers.length > 0 ) {
+                driver.setTriggers( triggers, video, '0:v:0', '0:a:0', video.duration );
+            } else {
+                driver.addMap( '0:v:0', '0:a:0' );
+            }
+            
             driver.setPreset( FFmpegPreset.Faster );
         }
 

@@ -28,9 +28,9 @@ export abstract class BaseTableController<R> extends BaseController {
 
             for ( let [ index, field ] of this.searchFields.entries() ) {
                 if ( index === 0 ) {
-                    conditional = doc( field ).match( regex );
+                    conditional = ( doc as any )( field ).match( regex );
                 } else {
-                    conditional = conditional.or( doc( field ).match( regex ) );
+                    conditional = conditional.or( ( doc as any )( field ).match( regex ) );
                 }
             }
 

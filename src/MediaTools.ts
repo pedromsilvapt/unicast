@@ -178,7 +178,7 @@ export class FFProbe {
                 let result = '';
                 let resultErr = '';
 
-                node.stdout.on( 'data', data => result += data.toString( 'utf8' ) );
+                node.stdout.on( 'data', data => result += typeof data == 'string' ? data : data.toString( 'utf8' ) );
                 node.stderr.on( 'data', data => resultErr += data );
                 node.stdout.on( 'end', () => {
                     if ( exitCode || !result ) {

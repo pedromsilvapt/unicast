@@ -34,6 +34,6 @@ export class ApiController extends BaseController {
     @Controller( ArtworkController, '/media/artwork' )
     artwork : ArtworkController;
 
-    @Controller( SyncController, '/media/providers' )
+    @Controller( SyncController, '/media/sync' )
     sync : SyncController;
 }

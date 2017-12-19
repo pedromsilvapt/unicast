@@ -170,6 +170,8 @@ export class FFmpegHlsDriver extends FFmpegDriver {
 
         // args.push( '-ar', '44100' );
         // args.push( '-x264opts', 'keyint=48:min-keyint=48:no-scenecut' );
+        //args.push( '-ac', '2', '-af', 'pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR' );
+        args.push( '-ac', '2' );
         
         return args;
     }
@@ -213,3 +215,15 @@ export enum FFmpegHlsPlaylistType {
     Event = 'event',
     Live = 'live'
 }
+
+// export function mute ( input : Stream, start : number, end : number, duration : number ) {
+//     const preMute = atrim( input, 0, start );
+
+//     const posMute = atrim( input, end, duration );
+
+//     const muted = silence( end - start );
+
+//     const [ output ] = concat( [], [ preMute, muted, posMute ] );
+
+//     return output;
+// }

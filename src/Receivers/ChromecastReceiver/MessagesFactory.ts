@@ -5,6 +5,7 @@ import * as truncate from 'truncate';
 import { SubtitlesMediaStream } from "../../MediaProviders/MediaStreams/SubtitlesStream";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import { HttpSender } from "../BaseReceiver/HttpSender";
+import { deflate } from "zlib";
 
 export interface ChromecastPlayTrackMessage {
     trackId: number,
@@ -41,6 +42,11 @@ export interface ChromecastPlayMessage {
     textTrackStyle ?: any;
 }
 
+// TODO Move this into the definition of module langs
+export interface Language { 
+    '1': string, '2': string, '3' : string, '2B' : string, '2T' : string, local : string, name : string
+};
+
 export class MessagesFactory {
     readonly sender : HttpSender;
     
@@ -52,6 +58,20 @@ export class MessagesFactory {
         return await this.sender.host() + this.sender.getUrlFor( session, stream.id );
     }
 
+    getSubtitlesLanguage ( query : string ) : Language {
+        const langs = { all : () => [] };
+
+        for ( let lang of langs.all() ) {
+            for ( let key of Object.keys( lang ) ) {
+                if ( lang[ key ] === query ) {
+                    return lang;
+                }
+            }
+        }
+
+        return { 2: 'pt-PT', name: 'Português' } as any;
+    }
+
     async createGeneralMessage ( id : string, streams : MediaStream[], record : MediaRecord, options : MediaPlayOptions ) : Promise<ChromecastPlayMessage> {
         const video : VideoMediaStream = streams.filter( stream => stream.enabled ).find( stream => stream.type === MediaStreamType.Video ) as VideoMediaStream;
 
@@ -59,14 +79,20 @@ export class MessagesFactory {
 
         let tracks : ChromecastPlayTrackMessage[] = [];
 
+        const defaultLanguage : string = this.sender.receiver.server.config.get<string>( 'primaryLanguage', 'en-US' );
+        
         for ( let [ index, subtitle ] of subtitles.entries() ) {
+            const language = this.getSubtitlesLanguage( 
+                subtitle.language || defaultLanguage
+            );
+
             tracks.push( {
                 trackId: index,
                 type: 'TEXT',
                 trackContentId: await this.getStreamUrl( id, subtitle ), //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
                 trackContentType: 'text/vtt',
-                name: subtitles.name || 'Português',
-                language: subtitles.language || 'pt-PT',
+                name: language.name,
+                language: language[ '2' ],
                 subtype: 'SUBTITLES'
             } );
         }

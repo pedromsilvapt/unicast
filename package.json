@@ -27,9 +27,11 @@
   },
   "dependencies": {
     "algorithms": "^0.10.0",
+    "array-filter-query-builder": "^0.5.3",
     "await-semaphore": "^0.1.1",
     "castv2-client": "^1.2.0",
     "chalk": "^2.1.0",
+    "composable": "^0.2.4",
     "config": "^1.26.2",
     "date-fns": "^1.28.5",
     "deep-equal": "^1.0.1",

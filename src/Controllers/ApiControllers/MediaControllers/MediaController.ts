@@ -1,7 +1,9 @@
 import { BaseTableController } from "../../BaseTableController";
-import { Request } from "restify";
+import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
-import { MediaKind } from "../../../MediaRecord";
+import { MediaKind, MediaRecord } from "../../../MediaRecord";
+import { Route } from "../../BaseController";
+import { MediaTrigger } from "../../../TriggerDb";
 
 export abstract class MediaTableController<R> extends BaseTableController<R> {
     getWatchedQuery ( req : Request, query : r.Sequence ) : r.Sequence {
@@ -22,8 +24,8 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
             const excluded = genres.filter( genre => req.query.genres[ genre ] === 'exclude' );
 
             query = query.filter( ( doc ) => {
-                return doc( "genres" ).setIntersection( included ).isEmpty().not().and(
-                    doc( "genres" ).setIntersection( excluded ).isEmpty()
+                return ( doc( "genres" ) as any ).setIntersection( included ).isEmpty().not().and(
+                    ( doc( "genres" ) as any ).setIntersection( excluded ).isEmpty()
                 );
             } );
         }
@@ -39,10 +41,10 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
             const excluded = collections.filter( collection => req.query.collections[ collection ] === 'exclude' );
 
             if ( included.length > 0 || excluded.length > 0 ) {
-                query = query.merge( ( record ) => {
-                    const collections = this.server.database.tables.collectionsMedia.query()
-                        .getAll( [ record( 'kind' ), record( 'id' ) ], { index: 'reference' } )
-                        .map( a => a( 'collectionId' ) ).coerceTo( 'array' )
+                query = ( query as any ).merge( ( record ) => {
+                    const collections = ( this.server.database.tables.collectionsMedia.query()
+                        .getAll( [ record( 'kind' ), record( 'id' ) ] as any, { index: 'reference' } )
+                        .map( a => a( 'collectionId' ) ) as any ).coerceTo( 'array' )
 
                     return { collections };
                 } ).filter( ( doc : any ) => {
@@ -71,5 +73,14 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
         }
 
         return cached;
+    }
+
+    @Route( 'get', '/:id/triggers' )
+    async triggers ( req : Request, res : Response ) : Promise<MediaTrigger[]> {
+        const media = await this.table.get( req.params.id ) as any as MediaRecord;
+        
+        const triggers = await this.server.triggerdb.queryMediaRecord( media );
+
+        return triggers;
     }
 }

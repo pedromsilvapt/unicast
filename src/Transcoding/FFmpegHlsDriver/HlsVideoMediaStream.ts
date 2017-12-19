@@ -59,7 +59,7 @@ export class HlsVideoMediaStream extends VideoMediaStream {
 
         this.task = new FFmpegHlsTranscodingTask( this.inputStream, this.driver, this.folder );
 
-        this.task.start();
+        this.task.setStateStart();
     }
 
     virtual : HlsVirtualPlaylist;
@@ -86,7 +86,7 @@ export class HlsVideoMediaStream extends VideoMediaStream {
         if ( !stream ) {
             this.inputStream.close();
             
-            this.task.cancel();
+            this.task.setStartCancel();
         }
     }
 

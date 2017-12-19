@@ -21,12 +21,20 @@ export function getTimeStatistics ( elapsed : number, done : number, total : num
 }
 
 export class BackgroundTask extends EventEmitter {
-    static fromPromise ( fn : ( task : BackgroundTask ) => Promise<void> ) : BackgroundTask {
-        const task = new BackgroundTask().start();
+    static fromPromise<T = any> ( fn : ( task : BackgroundTask ) => Promise<T> ) : [ BackgroundTask, Promise<T> ] {
+        const task = new BackgroundTask().setStateStart();
 
-        fn( task ).catch( error => task.addError( error ) ).then( () => task.finish() );
+        const promise = fn( task ).catch( error => {
+            task.addError( error );
+
+            return Promise.reject( error );
+        } ).then( t => {
+            task.setStateFinish();
+
+            return t;
+        } );
         
-        return task;
+        return [ task, promise ];
     }
 
     id : string;
@@ -41,7 +49,7 @@ export class BackgroundTask extends EventEmitter {
 
     total : number = 0;
     
-    errors : any[];
+    errors : any[] = [];
 
     metrics : BackgroundTaskMetric<any>[] = [];
 
@@ -87,7 +95,7 @@ export class BackgroundTask extends EventEmitter {
 
     protected onStart () {}
 
-    start () : this {
+    setStateStart () : this {
         if ( this.state === BackgroundTaskState.Unstarted ) {
             this.stopwatch.resume();
 
@@ -103,7 +111,7 @@ export class BackgroundTask extends EventEmitter {
 
     protected onCancel () {}
 
-    cancel () : this {
+    setStartCancel () : this {
         if ( this.cancelable && this.state !== BackgroundTaskState.Cancelled ) {
             this.stopwatch.pause();
 
@@ -117,7 +125,7 @@ export class BackgroundTask extends EventEmitter {
 
     protected onPause () {}
 
-    pause () : this {
+    setStatePause () : this {
         if ( this.pausable && this.state === BackgroundTaskState.Running ) {
             this.stopwatch.pause();
 
@@ -131,7 +139,7 @@ export class BackgroundTask extends EventEmitter {
 
     protected onResume () {}
 
-    resume () : this {
+    setStateResume () : this {
         if ( this.pausable && this.state === BackgroundTaskState.Paused ) {
             this.stopwatch.resume();
 
@@ -147,7 +155,7 @@ export class BackgroundTask extends EventEmitter {
 
     protected onFinish () {}
 
-    finish () : this {
+    setStateFinish () : this {
         if ( this.state === BackgroundTaskState.Running ) {
             this.stopwatch.pause();
 

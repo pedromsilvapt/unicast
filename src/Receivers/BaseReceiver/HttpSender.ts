@@ -39,7 +39,7 @@ export class HttpSender {
             const [ streams, record, options ] = await this.receiver.sessions.get( req.params.session );
     
             const stream = await this.getStream( streams, req.params.stream, req.query );
-
+            
             if ( stream.type === MediaStreamType.Subtitles ) {
                 res.set( 'Content-Type', stream.mime + ';charset=utf-8' );
             } else {

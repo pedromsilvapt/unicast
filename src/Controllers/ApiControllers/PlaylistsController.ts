@@ -53,9 +53,9 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
             query = query.orderBy( { index: r.desc( 'createdAt' ) } ).filter( { device: req.params.device } );
 
             if ( req.query.empty === 'exclude' ) {
-                query.filter( doc => doc( 'references' ).count().gt( 0 ) )
+                query.filter( doc => ( doc as any )( 'references' ).count().gt( 0 ) )
             } else if ( req.query.empty === 'include' ) {
-                query.filter( doc => doc( 'references' ).count().lt( 0 ) )
+                query.filter( doc => ( doc as any )( 'references' ).count().lt( 0 ) )
             }
 
             return query.limit( 1 );

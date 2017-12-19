@@ -3,6 +3,7 @@ import { Request, Response } from "restify";
 import { PlaylistsController } from "./PlaylistsController";
 import { MediaSourceDetails } from "../../MediaProviders/MediaSource";
 import { InvalidArgumentError } from 'restify-errors';
+import { setTimeout } from "timers";
 
 export class InvalidDeviceArgumentError extends InvalidArgumentError {
     constructor ( device : string ) {

@@ -37,6 +37,8 @@ export class LinkedList<T> {
         if ( prev ) {
             prev.next = link.next;
         }
+
+        return this;
     }
 
     * values () : IterableIterator<T> {

@@ -55,7 +55,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
             throw new Error( `Could not find an encoding process with the id "${ id }"` );
         }
 
-        this.encoders.get( id ).cancel();
+        this.encoders.get( id ).setStartCancel();
 
         this.encoders.delete( id );
     }
@@ -72,7 +72,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
             
             this.encoders.set( id, encoder );
 
-            encoder.start();
+            encoder.setStateStart();
 
             this.averageMetric.addSubMetric( encoder.metrics[ 0 ] );
 
@@ -82,7 +82,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
             if ( cancel ) {
                 cancel.whenCancelled().then( () => {
-                    encoder.cancel();
+                    encoder.setStartCancel();
 
                     this.encoders.delete( id );
                 } );
@@ -106,7 +106,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
     protected onCancel () {
         for ( let [ id, encoder ] of Array.from( this.encoders ) ) {
-            encoder.cancel();
+            encoder.setStartCancel();
             
             this.encoders.delete( id );
         }
@@ -190,16 +190,16 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
 
             child.stderr.on( 'data', d => {
                 const line = d.toString().trim();
-
+                
                 if ( line.startsWith( '[hls @' ) && line.endsWith( 'for writing' ) ) {
                     const matches = line.match( /index([0-9]*)\.ts/i );
-
+                    
                     if ( matches && matches.length ) {
                         while ( lastSegment <= +matches[ 1 ] ) {
                             this.addDone( 1 );
 
                             this.mainTask.scheduler.insert( lastSegment, { id } );
-
+                            
                             lastSegment++;
                         }
 
@@ -211,7 +211,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
                  if ( this.doneSegment.end === this.segment.end ) {
                      this.completed.resolve();
     
-                     this.finish();
+                     this.setStateFinish();
                  }
              } );
 

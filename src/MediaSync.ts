@@ -26,7 +26,7 @@ export class MediaSync {
             await task.do( this.cleanKind( kind, task ) );
         }
 
-        task.finish();
+        task.setStateFinish();
     }
 
     async sync ( task : BackgroundTask = null, kinds : MediaKind[] = null ) : Promise<void> {
@@ -40,7 +40,7 @@ export class MediaSync {
             await task.do( this.syncKind( kind, task ) );
         }
 
-        task.finish();
+        task.setStateFinish();
     }
 
     protected async syncKind ( kind : MediaKind, task : BackgroundTask = null ) : Promise<void> {
@@ -221,7 +221,7 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
 
         const tasks : Promise<any>[] = [];
 
-        for ( let record of remote ) {
+        for ( let record of missing ) {
             tasks.push( 
                 task.do( this.cleanRecord( task, record ) )
             );
@@ -242,7 +242,7 @@ export class MediaSyncMovie extends MediaSyncKind<MovieMediaRecord, IMovieMediaR
     }
 
     compare ( a : MovieMediaRecord, b : MovieMediaRecord ) : boolean {
-        return this.equalFields( a, b, [ "title", "rating", "trailer", "parentalRating", "plot", "year", "tagline", "runtime", "art", "external", 'quality', "genres" ] );
+        return this.equalFields( a, b, [ "title", "rating", "trailer", "parentalRating", "plot", "year", "tagline", "runtime", "art", "external", 'quality', "genres", "sources" ] );
     }
 
     async delete ( record : MovieMediaRecord ) : Promise<void> {
@@ -439,7 +439,7 @@ export class MediaSyncTvEpisode extends MediaSyncKind<TvEpisodeMediaRecord, ITvE
     }
 
     compare ( a : TvEpisodeMediaRecord, b : TvEpisodeMediaRecord ) : boolean {
-        return this.equalFields( a, b, [ "art", "quality", "external", "rating", "seasonNumber", "runtime", "watched" ] );
+        return this.equalFields( a, b, [ "art", "quality", "external", "rating", "seasonNumber", "runtime", "watched", "sources" ] );
     }
     
     async delete ( record : TvEpisodeMediaRecord ) : Promise<void> {

@@ -57,7 +57,7 @@ export function BinaryResponse ( controller : any, method : any ) {
                 res.set( 'Content-Type', file.mime );
                 res.set( 'Content-Length', '' + file.length );
                 
-                res.writeHead( 200, res.headers() );
+                ( res as any ).writeHead( 200, res.headers() );
 
                 if ( Buffer.isBuffer( file.data ) ) {
                     res.write( file.data );

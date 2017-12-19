@@ -20,6 +20,7 @@ import * as fs from 'mz/fs';
 import { EventEmitter } from "events";
 import { ArtworkCache } from "./ArtworkCache";
 import { Diagnostics } from "./Diagnostics";
+import { TriggerDb } from "./TriggerDb";
 
 export class UnicastServer {
     readonly config : Config;
@@ -37,7 +38,9 @@ export class UnicastServer {
     readonly storage : Storage;
 
     readonly artwork : ArtworkCache;
-    
+
+    readonly triggerdb : TriggerDb;
+
     readonly transcoding : TranscodingManager;
 
     readonly diagnostics : Diagnostics;
@@ -67,6 +70,8 @@ export class UnicastServer {
 
         this.artwork = new ArtworkCache( this );
 
+        this.triggerdb = new TriggerDb( this );
+        
         this.transcoding = new TranscodingManager( this );
 
         this.diagnostics = new Diagnostics( this );

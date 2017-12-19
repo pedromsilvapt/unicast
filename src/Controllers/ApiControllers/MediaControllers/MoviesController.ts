@@ -36,7 +36,7 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
     @Route( 'get', '/genres' )
     async genres ( req : Request, res : Response ) {
         return this.table.find( query => {
-            return query.distinct( { index: 'genres' } );
+            return ( query as any ).distinct( { index: 'genres' } );
         } );
     }
 }

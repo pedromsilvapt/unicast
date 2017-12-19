@@ -82,7 +82,7 @@ export function handle ( controller : { server : UnicastServer }, method : strin
             
             next();
         } catch ( error ) {
-            controller.server.diagnostics.error( 'unicast/controller', error.message, error );
+            controller.server.diagnostics.error( 'unicast/controller', error.message + error.stack, error );
 
             next( error );
         }
