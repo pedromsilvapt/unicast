@@ -8,7 +8,7 @@ import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVid
 import { MediaRecord } from "../../../MediaRecord";
 import { HistoryRecord } from "../../../Database";
 import { CancelToken } from "../../../ES2017/CancelToken";
-import { TriggerDbMedia } from "../../../TriggerDb";
+import { MediaTrigger } from "../../../TriggerDb";
 
 export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOptions> {
     receiver : ChromecastReceiver;
@@ -36,9 +36,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
     }
 
     async transcodeVideo ( session : HistoryRecord, media : MediaRecord, stream : VideoMediaStream, customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<VideoMediaStream> {
-        const triggers : TriggerDbMedia[] = await this.receiver.server.triggerdb.queryMediaRecord( media );
-
-        console.log( triggers );
+        const triggers : MediaTrigger[] = await this.receiver.server.triggerdb.queryMediaRecord( media );
 
         const options = { ...this.options, customOptions };
 

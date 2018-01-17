@@ -64,3 +64,7 @@ config/local.yaml
 lib/
 
 .vscode
+
+.fusebox
+
+libs/

@@ -10,7 +10,9 @@ export default class DefaultMediaRemote extends GeneralRemote {
     lastSubtitlesStyle : any = null;
 
     async seekTo ( newCurrentTime : number ) : Promise<void> {
-        await this.callPlayerMethod( 'seek', [ newCurrentTime ] );
+        this.isOpened || await this.open();
+        
+        await this.player.seek( newCurrentTime );
     }
 
     /** Seeks in seconds relative to currentTime
@@ -26,16 +28,22 @@ export default class DefaultMediaRemote extends GeneralRemote {
         return this.seekTo( newCurrentTime );
     }
 
-    setVolume ( volume : number ) {
-        return this.callClientMethod( 'setVolume', [ { level: volume } ] );
+    async setVolume ( level : number ) {
+        this.isConnected || await this.connect();
+        
+        return this.client.setVolume( { level } );
     }
 
-    setVolumeMuted ( muted : boolean = true ) {
-        return this.callClientMethod( 'setVolume', [ { muted: muted } ] );
+    async setVolumeMuted ( muted : boolean = true ) {
+        this.isConnected || await this.connect();
+
+        return this.client.setVolume( { muted } );
     }
 
     async load ( media : any, options : any = {} ) {
-        let status = await this.callPlayerMethod( 'load', [ media, options ], [ 'playing' ] );
+        this.isOpened || await this.open();
+
+        let status = await this.player.load( media, options );
 
         if ( media.textTrackStyle ) {
             this.lastSubtitlesStyle = media.textTrackStyle;
@@ -48,36 +56,40 @@ export default class DefaultMediaRemote extends GeneralRemote {
         return status;
     }
 
-    pause () {
+    async pause () {
+        this.isOpened || await this.open();
+
         this.playing = false;
 
-        return this.callPlayerMethod( 'pause', [], [ 'pausing', 'paused' ] );
+        return this.pause();
     }
 
-    resume () {
+    async resume () {
+        this.isOpened || await this.open();
+
         this.playing = true;
 
-        return this.callPlayerMethod( 'play', [], [ 'resuming', 'resumed' ] );
+        return this.player.play();
     }
 
-    stop () {
+    async stop () {
+        this.isOpened || await this.open();
+        
         this.playing = false;
 
-        return this.callPlayerMethod( 'stop', [], [ 'stopping', 'stopped' ] );
+        return this.player.stop();
     }
 
-    subtitlesOff () {
-        return this.callPlayerMethod( 'media.sessionRequest', [ {
-            type: 'EDIT_TRACKS_INFO',
-            activeTrackIds: []
-        } ] );
+    async subtitlesOff () {
+        this.isOpened || await this.open();
+
+        await this.player.disableSubtitles();
     }
 
-    changeSubtitles ( index : number ) {
-        this.callPlayerMethod( 'media.sessionRequest', [ {
-            type: 'EDIT_TRACKS_INFO',
-            activeTrackIds: [ index ]
-        } ] );
+    async changeSubtitles ( index : number ) {
+        this.isOpened || await this.open();
+
+        await this.player.setActiveSubtitles( index );
     }
 
     async changeSubtitlesSize ( size : number ) {
@@ -85,13 +97,12 @@ export default class DefaultMediaRemote extends GeneralRemote {
             return false;
         }
 
+        this.isOpened || await this.open();        
+
         let style = this.lastSubtitlesStyle;
 
         style.fontScale = size;
 
-        return this.callPlayerMethod( 'media.sessionRequest', [ {
-            type: 'EDIT_TRACKS_INFO',
-            textTrackStyle: style
-        } ] );
+        await this.player.setSubtitlesStyle( style );
     }
 }

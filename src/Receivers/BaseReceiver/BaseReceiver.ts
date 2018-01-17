@@ -47,6 +47,12 @@ export abstract class BaseReceiver extends EventEmitter implements IMediaReceive
 
     abstract seekTo ( time : number ) : Promise<ReceiverStatus>;
 
+    abstract mute () : Promise<ReceiverStatus>;
+
+    abstract unmute () : Promise<ReceiverStatus>;
+
+    abstract setVolume ( level : number ) : Promise<ReceiverStatus>;
+
     abstract callCommand<R = any, A = any[]> ( commandName : string, args : A ) : Promise<R>;
 
     abstract toJSON();

@@ -45,23 +45,21 @@ export class ChromecastReceiver extends BaseReceiver {
         this.client.on( 'status', ( ...args ) => this.emit( 'inner-status', ...args ) );
     }
 
-    async connect () : Promise<boolean> {
-        if ( this.client.connected ) {
-            return true;
-        }
+    get connected () : boolean {
+        return this.client.isOpened;
+    }
 
-        await this.client.ensureConnection();
+    async connect () : Promise<boolean> {
+        if ( !this.client.isConnected ) {
+            await this.client.open();
+        }
 
         return true;
     }
 
     async disconnect () : Promise<boolean> {
-        if ( !this.client.connected ) {
-            return true;
-        }
-
         this.client.close();
-
+        
         return true;
     }
 
@@ -74,9 +72,15 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async play ( id : string ) : Promise<ReceiverStatus> {
+        // Get the session information
         const [ streams, record, playOptions ] = await this.sessions.get( id );
 
+        // Find the video stream
         const video : VideoMediaStream = streams.find( stream => stream.type === MediaStreamType.Video ) as VideoMediaStream;
+
+        if ( !video ) {
+            throw new Error( `Trying to play media with no video stream is not currently supported.` );
+        }
 
         const options : ChromecastPlayOptions = {
             autoplay: true || playOptions.autostart,
@@ -113,16 +117,6 @@ export class ChromecastReceiver extends BaseReceiver {
 
         return this.status();
     }
-
-    // 69.ts - 208,459256
-    // 70.ts - 211,543467 = 3.084211
-    // 79.ts - 238,432589
-
-    // 69.ts - 208.599467
-    // 79.ts - 238.631467
-
-    // 0.021333 * 60 * 3
-
 
     getSubtitlesStyle () {
         return {
@@ -196,48 +190,22 @@ export class ChromecastReceiver extends BaseReceiver {
         return normalized;
     }
 
-    changeSubtitles ( ...args ) {
-        return this.client.changeSubtitles( ...args );
+    async changeSubtitles ( index : number ) : Promise<ReceiverStatus> {
+        await this.client.changeSubtitles( index );
+
+        return this.status();
     }
 
-    subtitlesOff ( ...args ) {
-        return this.client.subtitlesOff( ...args );
+    async subtitlesOff () : Promise<ReceiverStatus> {
+        await this.client.subtitlesOff();
+
+        return this.status();        
     }
 
-    // pause ( ...args ) {
-    //     return this.client.pause( ...args );
-    // }
+    async changeSubtitlesSize ( size : number ) : Promise<ReceiverStatus> {
+        await this.client.changeSubtitlesSize( size );
 
-    // resume ( ...args ) {
-    //     return this.client.resume( ...args );
-    // }
-
-    changeSubtitlesSize ( ...args ) {
-        return this.client.changeSubtitlesSize( ...args );
-    }
-
-    async getStatus ( ...args ) {
-        let status = await this.client.getStatus();
-
-        if ( status && status.media ) {
-            let item = await this.media.get( status.media.metadata.itemId );
-
-            let video = await this.video( item );
-
-            if ( await video.transcodable ) {
-                status.media.duration = await video.duration;
-
-                if ( status.media.metadata.offset ) {
-                    status.currentTime += +status.media.metadata.offset;
-                }
-            }
-        }
-
-        status = new ChromecastReceiverStatus( status );
-
-        this.emit( 'status', status );
-
-        return status;
+        return this.status();
     }
 
     async seek ( time : number ) : Promise<ReceiverStatus> {
@@ -252,63 +220,23 @@ export class ChromecastReceiver extends BaseReceiver {
         return this.status();
     }
 
-    // async seekToTime ( time ) {
-    //     let item = await this.current;
+    async setVolume ( volume : number ) : Promise<ReceiverStatus> {
+        await this.client.setVolume( volume );
 
-    //     if ( !item ) {
-    //         throw new Error( `No media currently playing in the receiver "${ this.name }"` );
-    //     }
-
-    //     let video = await this.video( item );
-
-    //     if ( await video.transcodable ) {
-    //         return this.play( item, {
-    //             range: {
-    //                 start: time
-    //             }
-    //         } )
-    //     } else {
-    //         await this.seekTo( time );
-
-    //         return this.resume();
-    //     }
-    // }
-
-    // async seekToPercentage ( percentage ) {
-    //     let status = await this.getStatus();
-
-    //     let position = status.media.duration * Math.min( 100, Math.max( 0, percentage ) ) / 100;
-
-    //     await this.pause();
-
-    //     await this.seekTo( position );
-
-    //     await this.resume();
-    // }
-
-    changeVolume ( ...args ) {
-        return this.client.setVolume( ...args );
+        return this.status();
     }
 
-    changeVolumeMuted ( ...args ) {
-        return this.client.setVolumeMuted( ...args );
+    async mute () : Promise<ReceiverStatus> {
+        await this.client.setVolumeMuted( true );
+
+        return this.status();
     }
 
-    // async stop ( ...args ) {
-    //     try {
-    //         let result = await this.client.stop();
+    async unmute () : Promise<ReceiverStatus> {
+        await this.client.setVolumeMuted( false );
 
-    //         await super.stop();
-
-    //         return result;
-    //     } catch ( error ) {
-    //         if ( error.message == 'Cannot read property \'mediaSessionId\' of null' ) {
-    //             return false;
-    //         } else {
-    //             throw error;
-    //         }
-    //     }
-    // }
+        return this.status();
+    }
 
     toJSON () {
         return {

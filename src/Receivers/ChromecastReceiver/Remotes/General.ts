@@ -1,7 +1,11 @@
 import { EventEmitter }     from 'events';
 import * as objectPath      from 'object-path';
-import { Client }           from 'castv2-client';
+import { Client as NativeClient, DefaultMediaReceiver }           from 'castv2-client';
+import * as util           from 'util';
 import * as promisify       from 'es6-promisify';
+import { Client } from './Interfaces/Client';
+import { Player } from './Interfaces/Player';
+import { Singleton } from '../../../ES2017/Singleton';
 
 export interface ChromecastPlayOptions {
     autoplay ?: boolean;
@@ -10,23 +14,27 @@ export interface ChromecastPlayOptions {
 }
 
 export class GeneralRemote extends EventEmitter {
-    connected : boolean = false;
-
-    connection = null;
-
     appId : string = null;
 
     application = null;
 
     address : string;
 
-    player : any;
+    player : Player;
 
-    client : any;
+    client : Client;
 
-    playerAsync : any;
+    isConnected : boolean = false;
 
-    clientAsync : any;
+    shouldBeConnected : boolean = false;
+
+    currentSessionId : string = null;
+
+    isLaunching : boolean = true;
+
+    isOpened : boolean = false;
+
+    shouldBeOpened : boolean = false;
 
     get name () {
         throw new Error( `Name retrieval is not implemented yet.` );
@@ -35,152 +43,269 @@ export class GeneralRemote extends EventEmitter {
     constructor ( address : string ) {
         super();
 
+        console.log( address );
         this.address = address;
-
-        this.eraseConnection();
     }
 
-    eraseConnection () {
-        this.connected = false;
-        this.connection = null;
+    @Singleton( () => 'connect' )
+    async connect () {
+        if ( !this.client ) {
+            this.client = new Client( new NativeClient( this.address ) );
+        }
 
-        this.client = null;
+        await this.client.connect( this.address );
+
+        this.isConnected = true;
+
+        this.shouldBeConnected = true;
+
         this.player = null;
-        this.playerAsync = {};
-        this.clientAsync = {};
-    }
 
-    setConnection ( client : any, player : any ) {
-        this.client = client;
-        this.player = player;
+        this.isOpened = false;
 
-        this.client.on( 'status', status => {
-            let connectedStill = status && status.applications instanceof Array && status.applications.some( app => app.appId === this.application.APP_ID );
-
-            if ( !connectedStill ) {
-                this.eraseConnection();
+        this.currentSessionId = null;
+        
+        this.client.native.on( 'status', status => {
+            if ( status && status.applications instanceof Array ) {
+                this.verify( status.applications.find( app => app.appId === this.application.APP_ID ) );
             }
 
             this.emit( 'app-status', status );
-        } );
-    }
-
-    async callPlayerMethod ( name : string, args : any[] = [], events : string | string[] = [] ) {
-        await this.ensureConnection();
-
-        return this.callAsyncMethod( this.player, this.playerAsync, name, args, events );
-    }
-
-    async callClientMethod ( name : string, args : any[] = [], events : string | string[] = [] ) {
-        await this.ensureConnection();
-
-        return this.callAsyncMethod( this.client, this.clientAsync, name, args, events );
-    }
-
-    async callAsyncMethod ( original : any, async : any, name : string, args : any[] = [], events : string | string[] = [] ) {
-        if ( typeof events === 'string' ) {
-            events = [ null, events ];
-        }
-
-        if ( !( name in async ) ) {
-            let parent = name.split( '.' ).length > 1 ? objectPath.get( original, name.split( '.' ).slice( 0, -1 ).join( '.' ) ) : original;
-            
-            async[ name ] = promisify( ( objectPath as any ).withInheritedProps.get<any, Function>( original, name ).bind( parent ) );
-        }
-
-        if ( events[ 0 ] ) {
-            this.emit( events[ 0 ] );
-        }
-
-        let result = async[ name ]( ...args );
-
-        if ( events[ 1 ] ) {
-            this.emit( events[ 1 ], result );
-        }
-
-        return result;
-    }
-
-    async ensureConnection () {
-        if ( this.connected ) {
-            return this.connection;
-        }
-
-        return this.reconnect();
-    }
-
-    reconnect () {
-        this.connected = true;
-
-        this.connection = new Promise( ( resolve, reject ) => {
-            try {
-                if ( this.client ) {
-                    this.client.close();
-                }
-
-                let client = new Client();
-                client.connect( this.address, () => {
-                    client.launch( this.application, ( error, player ) => {
-                        if ( error ) {
-                            this.emit( 'error', error );
-
-                            client.close();
-
-                            return reject( error );
-                        }
-
-                        this.setConnection( client, player );
-
-                        this.emit( 'connected' );
-
-                        resolve( [ client, player ] );
-                    } );
-                } );
-
-                client.on( 'error', err => {
-                    this.emit( 'error', err );
-
-                    client.close();
-
-                    reject( err );
-                } );
-
-                client.on( 'close', () => {
-                    if ( this.connected ) {
-                        console.log( 'DEBUG', 'Reconnecting...' )
-                        this.reconnect();
-                    }
-                } );
-            } catch ( err ) {
-                reject( err );
+        } ).on( 'close', status => {
+            if ( this.shouldBeConnected ) {
+                this.reconnect();
             }
+        } ).on( 'error', error => {
+            console.error( 'error', error.message, error.stack );
         } );
+    }
 
-        return this.connection;
+    protected async verify ( session : any ) {
+        if ( this.isLaunching ) {
+            return;
+        }
+
+        if ( this.isOpened ) {
+            if ( !session || session.sessionId != this.currentSessionId ) {
+                this.currentSessionId = null;
+
+                this.isOpened = false;
+
+                this.player.close();
+
+                this.player = null;
+            } else {
+                return;
+            }
+        }
+
+        if ( session ) {
+            await this.join( session );
+        } else if ( this.shouldBeOpened ) {
+            await this.launch();
+        }
+    }
+
+    protected onPlayerClose () {
+        this.player = null;
+
+        this.isOpened = false;
+
+        this.shouldBeOpened = false;
+    }
+
+    @Singleton( () => 'join' )
+    async join ( app : any ) {
+        if ( !this.isConnected ) {
+            await this.connect();
+        }
+
+        this.isOpened = true;
+
+        this.player = await this.client.join( app, this.application );
+
+        this.currentSessionId = this.player.native.session.sessionId;
+
+        this.player.native.on( 'close', this.onPlayerClose.bind( this ) );
+    }
+
+    @Singleton( () => 'launch' )
+    async launch () {
+        if ( !this.isConnected ) {
+            await this.connect();
+        }
+
+        this.isLaunching = true;
+        
+        this.player = await this.client.launch( this.application );
+
+        this.isOpened = true;
+
+        this.currentSessionId = this.player.native.session.sessionId;
+        
+        this.isLaunching = false;
+
+        this.player.native.on( 'close', this.onPlayerClose.bind( this ) );
+    }
+
+    async open () {
+        if ( !this.isConnected ) {
+            await this.connect();
+        }
+        
+        this.shouldBeOpened = true;
+
+        const sessions = await this.client.getSessions();
+
+        let match = sessions.find( app => app.appId === this.application.APP_ID );
+
+        if ( match ) {
+            await this.join( match );
+        } else {
+            await this.launch();
+        }
+    }
+
+    async reconnect () {
+        if ( this.shouldBeOpened ) {
+            this.close();
+    
+            await this.open();
+        } else {
+            this.close();
+    
+            await this.connect();
+        }
     }
 
     getStatus () {
+        if ( !this.isConnected ) {
+            this.connect();
+        }
+
+        if ( !this.isOpened ) {
+            return null;
+        }
+
+        console.log( 'get status' );
+
         return Promise.race( [
-            this.callPlayerMethod( 'getStatus', [], 'status' ).catch( () => null ),
+            this.player.getStatus().catch( err => { console.error( err ); return null; } ),
             new Promise( ( _, reject ) => setTimeout( reject.bind( null, new Error( 'Chromecast getStatus timeout.' ) ), 5000 ) )
         ] );
     }
 
-    close () {
-        if ( this.connected ) {
+    close ( efective : boolean = true ) {
+        if ( this.isOpened ) {
+            this.emit( 'closing' );
+
+            this.client.stop( this.player );
+        }
+
+        this.player = null;
+
+        this.shouldBeConnected = false;
+
+        if ( this.isOpened ) {
+            this.isOpened = false;
+
+            this.emit( 'closed' );
+        }
+
+        if ( this.isConnected ) {
             this.emit( 'disconnecting' );
 
-            // We mark the connected state as falso so any code listening to the close event knows that it is a forced connection
-            // This way, if the connection drops unnexpectadly, we can check this variable to see if it is purposful or if needs a reconnection
-            this.connected = false;
-
-            this.player.close();
+            // We mark the connected state as false so any code listening to the close event knows that it is a forced connection
+            // This way, if the connection drops unnexpectedly, we can check this variable to see if it is purposeful or if needs a reconnection
+            this.isConnected = false;
 
             this.client.close();
+        }
 
-            this.eraseConnection();
+        this.client = null;
+
+        this.shouldBeOpened = false;
+
+        if ( this.isConnected ) {
+            this.isConnected = false;
 
             this.emit( 'disconnected' );
         }
     }
 }
+
+// ( async () => {
+//     let client = new Client();
+
+//     const co = ( c : any, b : string ) => util.promisify( c[ b ].bind( c ) );
+
+//     await co( client, 'connect' )( '192.168.0.59' );
+    
+//     const apps = await co( client, 'getStatus' )();
+
+//     const sessionId : string = apps.applications[ 0 ];
+    
+//     const player = await co( client, 'join' )( sessionId, DefaultMediaReceiver );
+
+//     const status = await co( player, 'getStatus' )();
+
+//     console.log( status.currentTime );
+
+//     return;
+
+
+//     client.connect( '192.168.0.59', () => {
+//         client.launch( DefaultMediaReceiver, function(err, player) {
+//             var media = {
+      
+//                 // Here you can plug an URL to any mp4, webm, mp3 or jpg file with the proper contentType.
+//               contentId: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/big_buck_bunny_1080p.mp4',
+//               contentType: 'video/mp4',
+//               streamType: 'BUFFERED', // or LIVE
+      
+//               // Title and cover displayed while buffering
+//               metadata: {
+//                 type: 0,
+//                 metadataType: 0,
+//                 title: "Big Buck Bunny", 
+//                 images: [
+//                   { url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg' }
+//                 ]
+//               }        
+//             };
+      
+//             player.on('status', function(status) {
+//               console.log('status broadcast playerState=%s', status.playerState);
+//             //   console.log( status );
+//             });
+      
+//             console.log('app "%s" launched, loading media %s ...', player.session.displayName, media.contentId);
+      
+//             player.load(media, { autoplay: true }, function(err, status) {
+//               console.log('media loaded playerState=%s', status.playerState);
+      
+//                 client.getStatus( console.log.bind( console ) );
+
+//               // Seek to 2 minutes after 15 seconds playing.
+//                 setTimeout(function() {
+//                     console.log( 'seek' );
+//                     player.seek(2*60, function(err, status) {
+//                     console.log( 'pause' );
+//                     player.pause();
+
+//                     setTimeout(function() {
+//                             console.log( 'resume' );
+//                             player.unpause();
+//                     }, 2000);
+//                     });
+//                 }, 5000);
+      
+//             });
+      
+//           });
+
+//         client.on( 'status', status => {
+//             // console.log( status );
+//         } );
+//     } );
+// } )().catch( error => console.error( error ) );

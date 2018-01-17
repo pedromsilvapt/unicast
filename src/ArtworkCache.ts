@@ -141,7 +141,7 @@ export class ArtworkCache {
 
         const cached = await this.readTransformed( url, options );
 
-        // await this.cache.save();
+        await this.cache.save();
 
         return cached;
     }

@@ -168,4 +168,39 @@ export class PlayerController extends BaseController {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
     }
+
+    @Route( 'post', '/:device/mute' )
+    async mute ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            return device.mute();
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'post', '/:device/unmute' )
+    async unmute ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            return device.unmute();
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'post', '/:device/volume/:volume' )
+    async setVolume ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const volume : number = +req.params.volume;
+
+            return device.setVolume( volume );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
 }
