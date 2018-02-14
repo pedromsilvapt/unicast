@@ -1,14 +1,29 @@
 import { EventEmitter } from "events";
 import { CancelToken } from "./ES2017/CancelToken";
-import { EntityFactory } from "./EntityFactory";
+import { EntityFactory, IEntity } from "./EntityFactory";
+import { UnicastServer } from "./UnicastServer";
 
-export abstract class EntityManager<E, K = E> extends EventEmitter {
+export abstract class EntityManager<E extends IEntity, K = E> extends EventEmitter {
+    server : UnicastServer;
+
+    constructor ( server : UnicastServer ) {
+        super();
+        
+        this.server = server;
+    }
+
     protected entities : E[] = [];
 
     protected abstract getEntityKey ( entity : E ) : K;
 
     add ( entity : E ) : this {
         this.entities.push( entity );
+
+        entity.server = this.server;
+
+        if ( entity.onEntityInit ) {
+            entity.onEntityInit();
+        }
 
         this.emit( 'entity-added', entity, this.getEntityKey( entity ) );
 
@@ -25,6 +40,10 @@ export abstract class EntityManager<E, K = E> extends EventEmitter {
         }
 
         return this;
+    }
+
+    hasKeyed ( key : K ) : boolean {
+        return this.entities.find( e => this.getEntityKey( e ) === key ) != null;
     }
 
     has ( entity : E ) : boolean {
@@ -50,13 +69,13 @@ export abstract class EntityManager<E, K = E> extends EventEmitter {
     }
 }
 
-export abstract class EntityFactoryManager<E, M extends EntityManager<E, K>, F extends EntityFactory<E>, T, K> extends EntityManager<F, T> {
+export abstract class EntityFactoryManager<E extends IEntity, M extends EntityManager<E, K>, F extends EntityFactory<E>, T, K> extends EntityManager<F, T> {
     entitiesManager : M;
 
     cancellations : Map<T, CancelToken> = new Map;    
 
-    constructor ( entities : M ) {
-        super();
+    constructor ( entities : M, server : UnicastServer ) {
+        super( server );
 
         this.entitiesManager = entities;
     }

@@ -15,7 +15,7 @@ export interface MediaRange {
 }
 
 export abstract class MediaStream {
-    readonly id : string;
+    id : string;
 
     size : number;
 

@@ -20,7 +20,7 @@ export interface ConfigContext {
     short_hostname: string;
     full_hostname: string;
     deployment: string;
-    architecture: string;
+    platform: string;
 }
 
 export class Config {
@@ -45,14 +45,14 @@ export class Config {
     static getContext () : ConfigContext {
         const env = process.env;
         const hostname = env.HOST || env.HOSTNAME || os.hostname();
-        const architecture = os.arch();
+        const platform = os.platform();
 
         return {
             instance: env.NODE_APP_INSTANCE,
             short_hostname: hostname.split( '.' )[ 0 ],
             full_hostname: hostname,
             deployment: env.NODE_ENV || 'development',
-            architecture: architecture
+            platform: platform
         };
     }
 
@@ -69,37 +69,37 @@ export class Config {
 
         return [
             check`default`,
-            check`default-${context.architecture}`,
+            check`default-${context.platform}`,
             check`default-${context.instance}`,
-            check`default-${context.instance}-${context.architecture}`,
+            check`default-${context.instance}-${context.platform}`,
             check`default-${context.deployment}`,
-            check`default-${context.deployment}-${context.architecture}`,
+            check`default-${context.deployment}-${context.platform}`,
             check`default-${context.deployment}-${context.instance}`,
-            check`default-${context.deployment}-${context.instance}-${context.architecture}`,
+            check`default-${context.deployment}-${context.instance}-${context.platform}`,
             check`${context.short_hostname}`,
-            check`${context.short_hostname}-${context.architecture}`,
+            check`${context.short_hostname}-${context.platform}`,
             check`${context.short_hostname}-${context.instance}`,
-            check`${context.short_hostname}-${context.instance}-${context.architecture}`,
+            check`${context.short_hostname}-${context.instance}-${context.platform}`,
             check`${context.short_hostname}-${context.deployment}`,
-            check`${context.short_hostname}-${context.deployment}-${context.architecture}`,
+            check`${context.short_hostname}-${context.deployment}-${context.platform}`,
             check`${context.short_hostname}-${context.deployment}-${context.instance}`,
-            check`${context.short_hostname}-${context.deployment}-${context.instance}-${context.architecture}`,
+            check`${context.short_hostname}-${context.deployment}-${context.instance}-${context.platform}`,
             check`${context.full_hostname}`,
-            check`${context.full_hostname}-${context.architecture}`,
+            check`${context.full_hostname}-${context.platform}`,
             check`${context.full_hostname}-${context.instance}`,
-            check`${context.full_hostname}-${context.instance}-${context.architecture}`,
+            check`${context.full_hostname}-${context.instance}-${context.platform}`,
             check`${context.full_hostname}-${context.deployment}`,
-            check`${context.full_hostname}-${context.deployment}-${context.architecture}`,
+            check`${context.full_hostname}-${context.deployment}-${context.platform}`,
             check`${context.full_hostname}-${context.deployment}-${context.instance}`,
-            check`${context.full_hostname}-${context.deployment}-${context.instance}-${context.architecture}`,
+            check`${context.full_hostname}-${context.deployment}-${context.instance}-${context.platform}`,
             check`local`,
-            check`local-${context.architecture}`,
+            check`local-${context.platform}`,
             check`local-${context.instance}`,
-            check`local-${context.instance}-${context.architecture}`,
+            check`local-${context.instance}-${context.platform}`,
             check`local-${context.deployment}`,
-            check`local-${context.deployment}-${context.architecture}`,
+            check`local-${context.deployment}-${context.platform}`,
             check`local-${context.deployment}-${context.instance}`,
-            check`local-${context.deployment}-${context.instance}-${context.architecture}`
+            check`local-${context.deployment}-${context.instance}-${context.platform}`
         ].filter( name => name );
     }
 

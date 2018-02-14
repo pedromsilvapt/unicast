@@ -8,6 +8,7 @@ import { CollectionsController } from "./MediaControllers/CollectionsController"
 import { ArtworkController } from "./MediaControllers/ArtworkController";
 import { SyncController } from "./MediaControllers/SyncController";
 import { TasksController } from "./TasksController";
+import { SubtitlesController } from "./MediaControllers/SubtitlesController";
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -34,6 +35,9 @@ export class ApiController extends BaseController {
     @Controller( ArtworkController, '/media/artwork' )
     artwork : ArtworkController;
 
-    @Controller( SyncController, '/media/sync' )
+    @Controller( SubtitlesController, '/media/subtitles' )
+    subtitles : SubtitlesController;
+
+    @Controller( SyncController, '/media/providers' )
     sync : SyncController;
 }

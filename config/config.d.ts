@@ -47,7 +47,7 @@ export default interface Config {
 
     mpv: {
         path: string;
-        cmd: string;
+        command: string;
         args ?: string[];
     }
 }

@@ -2,12 +2,21 @@ import { EventEmitter } from "events";
 import { EntityManager } from "./EntityManager";
 import { CancelToken } from "./ES2017/CancelToken";
 import { toIterable, merge } from "./ES2017/AsyncIterable";
+import { UnicastServer } from "./UnicastServer";
 
-export abstract class EntityFactory<E> {
+export class IEntity {
+    server : UnicastServer;
+
+    onEntityInit ? ();
+}
+
+export abstract class EntityFactory<E extends IEntity> extends IEntity {
+    server : UnicastServer;
+
     abstract entities ( cancel : CancelToken ) : AsyncIterable<E>;
 }
 
-export abstract class ConfigurableEntityFactory<E> extends EntityFactory<E> {
+export abstract class ConfigurableEntityFactory<E extends IEntity> extends EntityFactory<E> {
     abstract getEntitiesConfig () : any[];
 
     async * entities ( cancel : CancelToken ) : AsyncIterable<E> {

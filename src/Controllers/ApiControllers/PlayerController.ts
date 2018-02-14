@@ -196,7 +196,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            const volume : number = +req.params.volume;
+            const volume : number = parseFloat( req.params.volume );
 
             return device.setVolume( volume );
         } else {

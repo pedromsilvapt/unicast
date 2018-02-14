@@ -183,7 +183,7 @@ export class ChromecastReceiver extends BaseReceiver {
                 time: { duration: status.media.duration, current: status.currentTime },
                 record: record
             },
-            volume: { level: status.volume.level, muted: false },
+            volume: { level: Math.round( status.volume.level * 100 ), muted: status.volume.muted },
             subtitlesStyle: null
         }
 
@@ -203,6 +203,8 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async changeSubtitlesSize ( size : number ) : Promise<ReceiverStatus> {
+        this.client.lastSubtitlesStyle.fontScale = size;
+
         await this.client.changeSubtitlesSize( size );
 
         return this.status();
@@ -221,7 +223,7 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async setVolume ( volume : number ) : Promise<ReceiverStatus> {
-        await this.client.setVolume( volume );
+        await this.client.setVolume( Math.round( volume ) / 100 );
 
         return this.status();
     }

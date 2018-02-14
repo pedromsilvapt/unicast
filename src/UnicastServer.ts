@@ -21,6 +21,7 @@ import { EventEmitter } from "events";
 import { ArtworkCache } from "./ArtworkCache";
 import { Diagnostics } from "./Diagnostics";
 import { TriggerDb } from "./TriggerDb";
+import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
 
 export class UnicastServer {
     readonly config : Config;
@@ -36,6 +37,8 @@ export class UnicastServer {
     readonly tasks : BackgroundTasksManager;
 
     readonly storage : Storage;
+
+    readonly subtitles : SubtitlesManager;
 
     readonly artwork : ArtworkCache;
 
@@ -60,13 +63,15 @@ export class UnicastServer {
 
         this.receivers = new ReceiversManager( this );
 
-        this.providers = new ProvidersManager();
+        this.providers = new ProvidersManager( this );
 
         this.media = new MediaManager( this );
 
         this.tasks = new BackgroundTasksManager();
 
         this.storage = new Storage( this );
+
+        this.subtitles = new SubtitlesManager( this );
 
         this.artwork = new ArtworkCache( this );
 
@@ -183,8 +188,23 @@ export class UnicastServer {
         if ( this.isHttpsEnabled ) {
             this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getSecureUrl() );
         }
+
+
+        // TODO Remove
+        // const results = await this.subtitles.search( await this.media.get( MediaKind.TvEpisode, '232a42de-e6bb-46d1-a155-050ba8ec0855' ), [ 'por' ] );
+        
+        // console.log( results.length );
+
+        // for ( let result of results ) {
+        //     console.log( result.releaseName, result.downloads, result.format );
+        // }
+
+        // if ( results.length ) {
+        //     ( await this.subtitles.download( results[ 1 ] ) ).pipe( fs.createWriteStream( 'subs.srt' ) );
+        // }
     }
 }
+
 
 export class MediaManager {
     readonly server  : UnicastServer;

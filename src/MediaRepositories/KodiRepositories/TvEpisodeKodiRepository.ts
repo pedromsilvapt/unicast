@@ -4,6 +4,7 @@ import { TvEpisodeMediaRecord, MediaKind } from "../../MediaRecord";
 import * as replaceExt        from 'replace-ext';
 import { KodiApi } from "./KodiApi";
 import { IMediaProvider } from "../../MediaProviders/BaseMediaProvider/IMediaProvider";
+import { SubtitlesKodiRepository } from "./SubtitlesKodiRepository";
 
 export class TvEpisodeKodiRepository extends BaseKodiRepository<TvEpisodeMediaRecord> implements ITvEpisodeMediaRepository {
     internalKind = 'episode';
@@ -12,8 +13,8 @@ export class TvEpisodeKodiRepository extends BaseKodiRepository<TvEpisodeMediaRe
 
     transformer : TvEpisodeRecordTransformer;
     
-    constructor ( provider : IMediaProvider, kodi : KodiApi ) {
-        super( provider, kodi );
+    constructor ( provider : IMediaProvider, kodi : KodiApi, subtitles ?: SubtitlesKodiRepository ) {
+        super( provider, kodi, subtitles );
 
         this.transformer = new TvEpisodeRecordTransformer( this.name );
     }

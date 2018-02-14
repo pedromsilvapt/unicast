@@ -45,7 +45,7 @@ export class ArtworkCache {
     }
 
     areOptionsEmpty ( options : ArtworkCacheOptions ) {
-        return typeof options.width === 'number';
+        return typeof options.width !== 'number';
     }
 
     optionsToString ( options : ArtworkCacheOptions ) : string {
@@ -95,7 +95,7 @@ export class ArtworkCache {
 
             const height = Math.ceil( metadata.height / ( metadata.width / width ) );
 
-            image = image.resize( width, height )
+            image = image.resize( width, height, { kernel: 'lanczos3' } );
         }
         
         return image;
@@ -129,11 +129,13 @@ export class ArtworkCache {
             await fs.writeFile( cachePathResized, buffer );
 
             this.setCached( url, cachePathResized, options );
+
+            return cachePathResized;
+        } catch ( err ) {
+            return cachePath;
         } finally {
             release();
         }
-
-        return cachePath;
     }
 
     async get ( url : string, options : ArtworkCacheOptions = {} ) : Promise<string> {

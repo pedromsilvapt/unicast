@@ -8,6 +8,7 @@ import { TvShowKodiRepository } from "../../MediaRepositories/KodiRepositories/T
 import { KodiApi } from "../../MediaRepositories/KodiRepositories/KodiApi";
 import { TvSeasonKodiRepository } from "../../MediaRepositories/KodiRepositories/TvSeasonKodiRepository";
 import { TvEpisodeKodiRepository } from "../../MediaRepositories/KodiRepositories/TvEpisodeKodiRepository";
+import { SubtitlesKodiRepository, ILocalKodiSubtitle } from "../../MediaRepositories/KodiRepositories/SubtitlesKodiRepository";
 
 export class KodiMediaProvider extends BaseMediaProvider {
     readonly type : string = 'kodi';
@@ -22,15 +23,21 @@ export class KodiMediaProvider extends BaseMediaProvider {
 
     tvEpisodesKodiRepository : TvEpisodeKodiRepository;
 
+    subtitlesRepository : SubtitlesKodiRepository;
+
     constructor ( name : string, address : string, port : number ) {
         super( name );
 
         this.api = new KodiApi( address, port );
+    }
 
-        this.moviesRepository = new MovieKodiRepository( this, this.api );
+    onEntityInit () {
+        this.subtitlesRepository = new SubtitlesKodiRepository( this.server );
+
+        this.moviesRepository = new MovieKodiRepository( this, this.api, this.subtitlesRepository );
         this.tvShowsKodiRepository = new TvShowKodiRepository( this, this.api );
         this.tvSeasonsKodiRepository = new TvSeasonKodiRepository( this, this.api );
-        this.tvEpisodesKodiRepository = new TvEpisodeKodiRepository( this, this.api );
+        this.tvEpisodesKodiRepository = new TvEpisodeKodiRepository( this, this.api, this.subtitlesRepository );
     }
 
     getMediaRepositories () : IMediaRepository[] {

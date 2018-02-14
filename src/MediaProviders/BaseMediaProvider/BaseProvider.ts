@@ -2,8 +2,11 @@ import { IMediaProvider } from "./IMediaProvider";
 import { MediaSource, MediaSourceDetails } from "../MediaSource";
 import { ProvidersManager } from "../ProvidersManager";
 import { IMediaRepository } from "../../MediaRepositories/BaseRepository/IMediaRepository";
+import { UnicastServer } from "../../UnicastServer";
 
 export abstract class BaseMediaProvider implements IMediaProvider {
+    server : UnicastServer;
+
     abstract readonly type : string;
 
     readonly name : string;

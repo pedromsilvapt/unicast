@@ -5,16 +5,12 @@ import { ReceiverFactory } from "./BaseReceiver/ReceiverFactory";
 import { CancelToken } from "../ES2017/CancelToken";
 
 export class ReceiversManager extends EntityManager<IMediaReceiver, string> {
-    readonly server : UnicastServer;
-
     readonly factories : ReceiverFactoriesManager;
 
     constructor ( server : UnicastServer ) {
-        super();
+        super( server );
 
-        this.server = server;
-
-        this.factories = new ReceiverFactoriesManager( this );
+        this.factories = new ReceiverFactoriesManager( this, server );
     }
 
     protected getEntityKey ( entity : IMediaReceiver ) : string {
@@ -23,8 +19,8 @@ export class ReceiversManager extends EntityManager<IMediaReceiver, string> {
 }
 
 export class ReceiverFactoriesManager extends EntityFactoryManager<IMediaReceiver, ReceiversManager, ReceiverFactory<IMediaReceiver>, string, string> {
-    constructor ( receivers : ReceiversManager ) {
-        super( receivers );
+    constructor ( receivers : ReceiversManager, server : UnicastServer ) {
+        super( receivers, server );
     }
 
     protected getEntityKey ( entity : ReceiverFactory<IMediaReceiver> ) : string {

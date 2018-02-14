@@ -1,4 +1,4 @@
-import { SegmentsMap } from "./SegmentsMapV2";
+import { SegmentsMap } from "./SegmentsMap";
 
 const test = require('blue-tape');
 var tapSpec = require('tap-spec');

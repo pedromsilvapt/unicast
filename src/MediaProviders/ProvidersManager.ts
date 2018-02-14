@@ -5,6 +5,7 @@ import { MediaStream } from "./MediaStreams/MediaStream";
 import { MediaRecord } from "../MediaRecord";
 import { RepositoriesManager } from "../MediaRepositories/RepositoriesManager";
 import { ProviderFactory } from "./BaseMediaProvider/ProviderFactory";
+import { UnicastServer } from "../UnicastServer";
 
 export class ProvidersManager extends EntityManager<IMediaProvider, string> {
     protected cached : { [ property : string ] : MediaSource } = {};
@@ -13,12 +14,12 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
 
     repositories : RepositoriesManager;
 
-    constructor () {
-        super();
+    constructor ( server : UnicastServer ) {
+        super( server );
 
         this.repositories = new RepositoriesManager();
 
-        this.factories = new ProviderFactoriesManager( this );        
+        this.factories = new ProviderFactoriesManager( this, server );        
     }
 
     add ( entity : IMediaProvider ) : this {
@@ -135,8 +136,8 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
 
 
 export class ProviderFactoriesManager extends EntityFactoryManager<IMediaProvider, ProvidersManager, ProviderFactory<IMediaProvider>, string, string> {
-    constructor ( receivers : ProvidersManager ) {
-        super( receivers );
+    constructor ( receivers : ProvidersManager, server : UnicastServer ) {
+        super( receivers, server );
     }
 
     protected getEntityKey ( entity : ProviderFactory<IMediaProvider> ) : string {

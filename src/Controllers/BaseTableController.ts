@@ -40,11 +40,19 @@ export abstract class BaseTableController<R> extends BaseController {
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
         if ( req.query.sort ) {
-            if ( !this.sortingFields.includes( req.query.sort ) ) {
-                throw new InvalidArgumentError( `Invalid sort field "${ req.query.sort }" requested.` );
+            let sort = typeof req.query.sort === 'string' ?
+                { field: req.query.sort, direction: 'asc' } :
+                { direction: 'asc', ...req.query.sort };
+
+            if ( !this.sortingFields.includes( req.query.sort.field ) ) {
+                throw new InvalidArgumentError( `Invalid sort field "${ req.query.sort.field }" requested.` );
             }
 
-            query = query.orderBy( { index: req.query.sort } );
+            if ( req.query.sort.direction == 'desc' ) {
+                query = query.orderBy( { index: r.desc( req.query.sort.field ) } );
+            } else {
+                query = query.orderBy( { index: r.asc( req.query.sort.field ) } );
+            }
         } else if ( this.defaultSortField ) {
             query = query.orderBy( { index: this.defaultSortField } );
         }

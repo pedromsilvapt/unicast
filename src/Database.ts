@@ -2,6 +2,7 @@ import * as r from 'rethinkdb';
 import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind } from "./MediaRecord";
 import { Semaphore } from 'await-semaphore';
 import { Config } from "./Config";
+import { IDatabaseLocalSubtitle } from './Subtitles/SubtitlesRepository';
 
 export class Debounce {
     protected action : Function;
@@ -86,6 +87,8 @@ export class DatabaseTables {
 
     collectionsMedia : CollectionMediaTable;
 
+    subtitles : SubtitlesTable;
+
     constructor ( pool : ConnectionPool ) {
         this.movies = new MoviesMediaTable( pool );
 
@@ -104,6 +107,8 @@ export class DatabaseTables {
         this.collections = new CollectionsTable( pool );
 
         this.collectionsMedia = new CollectionMediaTable( pool );
+
+        this.subtitles = new SubtitlesTable( pool );
     }
 
     async install () {
@@ -124,6 +129,8 @@ export class DatabaseTables {
         await this.collections.install();
 
         await this.collectionsMedia.install();
+
+        await this.subtitles.install();
     }
 }
 
@@ -509,6 +516,14 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
     ];
 }
 
+export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {
+    readonly tableName : string = 'subtitles';
+
+    indexesSchema : IndexSchema[] = [ 
+        { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
+    ];
+}
+
 export interface PlaylistRecord {
     id ?: string;
     references : { kind : MediaKind, id : string }[];
@@ -533,6 +548,7 @@ export interface CollectionRecord {
     title : string;
     color : string;
     kinds : string[];
+    primary : boolean;
 }
 
 export interface CollectionMediaRecord {
@@ -542,3 +558,5 @@ export interface CollectionMediaRecord {
     mediaId : string;
     createdAt : Date;
 }
+
+export interface SubtitleMediaRecord extends IDatabaseLocalSubtitle { }

@@ -3,6 +3,7 @@ import { CancelToken } from "../../ES2017/CancelToken";
 import { UnicastServer } from "../../UnicastServer";
 import { ConfigurableEntityFactory } from "../../EntityFactory";
 import { ConfigInstances } from "../../Config";
+import { ReceiversManager } from "../ReceiversManager";
 
 export abstract class ReceiverFactory<R extends IMediaReceiver> extends ConfigurableEntityFactory<R> {
     readonly server : UnicastServer;

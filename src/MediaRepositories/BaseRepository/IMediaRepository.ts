@@ -1,5 +1,6 @@
 import { MediaRecord, MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MediaKind } from "../../MediaRecord";
 import { IMediaProvider } from "../../MediaProviders/BaseMediaProvider/IMediaProvider";
+import { ISubtitlesRepository } from "../../Subtitles/SubtitlesRepository";
 
 export interface MediaQuery {
     id ?: string;
@@ -28,6 +29,8 @@ export interface IMediaRepository<R extends MediaRecord = MediaRecord, Q extends
 
     readonly indexable : boolean;
 
+    readonly subtitles ?: ISubtitlesRepository;
+
     fetch ( id : string, query ?: Q ) : Promise<R>;
 
     fetchMany ( ids : string[], query ?: Q ) : Promise<R[]>;
@@ -35,18 +38,10 @@ export interface IMediaRepository<R extends MediaRecord = MediaRecord, Q extends
     find ( query ?: Q ) : Promise<R[]>;
 }
 
-export interface IMovieMediaRepository extends IMediaRepository<MovieMediaRecord> {
-    
-}
+export interface IMovieMediaRepository extends IMediaRepository<MovieMediaRecord> { }
 
-export interface ITvShowMediaRepository extends IMediaRepository<TvShowMediaRecord> {
-    
-}
+export interface ITvShowMediaRepository extends IMediaRepository<TvShowMediaRecord> { }
 
-export interface ITvSeasonMediaRepository extends IMediaRepository<TvSeasonMediaRecord, TvSeasonMediaQuery> {
-    
-}
+export interface ITvSeasonMediaRepository extends IMediaRepository<TvSeasonMediaRecord, TvSeasonMediaQuery> { }
 
-export interface ITvEpisodeMediaRepository extends IMediaRepository<TvEpisodeMediaRecord, TvEpisodeMediaQuery> {
-    
-}
+export interface ITvEpisodeMediaRepository extends IMediaRepository<TvEpisodeMediaRecord, TvEpisodeMediaQuery> { }

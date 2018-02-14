@@ -22,6 +22,7 @@
     "@types/sha1": "^1.1.0",
     "@types/superagent": "^3.5.5",
     "blue-tape": "^1.0.0",
+    "fuse-box": "^3.0.2",
     "tap-spec": "^4.1.1",
     "tape": "^4.8.0",
     "typescript": "^2.6.2"
@@ -66,12 +67,15 @@
     "rethinkdb": "^2.3.3",
     "sha1": "^1.1.1",
     "sharp": "^0.18.4",
+    "shorthash": "0.0.2",
     "sort-by": "^1.2.0",
     "srt-to-vtt": "^1.1.1",
     "string-to-stream": "^1.1.0",
+    "subtitler": "^2.6.0",
     "superagent": "^3.6.0",
     "thinky": "^2.3.8",
     "truncate": "^2.0.0",
-    "uid": "0.0.2"
+    "uid": "0.0.2",
+    "yauzl": "^2.9.1"
   }
 }

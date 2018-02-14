@@ -57,6 +57,7 @@ export interface PlayableMediaRecord extends MediaRecord {
 }
 
 export interface MovieMediaRecord extends PlayableMediaRecord {
+    kind : MediaKind.Movie;
     rating : number;
     genres : string[];
     trailer : string;
@@ -67,6 +68,7 @@ export interface MovieMediaRecord extends PlayableMediaRecord {
 }
 
 export interface TvShowMediaRecord extends MediaRecord {
+    kind : MediaKind.TvShow;
     episodesCount : number;
     genres : string[];
     plot : string;
@@ -80,6 +82,7 @@ export interface TvShowMediaRecord extends MediaRecord {
 }
 
 export interface TvSeasonMediaRecord extends MediaRecord {
+    kind : MediaKind.TvSeason;
     art : TvSeasonMediaRecordArt;
     number : number;
     tvShowId : string;
@@ -88,6 +91,7 @@ export interface TvSeasonMediaRecord extends MediaRecord {
 }
 
 export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
+    kind : MediaKind.TvEpisode;
     number : number;
     seasonNumber : number;   
     tvSeasonId : string;
@@ -95,5 +99,5 @@ export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
 }
 
 export interface CustomMediaRecord extends PlayableMediaRecord {
-
+    kind: MediaKind.Custom
 }

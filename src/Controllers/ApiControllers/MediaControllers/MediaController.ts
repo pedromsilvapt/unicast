@@ -23,11 +23,19 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
             const included = genres.filter( genre => req.query.genres[ genre ] === 'include' );
             const excluded = genres.filter( genre => req.query.genres[ genre ] === 'exclude' );
 
-            query = query.filter( ( doc ) => {
-                return ( doc( "genres" ) as any ).setIntersection( included ).isEmpty().not().and(
-                    ( doc( "genres" ) as any ).setIntersection( excluded ).isEmpty()
-                );
-            } );
+            if ( included.length > 0 || excluded.length > 0 ) {
+                query = query.filter( ( doc ) => {
+                    if ( included.length > 0 && excluded.length > 0 ) {
+                        return ( doc( "genres" ) as any ).setIntersection( included ).isEmpty().not().and(
+                            ( doc( "genres" ) as any ).setIntersection( excluded ).isEmpty()
+                        );
+                    } else if ( included.length > 0 ) {
+                        return ( doc( "genres" ) as any ).setIntersection( included ).isEmpty().not();
+                    } else if ( excluded.length > 0 ) {
+                        return ( doc( "genres" ) as any ).setIntersection( excluded ).isEmpty();
+                    }
+                } );
+            }
         }
 
         return query;
@@ -48,11 +56,16 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
 
                     return { collections };
                 } ).filter( ( doc : any ) => {
-                    return doc( "collections" ).setIntersection( included ).isEmpty().not().and(
-                        doc( "collections" ).setIntersection( excluded ).isEmpty()
-                    );
+                    if ( included.length > 0 && excluded.length > 0 ) {
+                        return doc( "collections" ).setIntersection( included ).isEmpty().not().and(
+                            doc( "collections" ).setIntersection( excluded ).isEmpty()
+                        );
+                    } else if ( excluded.length > 0 ) {
+                        return doc( "collections" ).setIntersection( excluded ).isEmpty();
+                    } else if ( included.length > 0 ) {
+                        return doc( "collections" ).setIntersection( included ).isEmpty().not();
+                    }
                 } ).without( 'collections' );
-                
             }
         }
 

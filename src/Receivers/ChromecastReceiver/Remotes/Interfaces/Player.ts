@@ -1,6 +1,6 @@
 import * as util from 'util';
 
-export function co<A, B, C> ( a : ( a : A ) => B | Promise<B>, b : ( b : B ) => C | Promise<C> ) : ( i : A, ...args : any[] ) => Promise<C> {
+export function co<A, B, C> ( a : ( a : A, ...args : any[] ) => B | Promise<B>, b : ( b : B, ...args : any[] ) => C | Promise<C> ) : ( i : A, ...args : any[] ) => Promise<C> {
     return async ( i, ...args ) => b( await a( i, ...args ), ...args );
 }
 

@@ -9,8 +9,16 @@ export default class DefaultMediaRemote extends GeneralRemote {
 
     lastSubtitlesStyle : any = null;
 
+    async checkMediaSession () {
+        if ( !this.player.native.media.currentSession ) {
+            await this.getStatus();
+        }
+    }
+
     async seekTo ( newCurrentTime : number ) : Promise<void> {
         this.isOpened || await this.open();
+        
+        await this.checkMediaSession();
         
         await this.player.seek( newCurrentTime );
     }
@@ -61,14 +69,18 @@ export default class DefaultMediaRemote extends GeneralRemote {
 
         this.playing = false;
 
-        return this.pause();
+        await this.checkMediaSession();
+        
+        return this.player.pause();
     }
 
     async resume () {
         this.isOpened || await this.open();
 
         this.playing = true;
-
+        
+        await this.checkMediaSession();
+        
         return this.player.play();
     }
 
@@ -77,18 +89,24 @@ export default class DefaultMediaRemote extends GeneralRemote {
         
         this.playing = false;
 
+        await this.checkMediaSession();
+        
         return this.player.stop();
     }
 
     async subtitlesOff () {
         this.isOpened || await this.open();
 
+        await this.checkMediaSession();
+
         await this.player.disableSubtitles();
     }
 
     async changeSubtitles ( index : number ) {
         this.isOpened || await this.open();
-
+        
+        await this.checkMediaSession();
+        
         await this.player.setActiveSubtitles( index );
     }
 
@@ -98,6 +116,8 @@ export default class DefaultMediaRemote extends GeneralRemote {
         }
 
         this.isOpened || await this.open();        
+
+        await this.checkMediaSession();
 
         let style = this.lastSubtitlesStyle;
 

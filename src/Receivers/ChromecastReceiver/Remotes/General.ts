@@ -43,7 +43,6 @@ export class GeneralRemote extends EventEmitter {
     constructor ( address : string ) {
         super();
 
-        console.log( address );
         this.address = address;
     }
 
@@ -187,8 +186,6 @@ export class GeneralRemote extends EventEmitter {
             return null;
         }
 
-        console.log( 'get status' );
-
         return Promise.race( [
             this.player.getStatus().catch( err => { console.error( err ); return null; } ),
             new Promise( ( _, reject ) => setTimeout( reject.bind( null, new Error( 'Chromecast getStatus timeout.' ) ), 5000 ) )
@@ -233,79 +230,3 @@ export class GeneralRemote extends EventEmitter {
         }
     }
 }
-
-// ( async () => {
-//     let client = new Client();
-
-//     const co = ( c : any, b : string ) => util.promisify( c[ b ].bind( c ) );
-
-//     await co( client, 'connect' )( '192.168.0.59' );
-    
-//     const apps = await co( client, 'getStatus' )();
-
-//     const sessionId : string = apps.applications[ 0 ];
-    
-//     const player = await co( client, 'join' )( sessionId, DefaultMediaReceiver );
-
-//     const status = await co( player, 'getStatus' )();
-
-//     console.log( status.currentTime );
-
-//     return;
-
-
-//     client.connect( '192.168.0.59', () => {
-//         client.launch( DefaultMediaReceiver, function(err, player) {
-//             var media = {
-      
-//                 // Here you can plug an URL to any mp4, webm, mp3 or jpg file with the proper contentType.
-//               contentId: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/big_buck_bunny_1080p.mp4',
-//               contentType: 'video/mp4',
-//               streamType: 'BUFFERED', // or LIVE
-      
-//               // Title and cover displayed while buffering
-//               metadata: {
-//                 type: 0,
-//                 metadataType: 0,
-//                 title: "Big Buck Bunny", 
-//                 images: [
-//                   { url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg' }
-//                 ]
-//               }        
-//             };
-      
-//             player.on('status', function(status) {
-//               console.log('status broadcast playerState=%s', status.playerState);
-//             //   console.log( status );
-//             });
-      
-//             console.log('app "%s" launched, loading media %s ...', player.session.displayName, media.contentId);
-      
-//             player.load(media, { autoplay: true }, function(err, status) {
-//               console.log('media loaded playerState=%s', status.playerState);
-      
-//                 client.getStatus( console.log.bind( console ) );
-
-//               // Seek to 2 minutes after 15 seconds playing.
-//                 setTimeout(function() {
-//                     console.log( 'seek' );
-//                     player.seek(2*60, function(err, status) {
-//                     console.log( 'pause' );
-//                     player.pause();
-
-//                     setTimeout(function() {
-//                             console.log( 'resume' );
-//                             player.unpause();
-//                     }, 2000);
-//                     });
-//                 }, 5000);
-      
-//             });
-      
-//           });
-
-//         client.on( 'status', status => {
-//             // console.log( status );
-//         } );
-//     } );
-// } )().catch( error => console.error( error ) );

@@ -1,5 +1,5 @@
 import { DriverFactory } from "./DriverFactory";
-import { TranscodingDriver, DriverTransformer } from "./TranscodingDriver";
+import { TranscodingDriver } from "./TranscodingDriver";
 import { MediaStream } from "../MediaProviders/MediaStreams/MediaStream";
 import { UnicastServer } from "../UnicastServer";
 

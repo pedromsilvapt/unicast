@@ -4,6 +4,7 @@ import { MovieMediaRecord, MediaKind } from "../../MediaRecord";
 import * as replaceExt        from 'replace-ext';
 import { KodiApi } from "./KodiApi";
 import { IMediaProvider } from "../../MediaProviders/BaseMediaProvider/IMediaProvider";
+import { SubtitlesKodiRepository } from "./SubtitlesKodiRepository";
 
 export class MovieKodiRepository extends BaseKodiRepository<MovieMediaRecord> implements IMovieMediaRepository {
     internalKind = 'movie';
@@ -12,8 +13,8 @@ export class MovieKodiRepository extends BaseKodiRepository<MovieMediaRecord> im
 
     transformer : MovieRecordTransformer;
 
-    constructor ( provider : IMediaProvider, kodi : KodiApi ) {
-        super( provider, kodi );
+    constructor ( provider : IMediaProvider, kodi : KodiApi, subtitles ?: SubtitlesKodiRepository ) {
+        super( provider, kodi, subtitles );
 
         this.transformer = new MovieRecordTransformer( this.name );
     }

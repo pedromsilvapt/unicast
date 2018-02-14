@@ -4,6 +4,7 @@ import { KodiApi } from "./KodiApi";
 import { IMediaProvider } from "../../MediaProviders/BaseMediaProvider/IMediaProvider";
 import * as parseQuality from 'parse-torrent-name';
 import * as path from 'path';
+import { SubtitlesKodiRepository } from "./SubtitlesKodiRepository";
 
 export abstract class BaseKodiRepository<R extends MediaRecord> implements IMediaRepository<R> {
     protected abstract readonly internalKind : string;
@@ -14,6 +15,8 @@ export abstract class BaseKodiRepository<R extends MediaRecord> implements IMedi
 
     readonly indexable : boolean = true;
 
+    subtitles : SubtitlesKodiRepository;
+
     get name () : string {
         return this.provider.name;
     }
@@ -22,9 +25,10 @@ export abstract class BaseKodiRepository<R extends MediaRecord> implements IMedi
 
     transformer ?: RecordTransformer;
 
-    constructor ( provider : IMediaProvider, kodi : KodiApi ) {
+    constructor ( provider : IMediaProvider, kodi : KodiApi, subtitles ?: SubtitlesKodiRepository ) {
         this.provider = provider;
         this.kodi = kodi;
+        this.subtitles = subtitles;
     }
     
     protected createParams ( query : MediaQuery ) : any {

@@ -2,16 +2,11 @@ import { BaseController, RoutesDeclarations, Controller, Route } from "../../Bas
 import { Request, Response, Next } from "restify";
 import { NotFoundError } from "restify-errors";
 import * as objectPath from 'object-path';
-import * as superagent from 'superagent';
-import * as sharp from 'sharp';
 import * as mime from 'mime';
 import * as path from 'path';
 import * as fs from 'mz/fs';
-import { Semaphore } from 'await-semaphore';
 
 export class ArtworkController extends BaseController {
-    semaphore : Semaphore = new Semaphore( 1 );
-
     async mkdirp ( folder : string ) {
         if ( !( await fs.exists( folder ) ) ) {
             await this.mkdirp( path.dirname( folder ) );

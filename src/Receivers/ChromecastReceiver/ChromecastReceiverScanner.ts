@@ -20,6 +20,10 @@ export abstract class ChromecastReceiverScanner {
 
     timeoutToken : NodeJS.Timer = null;
 
+    missedConnectionsThreshold : number = 0;
+
+    rememberDevices : boolean = false;
+
     pushDevice : Function;
 
     endDevices : Function;
@@ -27,6 +31,8 @@ export abstract class ChromecastReceiverScanner {
     iterable : AsyncIterableIterator<ChromecastReceiverIdentification>;
 
     history : Map<string, ChromecastReceiverIdentification> = new Map;
+
+    misses : Map<string, number> = new Map;
 
     responses : Map<string, ChromecastReceiverIdentification> = new Map;
 
@@ -54,6 +60,7 @@ export abstract class ChromecastReceiverScanner {
         const device = { name, address, status };
 
         this.history.set( address, device );
+        this.misses.set( address, 0 );
         this.responses.set( address, device );
     }
 
@@ -66,6 +73,8 @@ export abstract class ChromecastReceiverScanner {
             };
     
             this.responses.set( address, device );
+
+            this.misses.set( address, 0 );
 
             if ( !this.history.has( address ) ) {
                 this.diagnostics.debug( 'chromecast/scanner', 'new ' + name + ' ' + address );
@@ -96,11 +105,17 @@ export abstract class ChromecastReceiverScanner {
     
                 for ( let ip of this.history.keys() ) {
                     if ( !this.responses.has( ip ) ) {
-                        this.pushDevice( { ...this.history.get( ip ), status: 'offline' } );
+                        this.misses.set( ip, this.misses.get( ip ) + 1 );
 
-                        this.diagnostics.debug( 'chromecast/scanner', 'destroy ' + this.history.get( ip ).name + ' ' + this.history.get( ip ).address );
+                        if ( !!this.rememberDevices && this.misses.get( ip ) > this.missedConnectionsThreshold ) {
+                            this.pushDevice( { ...this.history.get( ip ), status: 'offline' } );
+    
+                            this.diagnostics.debug( 'chromecast/scanner', 'destroy ' + this.history.get( ip ).name + ' ' + this.history.get( ip ).address );
+    
+                            this.history.delete( ip );
 
-                        this.history.delete( ip );
+                            this.misses.delete( ip );
+                        }
                     }
                 }
 
@@ -157,7 +172,7 @@ export class ChromecastReceiverSSDPScanner extends ChromecastReceiverScanner {
         if ( statusCode == 200 && !this.timedOut && !this.history.has( rinfo.address ) ) {
             const player = new DefaultMediaRemote( rinfo.address );
             
-            await player.ensureConnection();
+            await player.connect();
 
             // TODO Make SSDP scanner find devices' names.
 
@@ -165,7 +180,7 @@ export class ChromecastReceiverSSDPScanner extends ChromecastReceiverScanner {
 
             // console.log( player.name );
 
-            this.onResponse( player.name, rinfo.address );
+            this.onResponse( player.toString(), rinfo.address );
         }
     }
 

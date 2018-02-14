@@ -87,7 +87,7 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        const references = req.body;
+        const references = typeof req.body === 'string' ? JSON.parse( req.body ) : req.body;
 
         if ( !( references instanceof Array ) ) {
             throw new InvalidArgumentError( `The request body must be an array.` );
