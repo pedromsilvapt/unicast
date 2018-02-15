@@ -25,7 +25,7 @@ export class ChromecastReceiver extends BaseReceiver {
         this.address = address;
 
         this.client = new DefaultMediaRemote( this.address );
-
+        
         this.sender = new ChromecastHttpSender( this );
 
         this.messagesFactory = new MessagesFactory( this.sender );
@@ -103,6 +103,8 @@ export class ChromecastReceiver extends BaseReceiver {
 
         this.sessions.current = id;
 
+        this.emit( 'play', id );
+
         // this.emit( 'playing', id, record, playOptions );
 
         // await super.play( item );
@@ -137,11 +139,15 @@ export class ChromecastReceiver extends BaseReceiver {
     async pause () : Promise<ReceiverStatus> {
         await this.client.pause();
 
+        this.emit( 'pause', this.sessions.current );
+
         return this.status();
     }
 
     async resume () : Promise<ReceiverStatus> {
         await this.client.resume();
+
+        this.emit( 'resume', this.sessions.current );
 
         return this.status();
     }
@@ -149,9 +155,13 @@ export class ChromecastReceiver extends BaseReceiver {
     async stop () : Promise<ReceiverStatus> {
         await this.client.stop();
 
-        this.sessions.release( this.sessions.current );
+        await this.sessions.release( this.sessions.current );
+
+        const id = this.sessions.current;
 
         this.sessions.current = null;
+        
+        this.emit( 'stop', id );
 
         return this.status();
     }

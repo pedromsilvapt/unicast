@@ -539,6 +539,7 @@ export interface HistoryRecord {
     playlistPosition ?: number;
     receiver : string;
     position : number;
+    positionHistory : number[];
     createdAt : Date;
     updatedAt : Date;
 }

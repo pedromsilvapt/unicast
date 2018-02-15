@@ -177,9 +177,9 @@ export class GeneralRemote extends EventEmitter {
         }
     }
 
-    getStatus () {
+    async getStatus () {
         if ( !this.isConnected ) {
-            this.connect();
+            await this.connect();
         }
 
         if ( !this.isOpened ) {
