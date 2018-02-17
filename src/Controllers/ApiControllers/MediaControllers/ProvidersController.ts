@@ -6,7 +6,7 @@ import { MediaSync } from "../../../MediaSync";
 import { BackgroundTask } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
 
-export class SyncController extends BaseController {
+export class ProvidersController extends BaseController {
     @Route( ['get', 'post'], '/sync' )
     async sync ( req : Request, res : Response ) : Promise<BackgroundTask> {
         const kinds : MediaKind[] = req.query.kinds || null;

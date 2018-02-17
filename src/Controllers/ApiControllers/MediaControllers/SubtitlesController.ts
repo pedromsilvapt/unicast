@@ -52,7 +52,7 @@ export class SubtitlesController extends BaseController {
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 
-        const file = await this.server.storage.getRandomFile( 'validate-', 'srt', 'subtitles' );
+        const file = await this.server.storage.getRandomFile( 'validate-local-', 'srt', 'temp/subtitles' );
         
         await this.server.subtitles.storeLocalToFile( media, subtitle, file )        
 
@@ -67,7 +67,7 @@ export class SubtitlesController extends BaseController {
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 
-        const file = await this.server.storage.getRandomFile( 'validate-', '.srt', 'subtitles' );
+        const file = await this.server.storage.getRandomFile( 'validate-remote-', '.srt', 'temp/subtitles' );
 
         await this.server.subtitles.storeRemoteToFile( subtitle, file )
         

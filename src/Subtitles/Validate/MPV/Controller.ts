@@ -127,7 +127,7 @@ export class MpvController implements IVideoPlayerController {
 
         const source = ( ControllerSource as string ).replace( /__timestamps__/, JSON.stringify( timestamps ) );
 
-        const sourceFile = await this.server.storage.getRandomFile( 'mpv-controller-', 'js' );
+        const sourceFile = await this.server.storage.getRandomFile( 'mpv-controller-', 'js', 'temp/subtitles' );
 
         await fs.writeFile( sourceFile, source, 'utf8' );
 

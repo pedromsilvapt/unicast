@@ -1,8 +1,6 @@
 import { MediaPlayOptions, IMediaReceiver, ReceiverStatusState, ReceiverStatus } from "./IMediaReceiver";
 import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import { MediaRecord, PlayableMediaRecord } from "../../MediaRecord";
-import { Database, HistoryRecord } from "../../Database";
-import { ProvidersManager } from "../../MediaProviders/ProvidersManager";
 import { MediaManager } from "../../UnicastServer";
 import { CancelToken } from "../../ES2017/CancelToken";
 import { EventEmitter } from "events";
@@ -157,8 +155,6 @@ export class PriorityPoller extends EventEmitter {
 
     set currentPriority ( value : number ) {
         if ( value != this._currentPriority ) {
-            console.log( 'priority set to', value, 'was', this._currentPriority );
-
             this._currentPriority = value;
 
             if ( this.intervalTimer ) {

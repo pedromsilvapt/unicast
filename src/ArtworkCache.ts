@@ -37,7 +37,7 @@ export class ArtworkCache {
     constructor ( server : UnicastServer ) {
         this.server = server;
 
-        this.cache = new MapCachePersistence( this.server.storage.getPath( 'artwork.json' ) );
+        this.cache = new MapCachePersistence( this.server.storage.getPath( 'cache/artwork.json' ) );
     }
 
     areOptionsEqual ( a : ArtworkCacheOptions, b : ArtworkCacheOptions ) : boolean {
@@ -64,6 +64,14 @@ export class ArtworkCache {
         this.cache.set( this.getCacheKey( url, options ), file );
     }
 
+    getReadableStream ( url : string ) : NodeJS.ReadableStream {
+        if ( url.startsWith( 'http://' ) || url.startsWith( 'https://' ) ) {
+            return superagent.get( url ) as any;
+        } else {
+            return fs.createReadStream( url );
+        }
+    }
+
     @Singleton( ( url : string ) => url )
     async readOriginal ( url : string ) : Promise<string> {
         let cached;
@@ -72,16 +80,18 @@ export class ArtworkCache {
             return cached;
         }
         
-        const cachePath = await this.server.storage.getRandomFile( 'original-', 'jpg', 'cache/artwork' );
+        const cachePath = await this.server.storage.getRandomFile( '', 'jpg', 'cache/artwork/original' );
 
         const release = await this.httpSemaphore.acquire();
 
         try {
-            const response = superagent.get( url );
+            this.server.diagnostics.debug( 'artwork', `Fetching ${url}, saving to ${cachePath}.`, { type: 'fetch' } );            
 
-            await saveStreamTo( response as any, cachePath );
+            await saveStreamTo( this.getReadableStream( url ), cachePath );
     
             this.setCached( url, cachePath );
+        } catch ( err ) {
+            await this.server.onError.notify( err );            
         } finally {
             release();
         }
@@ -118,7 +128,9 @@ export class ArtworkCache {
         const release = await this.sharpSemaphore.acquire();
 
         try {
-            const cachePathResized = await this.server.storage.getRandomFile( 'transformed-', 'jpg', 'cache/artwork' );
+            const cachePathResized = await this.server.storage.getRandomFile( '', 'jpg', 'cache/artwork/transformed' );
+            
+            this.server.diagnostics.debug( 'artwork', `Transforming ${url}, saving to ${cachePathResized}.`, { type: 'transform', options } );
 
             let image = await sharp( cachePath );
 
@@ -132,6 +144,8 @@ export class ArtworkCache {
 
             return cachePathResized;
         } catch ( err ) {
+            await this.server.onError.notify( err );
+
             return cachePath;
         } finally {
             release();

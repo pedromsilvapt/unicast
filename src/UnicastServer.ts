@@ -1,8 +1,8 @@
 import { ProvidersManager } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord } from "./MediaRecord";
-import { Database, BaseTable, CategoryRecord } from "./Database";
-import { MediaSourceDetails, MediaSource } from "./MediaProviders/MediaSource";
+import { Database, BaseTable, CollectionRecord } from "./Database";
+import { MediaSourceDetails } from "./MediaProviders/MediaSource";
 import { Config } from "./Config";
 import * as restify from 'restify';
 import * as logger from 'restify-logger';
@@ -22,8 +22,19 @@ import { ArtworkCache } from "./ArtworkCache";
 import { Diagnostics } from "./Diagnostics";
 import { TriggerDb } from "./TriggerDb";
 import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
+import { Hookable, Hook } from "./Hookable";
 
 export class UnicastServer {
+    readonly hooks : Hookable = new Hookable();
+
+    readonly onStart : Hook<void> = this.hooks.create( 'start' );
+
+    readonly onListen : Hook<void> = this.hooks.create( 'listen' );
+    
+    readonly onError : Hook<Error> = this.hooks.create( 'error' );
+
+    readonly onClose : Hook<void> = this.hooks.create( 'close' );
+
     readonly config : Config;
 
     readonly database : Database;
@@ -120,6 +131,10 @@ export class UnicastServer {
                 return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );
             }
         } ) );
+
+        this.onError.subscribe( error => {
+            this.diagnostics.error( 'unhandled', error.message, error );
+        } );
     }
 
     async getIpV4 () : Promise<string> {
@@ -155,7 +170,9 @@ export class UnicastServer {
     }
 
     async listen () : Promise<void> {
-        const ip : string = await this.getIpV4();
+        await this.onStart.notify();
+
+        await this.getIpV4();
 
         const port : number = await this.getPort();
 
@@ -164,7 +181,7 @@ export class UnicastServer {
         // Attach all api controllers
         new ApiController( this, '/api' ).install();
 
-        this.http.use( ( req, res, next ) => {
+        this.http.use( ( req, _res, next ) => {
             if ( req.url.startsWith( '/api/' ) ) {
                 next( new ResourceNotFoundError( `Could not find the resource "${ req.url }"` ) );
             }
@@ -181,27 +198,35 @@ export class UnicastServer {
 
         await this.database.install();
 
+        await this.onListen.notify();
+
         await this.http.listen( [ port, sslPort ] );
+
+        await this.storage.clean();
 
         this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getUrl() );
         
         if ( this.isHttpsEnabled ) {
             this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getSecureUrl() );
         }
+    }
 
+    async close () {
+        await this.onClose.notify();
 
-        // TODO Remove
-        // const results = await this.subtitles.search( await this.media.get( MediaKind.TvEpisode, '232a42de-e6bb-46d1-a155-050ba8ec0855' ), [ 'por' ] );
-        
-        // console.log( results.length );
+        this.http.close();
+    }
 
-        // for ( let result of results ) {
-        //     console.log( result.releaseName, result.downloads, result.format );
-        // }
-
-        // if ( results.length ) {
-        //     ( await this.subtitles.download( results[ 1 ] ) ).pipe( fs.createWriteStream( 'subs.srt' ) );
-        // }
+    async quit ( delay : number = 0 ) {
+        try {
+            await this.close();
+        } finally {
+            if ( delay > 0 ) {
+                setTimeout( () => process.exit(), delay );
+            } else {
+                process.exit();
+            }
+        }
     }
 }
 
@@ -275,7 +300,7 @@ export class MediaManager {
         return null;
     }
 
-    async getCollections ( kind : MediaKind, id : string ) : Promise<CategoryRecord[]> {
+    async getCollections ( kind : MediaKind, id : string ) : Promise<CollectionRecord[]> {
         const categories = await this.database.tables.collectionsMedia.find( query => {
             return query.filter( doc => doc( 'mediaKind' ).eq( kind ).and( doc( 'mediaId' ).eq( id ) ) );
         } );
@@ -301,7 +326,7 @@ export class MultiServer extends EventEmitter {
 
     listen ( ports : number[] ) : Promise<void> {
         return Promise.all( this.servers.map( ( server, index ) => {
-            return new Promise<void>( ( resolve, reject ) => {
+            return new Promise<void>( resolve => {
                 server.listen( ports[ index ], () => {
                     resolve();
                 } );
@@ -309,10 +334,18 @@ export class MultiServer extends EventEmitter {
         } ) ).then( () => null );
     }
 
-    close () {
+    async close () {
+        let promises : Promise<void>[] = [];
+
         for ( let server of this.servers ) {
-            server.close();
+            promises.push( 
+                new Promise<void>( 
+                    resolve => server.close( resolve ) 
+                )
+            );
         }
+
+        await Promise.all( promises );
     }
 
     inflightRequests (): number {
