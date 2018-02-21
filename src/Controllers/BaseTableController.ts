@@ -120,7 +120,7 @@ export abstract class BaseTableController<R> extends BaseController {
             throw new NotAuthorizedError();
         }
 
-        const body = await this.transformDocument( req, res, req.body, true );
+        const body = await this.transformDocument( req, res, typeof req.body === 'string' ? JSON.parse( req.body ) : req.body, true );
 
         const item : R = await this.table.create( body );
 
@@ -137,7 +137,7 @@ export abstract class BaseTableController<R> extends BaseController {
             throw new NotAuthorizedError();
         }
 
-        const body = this.transformDocument( req, res, req.body, false );
+        const body = this.transformDocument( req, res, typeof req.body === 'string' ? JSON.parse( req.body ) : req.body, false );
 
         const item : R = await this.table.update( req.params.id, body );
 

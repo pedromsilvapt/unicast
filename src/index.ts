@@ -17,4 +17,4 @@ server.providers.add( new FileSystemMediaProvider( 'filesystem' ) );
 server.transcoding.registerDriver( new FFmpegDriverFactory() );
 server.transcoding.registerDriver( new FFmpegHlsDriverFactory() );
 
-server.listen().catch( console.error.bind( console ) );
+server.listen().catch( err => console.error( err.message, err.stack ) );

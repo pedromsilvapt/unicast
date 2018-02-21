@@ -4,6 +4,7 @@ import { BaseTableController } from "../BaseTableController";
 import { Request, Response } from "restify";
 import { Route } from "../BaseController";
 import * as r from 'rethinkdb';
+import { MediaRecord } from "../../MediaRecord";
 
 export class PlaylistsController extends BaseTableController<PlaylistRecord> {
     defaultSortField : string = 'createdAt';
@@ -38,6 +39,8 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
     async transform ( req : Request, res : Response, playlist : PlaylistRecord ) : Promise<any> {
         if ( req.query.items === 'true' ) {
             ( playlist as any ).items = await Promise.all( ( playlist.references || [] ).map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
+
+            ( playlist as any ).items = ( playlist as any ).items.filter( item => !!item );
         }
 
         return playlist;
@@ -69,14 +72,16 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
     }
 
     @Route( 'get', '/:id/items' )
-    async getItems ( req : Request, res : Response ) {
+    async getItems ( req : Request, res : Response ) : Promise<MediaRecord[]> {
         const playlist = await this.table.get( req.params.id );
 
         if ( !playlist ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        return await Promise.all( playlist.references.map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
+        const items = await Promise.all( playlist.references.map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
+
+        return items.filter( item => !!item );
     }
 
     @Route( 'post', '/:id/items' )

@@ -35,6 +35,7 @@
     "chalk": "^2.1.0",
     "composable": "^0.2.4",
     "config": "^1.26.2",
+    "data-optional": "0.0.2",
     "date-fns": "^1.28.5",
     "deep-equal": "^1.0.1",
     "del": "^3.0.0",

@@ -2,12 +2,24 @@ import { BaseController, RoutesDeclarations, Controller, Route } from "../BaseCo
 import { Request, Response } from "restify";
 import { PlaylistsController } from "./PlaylistsController";
 import { MediaSourceDetails } from "../../MediaProviders/MediaSource";
-import { InvalidArgumentError } from 'restify-errors';
+import { InvalidArgumentError, HttpError } from 'restify-errors';
 import { setTimeout } from "timers";
+import { MediaPlayOptions, ReceiverStatus } from "../../Receivers/BaseReceiver/IMediaReceiver";
+import { MediaRecord } from "../../MediaRecord";
 
 export class InvalidDeviceArgumentError extends InvalidArgumentError {
     constructor ( device : string ) {
         super( `Could not find a device named "${ device }".` );
+    }
+}
+
+export class NoNextPreviousMediaFound extends HttpError {
+    constructor () {
+        super( {
+            statusCode: 412,
+            message: `No media available to fulfill the request.`,
+            code: 'ENOMEDIA'
+        } );
     }
 }
 
@@ -32,12 +44,73 @@ export class PlayerController extends BaseController {
         }
     }
 
-    @Route( 'get', '/:device/playtest' )
-    async playtest ( req : Request, res : Response ) {
+    @Route( [ 'get', 'post' ], '/:device/play/next' )
+    async playNextMedia ( req : Request, res : Response ) : Promise<ReceiverStatus> {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.play( 'bd0dbdbc-096a-4217-bfaa-2060bb834ce0' );
+            const next = await device.sessions.getNext( device.sessions.current, req.query.strategy || 'auto' );
+
+            const [ record, options ] = next.orElseThrow( () => new NoNextPreviousMediaFound() );
+
+            const session = await device.sessions.register( record, options );
+
+            return device.play( session );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( [ 'get', 'post' ], '/:device/play/previous' )
+    async playPreviousMedia ( req : Request, res : Response ) : Promise<ReceiverStatus> {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const next = await device.sessions.getPrevious( device.sessions.current, req.query.strategy || 'auto' );
+
+            const [ record, options ] = next.orElseThrow( () => new NoNextPreviousMediaFound() );
+
+            const session = await device.sessions.register( record, options );
+
+            return device.play( session );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'get', '/:device/preview/next' )
+    async nextMedia ( req : Request, res : Response ) : Promise<{ record: MediaRecord, options : MediaPlayOptions }> {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const next = await device.sessions.getNext( device.sessions.current, req.query.strategy || 'auto' );
+
+            if ( next.isPresent() ) {
+                const [ record, options ] = next.get();
+    
+                return { record, options };
+            } else {
+                return { record: null, options: null };
+            }
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'get', '/:device/preview/previous' )
+    async previousMedia ( req : Request, res : Response ) : Promise<{ record: MediaRecord, options : MediaPlayOptions }> {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const previous = await device.sessions.getPrevious( device.sessions.current, req.query.strategy || 'auto' );
+
+            if ( previous.isPresent() ) {
+                const [ record, options ] = previous.get();
+    
+                return { record, options };
+            } else {
+                return { record: null, options: null };
+            }
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -54,7 +127,7 @@ export class PlayerController extends BaseController {
     
             const { playlistId, playlistPosition } = req.body;
 
-            const options = playlistId ? { playlistId, playlistPosition } : {};
+            const options : MediaPlayOptions = playlistId ? { playlistId, playlistPosition } : {};
 
             const session = await device.sessions.register( record, options );
 

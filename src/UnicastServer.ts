@@ -23,6 +23,7 @@ import { Diagnostics } from "./Diagnostics";
 import { TriggerDb } from "./TriggerDb";
 import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
 import { Hookable, Hook } from "./Hookable";
+import * as r from 'rethinkdb';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -121,6 +122,20 @@ export class UnicastServer {
 
         this.http.use( restify.plugins.queryParser() );
         this.http.use( restify.plugins.bodyParser() );
+        this.http.use( ( req: restify.Request, res: restify.Response, next: restify.Next ) => {
+            try {
+                if ( !req.body ) {
+                    req.body = {};
+                } else {
+                    req.body = typeof req.body === 'string' ? JSON.parse( req.body ) : req.body;
+                }
+
+                next();
+            } catch ( err ) {
+                console.log( err );
+                next( err );
+            }
+        } )
 
         // Set logger format
         logger.format( 'unicast-simple', `${chalk.blue( `[${this.http.name}]` ) } ${ chalk.green( ':method' ) } ${ chalk.cyan( ':url' ) } ${ chalk.grey( ':status' ) } :response-time ms` )
@@ -270,6 +285,84 @@ export class MediaManager {
         let table : BaseTable<MediaRecord> = this.getTable( kind );
 
         return table.get( id );
+    }
+
+    async getSeason ( show : string, season : number ) : Promise<TvSeasonMediaRecord> {
+        const seasons = await this.database.tables.seasons.find( query => query.filter( {
+            tvShowId: show, 
+            number: season
+        } ).limit( 1 ) );
+
+        if ( seasons.length ) {
+            return seasons[ 0 ];
+        }
+
+        return null;
+    }
+
+    async getSeasons ( show : string ) : Promise<TvSeasonMediaRecord[]> {
+        return await this.database.tables.seasons.find( query => query.filter( {
+            tvShowId: show
+        } ) );
+    }
+
+    async getSeasonEpisode ( season : string, episode : number ) : Promise<TvEpisodeMediaRecord> {
+        const episodes = await this.database.tables.episodes.find( query => query.filter( {
+            tvSeasonId: season, 
+            number: episode
+        } ).limit( 1 ) );
+
+        if ( episodes.length ) {
+            return episodes[ 0 ];
+        }
+
+        return null;
+    }
+
+    async getSeasonEpisodes ( season : string ) : Promise<TvEpisodeMediaRecord[]> {
+        return await this.database.tables.episodes.find( query => query.filter( {
+            tvSeasonId: season
+        } ) );
+    }
+
+    async getEpisode ( show : string, season : number, episode : number ) : Promise<TvEpisodeMediaRecord> {
+        const seasonRecord = await this.getSeason( show, season );
+
+        if ( !seasonRecord ) {
+            return null;
+        }
+
+        return this.getSeasonEpisode( seasonRecord.id, episode );
+    }
+
+    async getEpisodesBySeason ( show : string ) : Promise<Map<number, { season: TvSeasonMediaRecord, episodes: TvEpisodeMediaRecord[] }>> {
+        const seasons = await this.getSeasons( show );
+
+        const ids = seasons.map( season => season.id );
+
+        const episodes = await this.database.tables.episodes.find( query => query.filter( doc => r.expr( ids ).contains( ( doc as any )( 'tvSeasonId' ) ) ) );
+
+        const episodesBySeason : Map<number, { season: TvSeasonMediaRecord, episodes: TvEpisodeMediaRecord[] }> = new Map();
+
+        for ( let episode of episodes ) {
+            const season = seasons.find( season => season.id === episode.tvSeasonId );
+
+            if ( !episodesBySeason.has( episode.seasonNumber ) ) {
+                episodesBySeason.set( episode.seasonNumber, {
+                    season, episodes: [ episode ]
+                } );
+            } else {
+                episodesBySeason.get( episode.seasonNumber ).episodes.push( episode );
+            }
+        }
+
+        return episodesBySeason;
+    }
+
+    async getEpisodes ( show : string ) : Promise<TvEpisodeMediaRecord[]> {
+        const seasons = await this.getEpisodesBySeason( show );
+
+        return Array.from( seasons.values() ).map( season => season.episodes ).reduce( ( a, b ) => a.concat( b ), [] );
     }
 
     store ( record : MediaRecord ) : Promise<MediaRecord> {
