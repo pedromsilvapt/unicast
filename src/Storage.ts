@@ -151,20 +151,21 @@ export class StorageCleaner {
 
         const release = await this.semaphore.acquire();
 
-        const stats = await fs.stat( target );
-
         try {
-            if ( stats.isFile() ) {
-                await this.cleanFile( stats, target, condition );
-            } else {
-                await this.cleanFolder( stats, target, condition );
+            if ( await fs.exists( target ) ) {
+                const stats = await fs.stat( target );
+    
+                if ( stats.isFile() ) {
+                    await this.cleanFile( stats, target, condition );
+                } else {
+                    await this.cleanFolder( stats, target, condition, false );
+                }
             }
         } catch ( error ) {
             await this.storage.server.onError.notify( error );
         } finally {
             release();
         }
-
     }
 
     protected async cleanFile ( stats : fs.Stats, target : string, condition : StoragePredicate ) : Promise<boolean> {
@@ -177,7 +178,7 @@ export class StorageCleaner {
         return false;
     }
 
-    protected async cleanFolder ( stats : fs.Stats, target : string, condition : StoragePredicate ) {        
+    protected async cleanFolder ( stats : fs.Stats, target : string, condition : StoragePredicate, cleanSelf : boolean = true ) {        
         if ( await condition( stats, target ) ) {
             const files = await fs.readdir( target );
 
