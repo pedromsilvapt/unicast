@@ -31,6 +31,7 @@
     "algorithms": "^0.10.0",
     "array-filter-query-builder": "^0.5.3",
     "await-semaphore": "^0.1.1",
+    "cache-stream": "^0.1.0",
     "castv2-client": "^1.2.0",
     "chalk": "^2.1.0",
     "composable": "^0.2.4",

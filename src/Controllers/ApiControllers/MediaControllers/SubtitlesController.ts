@@ -3,11 +3,12 @@ import { Request, Response } from "restify";
 import { ISubtitle } from "../../../Subtitles/Providers/ISubtitlesProvider";
 import { ILocalSubtitle } from "../../../Subtitles/SubtitlesManager";
 import { MpvController } from "../../../Subtitles/Validate/MPV/Controller";
-import { MediaKind, PlayableMediaRecord } from "../../../MediaRecord";
+import { MediaKind, PlayableMediaRecord, TvEpisodeMediaRecord } from "../../../MediaRecord";
 import { MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { FileSystemVideoMediaStream } from "../../../MediaProviders/FileSystemMediaProvider/MediaStreams/FileSystemVideoStream";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { Semaphore } from "await-semaphore";
+import * as sortBy from 'sort-by';
 
 export class SubtitlesController extends BaseController {
     protected validateSemaphore : Semaphore = new Semaphore( 1 );
@@ -15,15 +16,36 @@ export class SubtitlesController extends BaseController {
     @Route( 'get', '/:kind/:id/local' )
     async listLocal ( req : Request, res : Response ) : Promise<ILocalSubtitle[]> {
         const media = await this.server.media.get( req.params.kind, req.params.id );
+        
+        return await this.server.subtitles.list( media );
+    }
 
-        return this.server.subtitles.list( media );
+    protected async listRemotePredict ( episode : TvEpisodeMediaRecord ) {
+        const season = await this.server.database.tables.seasons.get( episode.tvSeasonId );
+        
+        const episodes = await this.server.media.getEpisodes( season.tvShowId );
+        
+        episodes.sort( sortBy( 'seasonNumber', 'number' ) );
+        
+        const index = episodes.findIndex( ep => ep.id === episode.id );
+
+        if ( index + 1 < episodes.length ) {
+            await this.server.subtitles.providers.search( episodes[ index + 1 ], [ 'por' ] );
+        }
     }
 
     @Route( 'get', '/:kind/:id/remote' )
     async listRemote ( req : Request, res : Response ) : Promise<ISubtitle[]> {
         const media = await this.server.media.get( req.params.kind, req.params.id );
+
+        const result = await this.server.diagnostics.measure( 'subtitles/search', () => this.server.subtitles.providers.search( media, [ 'por' ] ) );
         
-        return this.server.subtitles.providers.search( media, [ 'por' ] );
+        if ( media.kind === MediaKind.TvEpisode ) {
+            this.listRemotePredict( media as TvEpisodeMediaRecord )
+                .catch( err => this.server.onError.notify( err ) );
+        }
+
+        return result;
     }
 
     protected async validateSubtitle ( media : PlayableMediaRecord, subtitleFile : string ) {

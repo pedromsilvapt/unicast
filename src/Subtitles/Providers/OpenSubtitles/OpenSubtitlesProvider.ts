@@ -72,52 +72,8 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
         }
 
         const query = await this.getQueryForMedia( media, lang );
-
-        console.log( query );
         
         let results : any[] = await this.api.search( this.token, lang, query );
-        
-        console.log( results.length );
-
-        // {
-        //     provider: 'openSubtitles',
-        //     id: subtitles.IDSubtitleFile,
-        //     idImdb: subtitles.IDMovieImdb,
-        //     size: subtitles.SubSize,
-        //     hash: subtitles.SubHash,
-        //     lastTimestamp: subtitles.SubLastTS,
-        //     format: subtitles.SubFormat,
-        //     reports: +subtitles.SubBad,
-        //     rating: subtitles.SubRating,
-        //     addedAt: subtitles.SubAddDate,
-        //     downloads: +subtitles.SubDownloadsCnt,
-        //     releaseName: subtitles.MovieReleaseName || '',
-        //     fps: subtitles.MovieFPS,
-        //     idMovie: subtitles.IDMovie,
-        //     idMovieImdb: subtitles.seriesIMDBParent || subtitles.IDMovieImdb,
-        //     title: subtitles.MovieName,
-        //     year: subtitles.MovieYear,
-        //     imdbRating: subtitles.MovieImdbRating,
-        //     language: subtitles.SubLanguageID,
-        //     languageName: subtitles.LanguageName,
-        //     languageISO639: subtitles.ISO639,
-        //     encoding: subtitles.SubEncoding,
-        //     type: subtitles.MovieKind,
-        //     rank: this.getUserRankScore( subtitles.UserRank ),
-        //     attributes: {
-        //         hearingImpaired: !!( +subtitles.SubHearingImpaired ),
-        //         highDefinition: !!( +subtitles.SubHD )
-        //     },
-        //     show: {
-        //         season: +subtitles.SeriesSeason,
-        //         episode: +subtitles.SeriesEpisode
-        //     },
-        //     download: {
-        //         manual: subtitles.SubtitlesLink,
-        //         zip: subtitles.ZipDownloadLink,
-        //         direct: subtitles.SubDownloadLink
-        //     }
-        // };
 
         return results.map<IOpenSubtitlesResult>( result => ( {
             provider: this.name,
@@ -143,10 +99,14 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
             encoding: null
         } );
 
-        console.log( subtitle.id );
         let result = new Promise<NodeJS.ReadableStream>( ( resolve, reject ) => {
             yauzl.fromBuffer( content.body, { lazyEntries: true }, ( err, file ) => {
-                console.log( err );
+                if ( file.entryCount > 100 ) {
+                    return reject( new Error( `Too many files in the zip "${ file.entryCount }".` ) );
+                }
+
+                let foundSubs : boolean = false;
+                
                 if ( err ) {
                     return reject( err );
                 }
@@ -154,15 +114,13 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
                 file.readEntry();
 
                 file.on( 'entry', entry => {
-                    console.log( 'entry', entry.fileName );
-
                     if ( isSubtitle( entry.fileName ) ) {
                         file.openReadStream( entry, ( err, stream : NodeJS.ReadableStream ) => {
-                            console.log( 'stream', stream );
-                            
                             if ( err ) {
                                 return reject( err );
                             }
+
+                            foundSubs = true;
 
                             stream = stream
                                 .pipe( iconv.decodeStream( subtitle.encoding || 'CP1252' ) )
@@ -174,6 +132,12 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
                         file.close();
                     } else {
                         file.readEntry();
+                    }
+                } );
+
+                file.on( 'end', () => {
+                    if ( !foundSubs ) {
+                        reject( new Error( `Could not find subtitles.` ) );
                     }
                 } );
 
