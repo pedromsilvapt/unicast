@@ -4,6 +4,7 @@ import { MediaKind, AllMediaKinds, MovieMediaRecord, MediaRecord, TvShowMediaRec
 import { IMediaRepository, IMovieMediaRepository, ITvShowMediaRepository, ITvSeasonMediaRepository, ITvEpisodeMediaRepository, MediaQuery, TvSeasonMediaQuery, TvEpisodeMediaQuery } from "./MediaRepositories/BaseRepository/IMediaRepository";
 import * as deepEqual from 'deep-equal';
 import { BackgroundTask } from "./BackgroundTask";
+import * as itt from 'itt';
 
 export class MediaSync {
     database : Database;
@@ -141,9 +142,11 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
 
     abstract async delete ( record : M ) : Promise<void>;
 
-    async syncResources ( task : BackgroundTask, record : M ) : Promise<void> {}
+    async syncResources ( task : BackgroundTask, record : M ) : Promise<void> { }
 
-    async cleanResources ( task : BackgroundTask, record : M ) : Promise<void> {}
+    async cleanResources ( task : BackgroundTask, record : M ) : Promise<void> { }
+
+    async cacheComputedFields ( task : BackgroundTask, record : M ) : Promise<void> { }
 
     abstract compare ( a : M, b : M )  : boolean;
 
@@ -178,6 +181,8 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
         task.addDone();
 
         await this.syncResources( task, record );
+
+        await this.cacheComputedFields( task, record );
     }
 
     async run ( task : BackgroundTask, id ?: string ) : Promise<void> {
@@ -215,6 +220,7 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
 
         const existing = new Set( remote.map( record => record.internalId ) );
 
+        const notMissing = indexed.filter( record => existing.has( record.internalId ) );
         const missing = indexed.filter( record => !existing.has( record.internalId ) );
 
         task.addDone( indexed.length - missing.length );
@@ -224,6 +230,15 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
         for ( let record of missing ) {
             tasks.push( 
                 task.do( this.cleanRecord( task, record ) )
+            );
+        }
+
+        for ( let record of notMissing ) {
+            tasks.push( 
+                task.do( 
+                    this.cleanResources( task, record )
+                        .finally( () => this.cacheComputedFields( task, record ) ) 
+                )
             );
         }
 
@@ -331,6 +346,21 @@ export class MediaSyncTvShow extends MediaSyncKind<TvShowMediaRecord, ITvShowMed
             await new MediaSyncTvSeason( this.engine, repository, show ).clean( task );
         }
     }
+
+    async cacheComputedFields ( task : BackgroundTask, show : TvShowMediaRecord ) : Promise<void> {
+        const seasons = await this.engine.database.tables.seasons.find( query => query.filter( {
+            tvShowId: show.id
+        } ) );
+
+        const episodesCount : number = itt( seasons ).map( season => season.episodesCount ).sum();
+        const watchedEpisodesCount : number = itt( seasons ).map( season => season.watchedEpisodesCount ).sum();
+        const seasonsCount = seasons.length;
+        const watched = watchedEpisodesCount >= episodesCount;
+
+        await this.engine.database.tables.shows.update( show.id, {
+            episodesCount, watchedEpisodesCount, seasonsCount, watched
+        } );
+    }
 }
 
 export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSeasonMediaRepository> {
@@ -410,6 +440,19 @@ export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSea
         if ( repository ) {
             await new MediaSyncTvEpisode( this.engine, repository, this.show, season ).clean( task );
         }
+    }
+
+    async cacheComputedFields ( task : BackgroundTask, season : TvSeasonMediaRecord ) : Promise<void> {
+        const episodes = await this.engine.database.tables.episodes.find( query => query.filter( {
+            tvSeasonId: season.id
+        } ) );
+
+        const episodesCount : number = itt( episodes ).keyBy( episode => episode.number ).size;
+        const watchedEpisodesCount : number = itt( episodes ).filter( episode => episode.watched ).keyBy( episode => episode.number ).size;
+        
+        await this.engine.database.tables.seasons.update( season.id, {
+            episodesCount, watchedEpisodesCount
+        } );
     }
 }
 

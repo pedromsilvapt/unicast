@@ -1,8 +1,11 @@
 import * as r from 'rethinkdb';
-import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind } from "./MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "./MediaRecord";
 import { Semaphore } from 'await-semaphore';
 import { Config } from "./Config";
 import { IDatabaseLocalSubtitle } from './Subtitles/SubtitlesRepository';
+import * as itt from 'itt';
+
+export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
 export class Debounce {
     protected action : Function;
@@ -43,11 +46,6 @@ export class Database {
     }
 
     connect () : Promise<r.Connection> {
-        /*{
-            db: 'unicast',
-            host: '127.0.0.1',
-            port: 28015
-        }*/
         return r.connect( this.config.get<r.ConnectionOptions>( 'database' ) );
     }
 
@@ -249,6 +247,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     indexesSchema : IndexSchema[] = [];
 
+    get database () : Database {
+        return this.pool.database;
+    }
+
     constructor ( pool : ConnectionPool ) {
         this.pool = pool;
     }
@@ -380,7 +382,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         return record;
     }
 
-    async updateMany ( predicate : r.ExpressionFunction<boolean>, update : any, limit : number = Infinity ) : Promise<number> {
+    async updateMany ( predicate : RethinkPredicate, update : any, limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
         
         let query = this.query().filter( predicate );
@@ -406,7 +408,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         return operation.deleted > 0;
     }
 
-    async deleteMany ( predicate : r.ExpressionFunction<boolean>, limit : number = Infinity ) : Promise<number> {
+    async deleteMany ( predicate : RethinkPredicate, limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
         
         let query = this.query().filter( predicate );
@@ -433,7 +435,17 @@ export abstract class BaseTable<R extends { id ?: string }> {
     }
 }
 
-export class MoviesMediaTable extends BaseTable<MovieMediaRecord> {
+export enum CascadeDirection {
+    Upstream = 'upstream',
+    Atomic = 'atomic',
+    Downstream = 'downstream'
+}
+
+export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
+    abstract setWatched ( id : string, watched : boolean, cascade ?: CascadeDirection ) : Promise<R>;
+}
+
+export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
     readonly tableName : string = 'media_movies';
 
     indexesSchema : IndexSchema[] = [ 
@@ -445,9 +457,22 @@ export class MoviesMediaTable extends BaseTable<MovieMediaRecord> {
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
+
+    async setWatched ( id : string, watched : boolean ) : Promise<MovieMediaRecord> {
+        const movie = await this.get( id );
+
+        if ( movie ) {
+            return this.update( id, {
+                ...movie,
+                watched
+            } );
+        }
+
+        return null;
+    }
 }
 
-export class TvShowsMediaTable extends BaseTable<TvShowMediaRecord> {
+export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     readonly tableName : string = 'media_tvshows';
 
     indexesSchema : IndexSchema[] = [ 
@@ -460,18 +485,92 @@ export class TvShowsMediaTable extends BaseTable<TvShowMediaRecord> {
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
+
+    async updateEpisodesCount ( id : string ) : Promise<TvShowMediaRecord> {
+        const seasons = await this.database.tables.seasons.find( query => query.filter( {
+            tvShowId: id
+        } ) );
+
+        const show : TvShowMediaRecord = null;
+
+        const seasonsCount = seasons.length;
+
+        const episodesCount = itt( seasons ).map( season => season.episodesCount ).sum();
+
+        const watchedEpisodesCount = itt( seasons ).map( season => season.watchedEpisodesCount ).sum();
+
+        return this.update( id, {
+            watched: episodesCount == watchedEpisodesCount,
+            seasonsCount, episodesCount, watchedEpisodesCount
+        } );
+    }    
+
+    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<TvShowMediaRecord> {
+        const seasons = await this.database.tables.seasons.find( query => query.filter( {
+            tvShowId: id
+        } ) );
+
+        let episodesCount = 0;
+        let watchedEpisodesCount = 0;
+
+        for ( let season of seasons ) {
+            if ( ( season.episodesCount === season.watchedEpisodesCount ) !== watched && cascade == CascadeDirection.Downstream ) {
+                season = await this.database.tables.seasons.setWatched( id, watched );
+            }
+
+            episodesCount += season.episodesCount;
+            watchedEpisodesCount += season.watchedEpisodesCount;
+        }
+
+        return this.update( id, { watched, episodesCount, watchedEpisodesCount } );
+    }
 }
 
-export class TvSeasonsMediaTable extends BaseTable<TvSeasonMediaRecord> {
+export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
     readonly tableName : string = 'media_tvseasons';
 
     indexesSchema : IndexSchema[] = [ 
         { name: 'number' },
         { name: 'tvShowId' }
     ];
+
+    async updateEpisodesCount ( id : string ) : Promise<TvSeasonMediaRecord> {
+        const season = await this.database.tables.seasons.get( id );
+
+        const episodes = await this.database.tables.episodes.find( query => query.filter( { tvSeasonId: id } ) );
+
+        const episodesCount : number = itt( episodes ).keyBy( episode => episode.number ).size;
+
+        const watchedEpisodesCount : number = itt( episodes ).filter( episode => episode.watched ).keyBy( episode => episode.number ).size;
+
+        return this.update( id, {
+            episodesCount,
+            watchedEpisodesCount
+        } );
+    }
+
+    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<TvSeasonMediaRecord> {
+        const season = await this.database.tables.seasons.get( id );
+
+        if ( cascade === CascadeDirection.Downstream ) {
+            const episodes = await this.database.tables.episodes.find( query => query.filter( { tvSeasonId: id } ) );
+
+            await this.database.tables.episodes.updateMany( { tvSeasonId: id }, { watched } );
+        } else {
+            const offset = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
+
+            const show = await this.database.tables.shows.get( season.tvShowId );
+
+            await this.database.tables.shows.update( show.id, { watchedEpisodesCount: show.watchedEpisodesCount + offset } );
+        }
+
+        return this.update( id, {
+            watchedEpisodesCount: watched ? season.episodesCount : 0
+        } );
+    }
 }
 
-export class TvEpisodesMediaTable extends BaseTable<TvEpisodeMediaRecord> {
+export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     readonly tableName : string = 'media_tvepisodes';
     
     indexesSchema : IndexSchema[] = [ 
@@ -480,10 +579,49 @@ export class TvEpisodesMediaTable extends BaseTable<TvEpisodeMediaRecord> {
         { name: 'lastPlayed' },
         { name: 'addedAt' }
     ];
+
+    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<TvEpisodeMediaRecord> {
+        const episode = await this.get( id );
+
+        if ( !episode ) {
+            return null;
+        }
+
+        if ( episode.watched === watched ) {
+            return episode;
+        }
+
+        if ( cascade === CascadeDirection.Upstream ) {
+            const offset = watched ? 1 : -1;
+
+            const season = await this.database.tables.seasons.get( episode.tvSeasonId );
+
+            await this.database.tables.seasons.update( season.id, { watchedEpisodesCount: season.watchedEpisodesCount + offset } );
+
+            const show = await this.database.tables.shows.get( season.tvShowId );
+
+            await this.database.tables.shows.update( show.id, { watchedEpisodesCount: show.watchedEpisodesCount + offset } );
+        }
+
+        return this.update( id, {
+            ...episode,
+            watched
+        } );
+    }
 }
 
-export class CustomMediaTable extends BaseTable<CustomMediaRecord> {
+export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
     readonly tableName : string = 'media_custom';
+
+    
+    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<CustomMediaRecord> {
+        const custom = await this.get( id );
+        
+        return this.update( id, {
+            ...custom,
+            watched
+        } );
+    }
 }
 
 export class PlaylistsTable extends BaseTable<PlaylistRecord> {
@@ -539,7 +677,8 @@ export interface HistoryRecord {
     playlistPosition ?: number;
     receiver : string;
     position : number;
-    positionHistory : number[];
+    positionHistory : { start: number, end: number }[];
+    watched: boolean;
     createdAt : Date;
     updatedAt : Date;
 }

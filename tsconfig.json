@@ -4,6 +4,7 @@
         "module": "commonjs",
         "moduleResolution": "node",
         "experimentalDecorators": true,
+        "skipLibCheck": true,
         "noImplicitAny": false,
         "sourceMap": true,
         "outDir": "lib/",
