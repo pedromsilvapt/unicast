@@ -9,6 +9,7 @@ import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream"
 import { HttpSender } from "../BaseReceiver/HttpSender";
 import { ChromecastHttpSender } from "./ChromecastHttpSender";
 import { ChromecastHlsTranscoder } from "./Transcoders/ChromecastHlsTranscoder";
+import { InvalidArgumentError } from "restify-errors";
 
 export class ChromecastReceiver extends BaseReceiver {
     readonly address : string;
@@ -176,7 +177,8 @@ export class ChromecastReceiver extends BaseReceiver {
                 state: ReceiverStatusState.Stopped,
                 media: {
                     time: { duration: 0, current: 0 },
-                    record: null
+                    record: null,
+                    session: null
                 },
                 volume: { level: 1, muted: false },
                 subtitlesStyle: null
@@ -191,7 +193,8 @@ export class ChromecastReceiver extends BaseReceiver {
             state: status.playerState,
             media: {
                 time: { duration: status.media.duration, current: status.currentTime },
-                record: record
+                record: record,
+                session: await this.server.database.tables.history.get( status.media.metadata.session )
             },
             volume: { level: Math.round( status.volume.level * 100 ), muted: status.volume.muted },
             subtitlesStyle: null
@@ -248,6 +251,14 @@ export class ChromecastReceiver extends BaseReceiver {
         await this.client.setVolumeMuted( false );
 
         return this.status();
+    }
+
+    async callCommand<R = any, A extends any[] = any[]> ( commandName : string, args : A ) : Promise<R> {    
+        if ( 'commandName' in this ) {
+            return this[ commandName ]( ...args );
+        }
+
+        throw new InvalidArgumentError();
     }
 
     toJSON () {

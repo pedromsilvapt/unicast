@@ -51,6 +51,12 @@ export class TvEpisodeKodiRepository extends BaseKodiRepository<TvEpisodeMediaRe
 
         return this.transformer.doArray( episodes );
     }
+
+    async watch ( id : string, status : boolean ) : Promise<TvEpisodeMediaRecord> {
+        await this.kodi.setSingleEpisode( +id, { playcount: status ? 1 : 0 } );
+
+        return this.fetch( id );
+    }
 }
 
 export class TvEpisodeRecordTransformer extends KodiRecordTransformer {

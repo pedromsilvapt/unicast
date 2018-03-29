@@ -53,7 +53,7 @@ export abstract class BaseReceiver extends EventEmitter implements IMediaReceive
 
     abstract setVolume ( level : number ) : Promise<ReceiverStatus>;
 
-    abstract callCommand<R = any, A = any[]> ( commandName : string, args : A ) : Promise<R>;
+    abstract callCommand<R = any, A extends any[] = any[]> ( commandName : string, args : A ) : Promise<R>;
 
     abstract toJSON();
 }

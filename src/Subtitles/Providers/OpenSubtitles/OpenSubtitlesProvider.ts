@@ -1,4 +1,5 @@
 import * as subtitler from 'subtitler';
+import * as OS from 'opensubtitles-api';
 import { ISubtitlesProvider, ISubtitle } from '../ISubtitlesProvider';
 import { MediaKind, TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from '../../../MediaRecord';
 import * as yauzl from 'yauzl';
@@ -28,6 +29,14 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
     protected tokenTimeout : NodeJS.Timer = null;
 
     protected api : any = subtitler.api;
+
+    protected os : any;
+
+    constructor () {
+        // this.os = new OS( {
+        //     useragent:'TemporaryUserAgent'
+        // } );
+    }
 
     protected async getQueryForMedia ( media : MediaRecord, lang : string ) {
         if ( media.kind === MediaKind.Movie ) {
@@ -71,25 +80,31 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
             await this.getToken();
         }
 
-        const query = await this.getQueryForMedia( media, lang );
-        
-        let results : any[] = await this.api.search( this.token, lang, query );
+        try {
+            const query = await this.getQueryForMedia( media, lang );
+            
+            let results : any[] = await this.api.search( this.token, lang, query );
+    
+            return results.map<IOpenSubtitlesResult>( result => ( {
+                provider: this.name,
+                id : result.IDSubtitleFile,
+                releaseName: result.MovieReleaseName || '',
+                encoding: result.SubEncoding,
+                format: result.SubFormat,
+                language: result.SubLanguageID,
+                downloads: +result.SubDownloadsCnt,
+                publishedAt: result.SubAddDate,
+                download : {
+                    manual: result.SubtitlesLink,
+                    zip: result.ZipDownloadLink,
+                    direct: result.SubDownloadLink
+                }
+            } ) );
+        } catch ( err ) {
+            console.error( err );
 
-        return results.map<IOpenSubtitlesResult>( result => ( {
-            provider: this.name,
-            id : result.IDSubtitleFile,
-            releaseName: result.MovieReleaseName || '',
-            encoding: result.SubEncoding,
-            format: result.SubFormat,
-            language: result.SubLanguageID,
-            downloads: +result.SubDownloadsCnt,
-            publishedAt: result.SubAddDate,
-            download : {
-                manual: result.SubtitlesLink,
-                zip: result.ZipDownloadLink,
-                direct: result.SubDownloadLink
-            }
-        } ) );
+            return [];
+        }
     }
 
     async download ( subtitle : IOpenSubtitlesResult ) : Promise<NodeJS.ReadableStream> {

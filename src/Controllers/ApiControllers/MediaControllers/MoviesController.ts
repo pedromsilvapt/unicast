@@ -1,6 +1,6 @@
 import { MovieMediaRecord } from "../../../MediaRecord";
 import { BaseTableController } from "../../BaseTableController";
-import { BaseTable } from "../../../Database";
+import { BaseTable, MediaTable } from "../../../Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
@@ -9,7 +9,7 @@ import { Route } from "../../BaseController";
 export class MoviesController extends MediaTableController<MovieMediaRecord> {
     sortingFields : string[] = [ 'title', 'rating', 'parentalRating', 'year', 'lastPlayed', 'addedAt' ]
     
-    get table () : BaseTable<MovieMediaRecord> {
+    get table () : MediaTable<MovieMediaRecord> {
         return this.server.database.tables.movies;
     }
 

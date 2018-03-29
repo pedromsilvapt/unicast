@@ -1,6 +1,6 @@
 import { TvEpisodeMediaRecord } from "../../../MediaRecord";
 import { BaseTableController } from "../../BaseTableController";
-import { BaseTable } from "../../../Database";
+import { BaseTable, MediaTable } from "../../../Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
@@ -10,7 +10,7 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
 
     defaultSortField : string = 'number';
 
-    get table () : BaseTable<TvEpisodeMediaRecord> {
+    get table () : MediaTable<TvEpisodeMediaRecord> {
         return this.server.database.tables.episodes;
     }
 

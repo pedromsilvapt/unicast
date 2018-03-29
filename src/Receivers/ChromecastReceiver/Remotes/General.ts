@@ -50,6 +50,20 @@ export class GeneralRemote extends EventEmitter {
     async connect () {
         if ( !this.client ) {
             this.client = new Client( new NativeClient( this.address ) );
+
+            this.client.native.on( 'error', error => {
+                console.error( 'error', error.message, error.stack );
+            } ).on( 'status', status => {
+                if ( status && status.applications instanceof Array ) {
+                    this.verify( status.applications.find( app => app.appId === this.application.APP_ID ) );
+                }
+    
+                this.emit( 'app-status', status );
+            } ).on( 'close', status => {
+                if ( this.shouldBeConnected ) {
+                    this.reconnect();
+                }
+            } );
         }
 
         await this.client.connect( this.address );
@@ -63,20 +77,6 @@ export class GeneralRemote extends EventEmitter {
         this.isOpened = false;
 
         this.currentSessionId = null;
-        
-        this.client.native.on( 'status', status => {
-            if ( status && status.applications instanceof Array ) {
-                this.verify( status.applications.find( app => app.appId === this.application.APP_ID ) );
-            }
-
-            this.emit( 'app-status', status );
-        } ).on( 'close', status => {
-            if ( this.shouldBeConnected ) {
-                this.reconnect();
-            }
-        } ).on( 'error', error => {
-            console.error( 'error', error.message, error.stack );
-        } );
     }
 
     protected async verify ( session : any ) {
@@ -105,6 +105,10 @@ export class GeneralRemote extends EventEmitter {
         }
     }
 
+    protected onPlayerError ( error ) {
+        console.log( 'player error', error );
+    }
+
     protected onPlayerClose () {
         this.player = null;
 
@@ -125,6 +129,8 @@ export class GeneralRemote extends EventEmitter {
 
         this.currentSessionId = this.player.native.session.sessionId;
 
+        this.player.native.on( 'error', this.onPlayerError.bind( this ) );
+
         this.player.native.on( 'close', this.onPlayerClose.bind( this ) );
     }
 
@@ -143,6 +149,8 @@ export class GeneralRemote extends EventEmitter {
         this.currentSessionId = this.player.native.session.sessionId;
         
         this.isLaunching = false;
+
+        this.player.native.on( 'error', this.onPlayerError.bind( this ) );
 
         this.player.native.on( 'close', this.onPlayerClose.bind( this ) );
     }

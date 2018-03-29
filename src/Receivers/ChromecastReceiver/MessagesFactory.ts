@@ -83,7 +83,8 @@ export class MessagesFactory {
         
         for ( let [ index, subtitle ] of subtitles.entries() ) {
             const language = this.getSubtitlesLanguage( 
-                subtitle.language || defaultLanguage
+                // TODO
+                ( subtitle as any ).language || defaultLanguage
             );
 
             tracks.push( {

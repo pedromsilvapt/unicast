@@ -1,4 +1,5 @@
-import { Semaphore } from "await-semaphore";
+// import { Semaphore } from "await-semaphore";
+import { Semaphore } from "data-semaphore";
 
 export class Hookable {
     hooks : Map<string, Hook> = new Map();

@@ -4,7 +4,8 @@ import * as fs from 'mz/fs';
 import * as del from 'del';
 import * as path from 'path';
 import { Singleton } from "./ES2017/Singleton";
-import { Semaphore } from "await-semaphore";
+// import { Semaphore } from "await-semaphore";
+import { Semaphore } from "data-semaphore";
 import { isBefore, subDays } from 'date-fns';
 
 export class Storage {

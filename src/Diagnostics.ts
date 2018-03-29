@@ -5,6 +5,8 @@ import * as pidusage from 'pidusage';
 import * as fs from 'mz/fs';
 import * as tpl from 'mnml-tpl';
 import { format } from "date-fns";
+import * as chalk from 'chalk';
+// import * as eyes from 'eyes';
 
 export class Diagnostics {
     protected logger : Logger;
@@ -15,7 +17,9 @@ export class Diagnostics {
 
     minimumLevel ?: string;
 
-    constructor ( server : UnicastServer, minimumLevel : string = 'info' ) {
+    inspector : any = (v) => v;// eyes.inspector();
+
+    constructor ( server : UnicastServer, minimumLevel : string = 'debug' ) {
         this.server = server;
 
         this.logger = new Logger( this.server.storage, 'logs/app-:YYYY-:MM-:DD.log' );
@@ -27,6 +31,10 @@ export class Diagnostics {
     
     stopwatch () : Stopwatch {
         return new Stopwatch();
+    }
+
+    service ( key : string ) : DiagnosticsService {
+        return new DiagnosticsService( this, key );
     }
 
     register ( key : string, time : number | Stopwatch, data ?: any ) {
@@ -50,8 +58,12 @@ export class Diagnostics {
     }
 
     log ( key : string, level : string, message : string, data ?: object ) : void {
-        if ( this.minimumLevel && this.levels.indexOf( level ) >= this.levels.indexOf( this.minimumLevel ) ) {
-            console.log( `[${ level.toUpperCase() }][${ key }]`, message );
+        const levelIndex = this.levels.indexOf( level );
+
+        if ( this.minimumLevel && levelIndex >= this.levels.indexOf( this.minimumLevel ) ) {
+            const color = [ chalk.white, chalk.cyan, chalk.orange, chalk.red, chalk.magenta ][ levelIndex ];
+
+            console.log( color( `[${ level.toUpperCase() }]` ) + chalk.green( `[${ key }]` ), message, data ? chalk.grey( this.inspector( data ) ) : '' );
         }
 
         this.logger.write( 'log', {
@@ -98,6 +110,49 @@ export class Diagnostics {
                 } );
             } );
         } );
+    }
+}
+
+export class DiagnosticsService {
+    diagnostics : Diagnostics;
+
+    key : string;
+
+    constructor ( diagnostics : Diagnostics, key : string ) {
+        this.diagnostics = diagnostics;
+        this.key = key;
+    }
+    
+    register ( time : number | Stopwatch, data ?: any ) : void {
+        this.diagnostics.register( this.key, time, data );
+    }
+
+    async measure<T> ( task : ( sw : Stopwatch ) => Promise<T>, data ?: any ) : Promise<T> {
+        return this.diagnostics.measure<T>( this.key, task, data );
+    }
+
+    log ( level : string, message : string, data ?: object ) : void {
+        this.diagnostics.log( this.key, level, message, data );
+    }
+
+    debug ( message : string, data ?: object ) : void {
+        this.diagnostics.debug( this.key, message, data );
+    }
+
+    info ( message : string, data ?: object ) : void {
+        this.diagnostics.info( this.key, message, data );
+    }
+
+    warning ( message : string, data ?: object ) : void {
+        this.diagnostics.warning( this.key, message, data );
+    }
+
+    error ( message : string, data ?: object ) : void {
+        this.diagnostics.error( this.key, message, data );
+    }
+
+    fatal ( message : string, data ?: object ) : void {
+        this.diagnostics.fatal( this.key, message, data );
     }
 }
 

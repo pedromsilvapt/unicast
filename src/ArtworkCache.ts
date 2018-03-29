@@ -1,4 +1,5 @@
-import { Semaphore } from "await-semaphore";
+// import { Semaphore } from "await-semaphore";
+import { Semaphore } from "data-semaphore";
 import * as superagent from 'superagent';
 import { UnicastServer } from "./UnicastServer";
 import { Singleton } from "./ES2017/Singleton";

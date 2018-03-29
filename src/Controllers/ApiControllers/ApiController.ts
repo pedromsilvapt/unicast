@@ -9,6 +9,7 @@ import { ArtworkController } from "./MediaControllers/ArtworkController";
 import { ProvidersController } from "./MediaControllers/ProvidersController";
 import { TasksController } from "./TasksController";
 import { SubtitlesController } from "./MediaControllers/SubtitlesController";
+import * as sortBy from 'sort-by';
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -44,5 +45,10 @@ export class ApiController extends BaseController {
     @Route( 'get', '/close' )
     async close () {
         await this.server.quit( 1000 );
+    }
+
+    @Route( 'get', '/sitemap' )
+    async sitemap () {
+        return Array.from( this.server.http.routes ).sort( sortBy( 'path' ) );
     }
 }

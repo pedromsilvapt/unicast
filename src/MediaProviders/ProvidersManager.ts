@@ -17,7 +17,7 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
     constructor ( server : UnicastServer ) {
         super( server );
 
-        this.repositories = new RepositoriesManager();
+        this.repositories = new RepositoriesManager( this.server );
 
         this.factories = new ProviderFactoriesManager( this, server );        
     }

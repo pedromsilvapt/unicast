@@ -1,6 +1,7 @@
 import * as r from 'rethinkdb';
 import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "./MediaRecord";
-import { Semaphore } from 'await-semaphore';
+// import { Semaphore } from 'await-semaphore';
+import { Semaphore } from 'data-semaphore';
 import { Config } from "./Config";
 import { IDatabaseLocalSubtitle } from './Subtitles/SubtitlesRepository';
 import * as itt from 'itt';
@@ -87,6 +88,8 @@ export class DatabaseTables {
 
     subtitles : SubtitlesTable;
 
+    jobsQueue : PersistentQueueTable<JobRecord>;
+
     constructor ( pool : ConnectionPool ) {
         this.movies = new MoviesMediaTable( pool );
 
@@ -107,6 +110,8 @@ export class DatabaseTables {
         this.collectionsMedia = new CollectionMediaTable( pool );
 
         this.subtitles = new SubtitlesTable( pool );
+
+        this.jobsQueue = new PersistentQueueTable( pool );
     }
 
     async install () {
@@ -129,6 +134,8 @@ export class DatabaseTables {
         await this.collectionsMedia.install();
 
         await this.subtitles.install();
+
+        await this.jobsQueue.install();
     }
 }
 
@@ -435,14 +442,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
     }
 }
 
-export enum CascadeDirection {
-    Upstream = 'upstream',
-    Atomic = 'atomic',
-    Downstream = 'downstream'
-}
-
 export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
-    abstract setWatched ( id : string, watched : boolean, cascade ?: CascadeDirection ) : Promise<R>;
+    
 }
 
 export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
@@ -457,19 +458,6 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
-
-    async setWatched ( id : string, watched : boolean ) : Promise<MovieMediaRecord> {
-        const movie = await this.get( id );
-
-        if ( movie ) {
-            return this.update( id, {
-                ...movie,
-                watched
-            } );
-        }
-
-        return null;
-    }
 }
 
 export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
@@ -503,26 +491,6 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
             watched: episodesCount == watchedEpisodesCount,
             seasonsCount, episodesCount, watchedEpisodesCount
         } );
-    }    
-
-    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<TvShowMediaRecord> {
-        const seasons = await this.database.tables.seasons.find( query => query.filter( {
-            tvShowId: id
-        } ) );
-
-        let episodesCount = 0;
-        let watchedEpisodesCount = 0;
-
-        for ( let season of seasons ) {
-            if ( ( season.episodesCount === season.watchedEpisodesCount ) !== watched && cascade == CascadeDirection.Downstream ) {
-                season = await this.database.tables.seasons.setWatched( id, watched );
-            }
-
-            episodesCount += season.episodesCount;
-            watchedEpisodesCount += season.watchedEpisodesCount;
-        }
-
-        return this.update( id, { watched, episodesCount, watchedEpisodesCount } );
     }
 }
 
@@ -548,26 +516,6 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
             watchedEpisodesCount
         } );
     }
-
-    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<TvSeasonMediaRecord> {
-        const season = await this.database.tables.seasons.get( id );
-
-        if ( cascade === CascadeDirection.Downstream ) {
-            const episodes = await this.database.tables.episodes.find( query => query.filter( { tvSeasonId: id } ) );
-
-            await this.database.tables.episodes.updateMany( { tvSeasonId: id }, { watched } );
-        } else {
-            const offset = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
-
-            const show = await this.database.tables.shows.get( season.tvShowId );
-
-            await this.database.tables.shows.update( show.id, { watchedEpisodesCount: show.watchedEpisodesCount + offset } );
-        }
-
-        return this.update( id, {
-            watchedEpisodesCount: watched ? season.episodesCount : 0
-        } );
-    }
 }
 
 export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
@@ -579,49 +527,10 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         { name: 'lastPlayed' },
         { name: 'addedAt' }
     ];
-
-    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<TvEpisodeMediaRecord> {
-        const episode = await this.get( id );
-
-        if ( !episode ) {
-            return null;
-        }
-
-        if ( episode.watched === watched ) {
-            return episode;
-        }
-
-        if ( cascade === CascadeDirection.Upstream ) {
-            const offset = watched ? 1 : -1;
-
-            const season = await this.database.tables.seasons.get( episode.tvSeasonId );
-
-            await this.database.tables.seasons.update( season.id, { watchedEpisodesCount: season.watchedEpisodesCount + offset } );
-
-            const show = await this.database.tables.shows.get( season.tvShowId );
-
-            await this.database.tables.shows.update( show.id, { watchedEpisodesCount: show.watchedEpisodesCount + offset } );
-        }
-
-        return this.update( id, {
-            ...episode,
-            watched
-        } );
-    }
 }
 
 export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
     readonly tableName : string = 'media_custom';
-
-    
-    async setWatched ( id : string, watched : boolean, cascade : CascadeDirection = CascadeDirection.Atomic ) : Promise<CustomMediaRecord> {
-        const custom = await this.get( id );
-        
-        return this.update( id, {
-            ...custom,
-            watched
-        } );
-    }
 }
 
 export class PlaylistsTable extends BaseTable<PlaylistRecord> {
@@ -650,7 +559,7 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
 
     indexesSchema : IndexSchema[] = [ 
         { name: 'collectionId' },
-        { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
+        { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
     ];
 }
 
@@ -660,6 +569,10 @@ export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {
     indexesSchema : IndexSchema[] = [ 
         { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];
+}
+
+export class PersistentQueueTable<R extends JobRecord> extends BaseTable<R> {
+    tableName : string = 'job_queue';
 }
 
 export interface PlaylistRecord {
@@ -692,11 +605,26 @@ export interface CollectionRecord {
 }
 
 export interface CollectionMediaRecord {
-    id : string;
+    id ?: string;
     collectionId : string;
-    mediaKind : string;
+    mediaKind : MediaKind;
     mediaId : string;
     createdAt : Date;
+}
+
+export interface JobRecord<P = any> {
+    id ?: string;
+    action : string;
+    payload : P;
+    priority : number;
+
+    pastAttempts : number;
+    maxAttempts : number;
+    nextAttempt : Date;
+
+    createdAt : Date;
+    updatedAt : Date;
+    attemptedAt : Date;
 }
 
 export interface SubtitleMediaRecord extends IDatabaseLocalSubtitle { }

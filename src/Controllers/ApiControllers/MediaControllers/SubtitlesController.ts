@@ -7,7 +7,8 @@ import { MediaKind, PlayableMediaRecord, TvEpisodeMediaRecord } from "../../../M
 import { MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { FileSystemVideoMediaStream } from "../../../MediaProviders/FileSystemMediaProvider/MediaStreams/FileSystemVideoStream";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
-import { Semaphore } from "await-semaphore";
+// import { Semaphore } from "await-semaphore";
+import { Semaphore } from "data-semaphore";
 import * as sortBy from 'sort-by';
 
 export class SubtitlesController extends BaseController {
@@ -57,11 +58,13 @@ export class SubtitlesController extends BaseController {
         
         const release = await this.validateSemaphore.acquire();
 
-        const player = new MpvController( this.server );
-
-        await player.play( video.file, subtitleFile );
-
-        release();
+        try {
+            const player = new MpvController( this.server );
+    
+            await player.play( video.file, subtitleFile );
+        } finally {
+            release();
+        }
 
         return { success: true };
     }

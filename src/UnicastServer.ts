@@ -1,7 +1,7 @@
 import { ProvidersManager } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord } from "./MediaRecord";
-import { Database, BaseTable, CollectionRecord } from "./Database";
+import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord } from "./MediaRecord";
+import { Database, BaseTable, CollectionRecord, MediaTable, TvEpisodesMediaTable } from "./Database";
 import { MediaSourceDetails } from "./MediaProviders/MediaSource";
 import { Config } from "./Config";
 import * as restify from 'restify';
@@ -24,6 +24,8 @@ import { TriggerDb } from "./TriggerDb";
 import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
 import { Hookable, Hook } from "./Hookable";
 import * as r from 'rethinkdb';
+import * as itt from 'itt';
+import { Semaphore } from "data-semaphore";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -71,17 +73,19 @@ export class UnicastServer {
     constructor () {
         this.config = Config.singleton();
 
+        this.storage = new Storage( this );
+        
+        this.diagnostics = new Diagnostics( this );
+
         this.database = new Database( this.config );
+
+        this.tasks = new BackgroundTasksManager();
 
         this.receivers = new ReceiversManager( this );
 
         this.providers = new ProvidersManager( this );
 
-        this.media = new MediaManager( this );
-
-        this.tasks = new BackgroundTasksManager();
-
-        this.storage = new Storage( this );
+        this.media = new MediaManager( this );        
 
         this.subtitles = new SubtitlesManager( this );
 
@@ -90,8 +94,6 @@ export class UnicastServer {
         this.triggerdb = new TriggerDb( this );
         
         this.transcoding = new TranscodingManager( this );
-
-        this.diagnostics = new Diagnostics( this );
 
         this.http = new MultiServer( [ restify.createServer() ] );
 
@@ -249,6 +251,8 @@ export class UnicastServer {
 export class MediaManager {
     readonly server  : UnicastServer;
 
+    watchTracker : MediaWatchTracker;
+
     get database () : Database {
         return this.server.database;
     }
@@ -259,9 +263,11 @@ export class MediaManager {
 
     constructor ( server : UnicastServer ) {
         this.server = server;
+
+        this.watchTracker = new MediaWatchTracker( this );
     }
 
-    getTable ( kind : MediaKind ) : BaseTable<MediaRecord> {
+    getTable ( kind : MediaKind ) : MediaTable<MediaRecord> {
         const tables = this.server.database.tables;
 
         switch ( kind ) {
@@ -285,6 +291,10 @@ export class MediaManager {
         let table : BaseTable<MediaRecord> = this.getTable( kind );
 
         return table.get( id );
+    }
+
+    getAll ( refs : [ MediaKind, string ][] ) : Promise<MediaRecord[]> {
+        return Promise.all( refs.map( ( [ kind, id ] ) => this.get( kind, id ) ) );
     }
 
     async getSeason ( show : string, season : number ) : Promise<TvSeasonMediaRecord> {
@@ -402,10 +412,249 @@ export class MediaManager {
 
         return this.server.database.tables.collections.findAll( ids );
     }
+
+    async getCollectionItems ( id : string ) : Promise<MediaRecord[]> {
+        const items = await this.database.tables.collectionsMedia.find( query => {
+            return query.filter( doc => doc( 'collectionId' ).eq( id ) );
+        } );
+
+        const ids = items.map<[MediaKind, string]>( r => ( [ r.mediaKind, r.mediaId ] ) );
+
+        return this.getAll( ids );
+    }
+}
+
+export class MediaWatchTracker {
+    mediaManager : MediaManager;
+
+    protected semaphore : Semaphore = new Semaphore( 1 );
+
+    constructor ( mediaManager : MediaManager ) {
+        this.mediaManager = mediaManager;
+    }
+
+    protected async watchTvEpisodesBatch ( query : any, watched : boolean, watchedAt : Date ) : Promise<TvEpisodeMediaRecord[]> {
+        const episodes = await this.mediaManager.database.tables.episodes.find( query => query.filter( {
+            ...query,
+            watched: !watched
+        } ) );
+
+        if ( watched ) {
+            // When watched, only increment the play count of episodes whose play count equals zero
+            await this.mediaManager.database.tables.episodes.updateMany( {
+                ...query,
+                watched: false
+            }, row => r.branch(
+                row( 'playCount' ).eq( 0 ),
+                { watched: true, lastPlayedAt: watchedAt, playCount: row( 'playCount' ).add( 1 ) } as any,
+                { watched: true } as any
+            ) );
+        } else {
+            await this.mediaManager.database.tables.episodes.updateMany( {
+                ...query,
+                watched: true
+            }, { watched: false } );
+        }
+
+        for ( let episode of episodes ) {
+            // MARK UNAWAITED            
+            this.mediaManager.server.repositories.watch( episode, watched );
+            // const repository = this.mediaManager.server.providers.repositories.get( episode.repository, MediaKind.TvEpisode );
+    
+            // if ( repository && repository.watch ) {
+                
+            //     await repository.watch( episode.internalId, watched );
+            // }
+        }
+
+        return episodes;
+    }
+
+    async watchTvShow ( show : TvShowMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            // First, list all seasons belonging to this TV Show
+            const seasons = await this.mediaManager.database.tables.seasons.find( query => query.filter( {
+                tvShowId: show.id
+            } ) );
+    
+            // Then compile all their ids
+            const seasonIds = seasons.map( season => season.id );
+    
+            // And get all episodes that belong to those seasons and are or are not watched, depending on what change we are making
+            const episodes = await this.watchTvEpisodesBatch( {
+                tvSeasonId: r.expr( seasonIds )            
+            }, watched, watchedAt );
+            
+            // const episodesBySeason = itt( episodes ).groupBy( ep => ep.tvSeasonId );
+    
+            // const episodesCount = itt( episodesBySeason )
+            //     .map( ( [ season, episodes ] ) => itt( episodes ).keyBy( ep => ep.number ).size )
+            //     .toMap<string, number>();
+            
+            for ( let season of seasons ) {
+                await this.mediaManager.database.tables.seasons.update( season.id, {
+                    watchedEpisodesCount: watched ? season.episodesCount : 0
+                } );
+            }
+    
+            await this.mediaManager.database.tables.shows.update( show.id, {
+                watchedEpisodesCount: watched ? itt( seasons ).map( season => season.episodesCount ).sum() : 0
+            } );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async watchTvSeason ( season : TvSeasonMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            const episodes = await this.watchTvEpisodesBatch( {
+                tvSeasonId: season.id
+            }, watched, watchedAt );
+    
+            const difference = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
+    
+            await this.mediaManager.database.tables.seasons.update( season.id, {
+                watchedEpisodesCount: watched ? season.episodesCount : 0
+            } );
+    
+            const show = await this.mediaManager.database.tables.shows.get( season.tvShowId );
+    
+            await this.mediaManager.database.tables.shows.update( season.tvShowId, {
+                watchedEpisodesCount: show.watchedEpisodesCount + difference 
+            } );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async watchTvEpisode ( episode : TvEpisodeMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            episode = await this.mediaManager.database.tables.episodes.get( episode.id );
+
+            if ( !watched && !episode.watched ) {
+                return;
+            }
+
+            await this.mediaManager.database.tables.episodes.update( episode.id, watched 
+                ? { watched: true, lastPlayedAt: watchedAt, playCount: r.row( 'playCount' ).add( 1 ) }
+                : { watched: false } 
+            );
+
+            // MARK UNAWAITED            
+            this.mediaManager.server.repositories.watch( episode, watched );
+            // const repository = this.mediaManager.server.providers.repositories.get( episode.repository, MediaKind.TvEpisode );
+
+            // if ( repository && repository.watch ) {
+            //     await repository.watch( episode.internalId, watched );
+            // }
+
+            const similarEpisodes = await this.mediaManager.database.tables.episodes.find( query => query.filter( {
+                watched: true,
+                tvSeasonId: episode.tvSeasonId,
+                number: episode.number
+            } ) );
+
+            if ( ( watched && similarEpisodes.length === 1 ) || ( !watched && similarEpisodes.length === 0 ) ) {
+                await this.mediaManager.database.tables.seasons.update( episode.id, {
+                    watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 )
+                } );
+        
+                const season = await this.mediaManager.database.tables.seasons.get( episode.tvSeasonId );
+        
+                await this.mediaManager.database.tables.shows.update( season.tvShowId, {
+                    watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 )
+                } );
+            }
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async watchMovie ( movie : MovieMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            movie = await this.mediaManager.database.tables.movies.get( movie.id );
+
+            if ( !watched && !movie.watched ) {
+                return;
+            }
+
+            await this.mediaManager.database.tables.movies.update( movie.id, watched 
+                ? { watched: true, lastPlayedAt: watchedAt, playCount: r.row( 'playCount' ).add( 1 ) }
+                : { watched: false } 
+            );
+
+            // MARK UNAWAITED
+            this.mediaManager.server.repositories.watch( movie, watched );
+            // const repository = this.mediaManager.server.providers.repositories.get( movie.repository, MediaKind.Movie );
+    
+            // if ( repository && repository.watch ) {
+            //     await repository.watch( movie.internalId, watched );
+            // }
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async watchCustom ( custom : CustomMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            custom = await this.mediaManager.database.tables.custom.get( custom.id );
+
+            if ( !watched && !custom.watched ) {
+                return;
+            }
+
+            await this.mediaManager.database.tables.custom.update( custom.id, watched 
+                ? { watched: true, lastPlayedAt: watchedAt, playCount: r.row( 'playCount' ).add( 1 ) }
+                : { watched: false } 
+            );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async watch ( media : MediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+        if ( media.kind === MediaKind.Movie ) {
+            return this.watchMovie( media as MovieMediaRecord, watched, watchedAt );
+        } else if ( media.kind === MediaKind.TvShow ) {
+            return this.watchTvShow( media as TvShowMediaRecord, watched, watchedAt );
+        } else if ( media.kind === MediaKind.TvSeason ) {
+            return this.watchTvSeason( media as TvSeasonMediaRecord, watched, watchedAt );
+        } else if ( media.kind === MediaKind.TvEpisode ) {
+            return this.watchTvEpisode( media as TvEpisodeMediaRecord, watched, watchedAt );
+        } else if ( media.kind === MediaKind.Custom ) {
+            return this.watchCustom( media as CustomMediaRecord, watched, watchedAt );
+        }
+    }
+}
+
+export interface Route extends restify.RouteOptions {
+    method : string;
 }
 
 export class MultiServer extends EventEmitter {
     servers : restify.Server[] = [];
+
+    routes : Route[] = [];
 
     constructor ( servers : restify.Server[] = [] ) {
         super();
@@ -445,31 +694,62 @@ export class MultiServer extends EventEmitter {
         return this.servers.reduce( ( s, server ) => s + server.inflightRequests(), 0 );
     }
 
+    protected addRoute ( opts: string | RegExp | restify.RouteOptions, method : string = null ) {
+        let route : restify.RouteOptions = null;
+
+        if ( typeof opts === 'string' ) {
+            route = { path: opts };
+        } else if ( opts instanceof RegExp ) {
+            route = { path: opts };
+        } else {
+            route = opts;
+        }
+
+        this.routes.push( {
+            ...route,
+            method: method || 'all' 
+        } );
+    }
+
     del ( opts: string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'del' );
+
         return this.servers.map( server => server.del( opts, ...handlers ) );
     }
 
     get ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'get' );
+
         return this.servers.map( server => server.get( opts, ...handlers ) );
     }
 
     head ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'head' );
+
         return this.servers.map( server => server.head( opts, ...handlers ) );
     }
 
     opts ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'opts' );
+
         return this.servers.map( server => server.opts( opts, ...handlers ) );
     }
 
     post ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'post' );
+
         return this.servers.map( server => server.post( opts, ...handlers ) );
     }
 
     put ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'put' );
+
         return this.servers.map( server => server.put( opts, ...handlers ) );
     }
 
     patch ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
+        this.addRoute( opts, 'patch' );
+
         return this.servers.map( server => server.patch( opts, ...handlers ) );
     }
 

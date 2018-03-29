@@ -1,20 +1,27 @@
 import { UnicastServer } from "../UnicastServer";
 import { Router } from 'restify-router';
 import { Request, Response, Next } from "restify";
+import { Diagnostics, DiagnosticsService } from "../Diagnostics";
 
 export type RoutesDeclarations = [ string[], string, string, RouteTransform, boolean ][];
 
 export abstract class BaseController implements Annotated {
     annotations : Annotation[];
 
+    name ?: string;
+
     readonly prefix : string;
 
     readonly server : UnicastServer;
+
+    readonly diagnostics : DiagnosticsService;
 
     constructor ( server : UnicastServer, prefix ?: string ) {
         this.prefix = prefix;
 
         this.server = server;
+
+        this.diagnostics = this.server.diagnostics.service( `unicast/controller/${ this.name || this.constructor.name }` );
     }
 
     routes : RoutesDeclarations;
@@ -71,7 +78,7 @@ export abstract class BaseController implements Annotated {
     }
 }
 
-export function handle ( controller : { server : UnicastServer }, method : string ) {
+export function handle ( controller : { server : UnicastServer, diagnostics : DiagnosticsService }, method : string ) {
     return async function ( req : Request, res : Response, next : Next ) {
         const stopwatch = controller.server.diagnostics.stopwatch().resume();
 
@@ -82,7 +89,8 @@ export function handle ( controller : { server : UnicastServer }, method : strin
             
             next();
         } catch ( error ) {
-            controller.server.diagnostics.error( 'unicast/controller', error.message + error.stack, error );
+            controller.diagnostics.error( error.message + error.stack, error );
+            // controller.server.diagnostics.error( 'unicast/controller', error.message + error.stack, error );
 
             next( error );
         }

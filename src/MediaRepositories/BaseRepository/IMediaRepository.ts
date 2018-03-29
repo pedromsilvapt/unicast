@@ -31,11 +31,15 @@ export interface IMediaRepository<R extends MediaRecord = MediaRecord, Q extends
 
     readonly subtitles ?: ISubtitlesRepository;
 
+    available () : Promise<boolean>;
+
     fetch ( id : string, query ?: Q ) : Promise<R>;
 
     fetchMany ( ids : string[], query ?: Q ) : Promise<R[]>;
 
     find ( query ?: Q ) : Promise<R[]>;
+
+    watch ? ( id : string, watched ?: boolean ) : Promise<R>;
 }
 
 export interface IMovieMediaRepository extends IMediaRepository<MovieMediaRecord> { }

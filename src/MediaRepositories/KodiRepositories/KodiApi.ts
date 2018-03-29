@@ -1,7 +1,14 @@
 import * as got                   from 'got';
 import { MediaQuery } from "../BaseRepository/IMediaRepository";
+// import { Semaphore } from 'await-semaphore';
+import { Semaphore, Batched } from 'data-semaphore';
+import { Optional } from 'data-optional';
 
 export class KodiApi {
+    protected semaphore : Semaphore = new Semaphore( 4 );
+
+    protected _available : Optional<boolean> = Optional.empty();
+
     address : string;
 
     port : number;
@@ -41,45 +48,76 @@ export class KodiApi {
         } );
     }
 
+    @Batched()
+    async available () : Promise<boolean> {
+        if ( this._available.isPresent() ) {
+            return this._available.get();
+        }
+
+        try {
+            await this.ping();
+
+            this._available = Optional.of( true );
+
+            return true;
+        } catch ( error ) {
+            this._available = Optional.of( false );
+            
+            return false;
+        }
+    }
+
     async query<R = any> ( query : any, kind : string = null, options : any = {} ) : Promise<R> {
-        let response = await got( this.endpoint, {
-            json: false,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify( {
-                'jsonrpc': '2.0',
-                'id': 1,
-                ...query
-            } )
-        } );
+        const release = await this.semaphore.acquire();
 
-        if ( !kind || options.returnResponse ) {
-            return response;
-        } else if ( !kind ) {
-            return response.body;
-        }
-
-        const body = JSON.parse( response.body );
-
-        if ( body.error ) {
-            console.log( query );
-            throw new Error( body.error.message );
-        }
-
-        if ( body.result.limits ) {
-            if ( body.result.limits.start >= body.result.limits.total ) {
-                return [] as any as R;
+        try {
+            let response = await got( this.endpoint, {
+                json: false,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify( {
+                    'jsonrpc': '2.0',
+                    'id': 1,
+                    ...query
+                } )
+            } );
+    
+            if ( !kind || options.returnResponse ) {
+                return response;
+            } else if ( !kind ) {
+                return response.body;
             }
+    
+            const body = JSON.parse( response.body );
+    
+            if ( body.error ) {
+                console.log( query );
+                throw new Error( body.error.message );
+            }
+    
+            if ( body.result.limits ) {
+                if ( body.result.limits.start >= body.result.limits.total ) {
+                    return [] as any as R;
+                }
+            }
+    
+            const result = body.result[ kind + 's' ] || body.result[ kind + 'details' ];
+    
+            if ( !( result instanceof Array ) && options.forceArray ) {
+                return [ result ] as any as R;
+            }
+    
+            return result;
+        } finally {
+            release();
         }
+    }
 
-        const result = body.result[ kind + 's' ] || body.result[ kind + 'details' ];
-
-        if ( !( result instanceof Array ) && options.forceArray ) {
-            return [ result ] as any as R;
-        }
-
-        return result;
+    async ping () : Promise<void> {
+        return this.query<void>( {
+            'method': 'JSONRPC.Ping'
+        } );
     }
 
     async getEpisodes ( params : any = {} ) : Promise<TvEpisodeKodiRecord[]> {
@@ -98,6 +136,16 @@ export class KodiApi {
             'method': 'VideoLibrary.GetEpisodeDetails',
             'params': {
                 'properties': this.tvEpisodeFieldsList,
+                ...params
+            }
+        }, 'episode' );
+    }
+    
+    async setSingleEpisode ( id : number, params : object ) : Promise<void> {
+        return this.query<void>( {
+            'method': 'VideoLibrary.SetEpisodeDetails',
+            'params': {
+                episodeid: id,
                 ...params
             }
         }, 'episode' );
@@ -165,9 +213,20 @@ export class KodiApi {
             }
         }, 'movie' );
     }
+
+    async setSingleMovie ( id : number, params : object ) : Promise<void> {
+        return this.query<void>( {
+            'method': 'VideoLibrary.SetMovieDetails',
+            'params': {
+                movieid: id,
+                ...params
+            }
+        }, 'movie' );
+    }
 }
 
 export interface MovieKodiRecord {
+    movieid : number;
     title : string;
     art : any;
     rating : number;
@@ -232,3 +291,15 @@ export interface TvEpisodeKodiRecord {
     lastplayed : string;
     plot : string;
 }
+
+// ( async () => {
+//     const api = new KodiApi( '127.192.0.1', 8008 );
+    
+//     const movie = await api.getSingleMovie( {
+//         movieid: 848
+//     } );
+
+//     console.log( movie );
+
+//     console.log( await api.setSingleMovie( 848, { playcount: 1 } ) );
+// } )();

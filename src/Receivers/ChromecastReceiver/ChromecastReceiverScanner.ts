@@ -40,7 +40,7 @@ export abstract class ChromecastReceiverScanner {
 
     diagnostics : Diagnostics;
 
-    constructor ( diagnostics : Diagnostics, interval : number = 10000, timeout : number = 5000 ) {
+    constructor ( diagnostics : Diagnostics, interval : number = 60000, timeout : number = 5000 ) {
         this.diagnostics = diagnostics;
 
         this.interval = interval;
@@ -83,7 +83,7 @@ export abstract class ChromecastReceiverScanner {
     
                 this.pushDevice( device );
             } else {
-                this.diagnostics.debug( 'chromecast/scanner', 'duplicate ' + name + ' ' + address );
+                // this.diagnostics.debug( 'chromecast/scanner', 'duplicate ' + name + ' ' + address );
             }
         }
     }
@@ -107,7 +107,7 @@ export abstract class ChromecastReceiverScanner {
                     if ( !this.responses.has( ip ) ) {
                         this.misses.set( ip, this.misses.get( ip ) + 1 );
 
-                        if ( !!this.rememberDevices && this.misses.get( ip ) > this.missedConnectionsThreshold ) {
+                        if ( this.rememberDevices && this.misses.get( ip ) > this.missedConnectionsThreshold ) {
                             this.pushDevice( { ...this.history.get( ip ), status: 'offline' } );
     
                             this.diagnostics.debug( 'chromecast/scanner', 'destroy ' + this.history.get( ip ).name + ' ' + this.history.get( ip ).address );

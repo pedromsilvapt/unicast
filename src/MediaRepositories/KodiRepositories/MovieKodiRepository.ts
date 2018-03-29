@@ -37,6 +37,12 @@ export class MovieKodiRepository extends BaseKodiRepository<MovieMediaRecord> im
 
         return this.transformer.doArray( movies );
     }
+
+    async watch ( id : string, status : boolean ) : Promise<MovieMediaRecord> {
+        await this.kodi.setSingleMovie( +id, { playcount: status ? 1 : 0 } );
+
+        return this.fetch( id );
+    }
 }
 
 export class MovieRecordTransformer extends KodiRecordTransformer {

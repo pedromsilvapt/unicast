@@ -1,6 +1,6 @@
 import { TvShowMediaRecord } from "../../../MediaRecord";
 import { BaseTableController } from "../../BaseTableController";
-import { BaseTable } from "../../../Database";
+import { BaseTable, MediaTable } from "../../../Database";
 import { Request, Response } from "restify";
 import { MediaTableController } from "./MediaController";
 import * as r from 'rethinkdb';
@@ -8,7 +8,7 @@ import * as r from 'rethinkdb';
 export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
     sortingFields : string[] = [ 'title', 'seasonsCount', 'rating', 'parentalRating', 'year', 'lastPlayed', 'addedAt' ]
 
-    get table () : BaseTable<TvShowMediaRecord> {
+    get table () : MediaTable<TvShowMediaRecord> {
         return this.server.database.tables.shows;
     }
 

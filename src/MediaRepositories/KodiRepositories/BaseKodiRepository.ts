@@ -65,6 +65,10 @@ export abstract class BaseKodiRepository<R extends MediaRecord> implements IMedi
         return params;
     }
 
+    async available () : Promise<boolean> {
+        return this.kodi.available();
+    }
+
     abstract fetch ( id : string, query ?: MediaQuery ) : Promise<R>;
 
     abstract fetchMany ( ids : string[], query ?: MediaQuery ) : Promise<R[]>;

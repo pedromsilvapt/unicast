@@ -125,9 +125,17 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.get( kind, id );
     
-            const { playlistId, playlistPosition } = req.body;
+            const { playlistId, playlistPosition, startTime, autostart } = req.body;
 
             const options : MediaPlayOptions = playlistId ? { playlistId, playlistPosition } : {};
+
+            if ( startTime ) {
+                options.startTime = parseFloat( startTime );
+            }
+
+            if ( autostart ) {
+                options.autostart = autostart !== 'false';
+            }
 
             const session = await device.sessions.register( record, options );
 
@@ -272,6 +280,19 @@ export class PlayerController extends BaseController {
             const volume : number = parseFloat( req.params.volume );
 
             return device.setVolume( volume );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'post', '/:device/subtitles-size/:size' )
+    async setSubtitlesSize ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const size : number = parseFloat( req.params.size );
+
+            return device.callCommand<ReceiverStatus>( 'changeSubtitlesSize', [ size ] );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }

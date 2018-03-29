@@ -7,6 +7,7 @@ import { EventEmitter } from "events";
 import { HistoryRecord } from "../../Database";
 import { Optional } from 'data-optional';
 import * as sortBy from 'sort-by';
+import { TranscodingBackgroundTask } from "../../Transcoding/TranscodingDriver";
 
 export class MediaSessionsManager {
     protected records : Map<string, Promise<[MediaStream[], MediaRecord, MediaPlayOptions, CancelToken]>> = new Map;
@@ -52,9 +53,13 @@ export class MediaSessionsManager {
         this.receiver.on( 'play', () => this.statusPoller.currentPriority = 0 );
     }
 
+    getSessionPercentage ( history : HistoryRecord, status : ReceiverStatus ) : number {
+        return history.positionHistory.map( seg => seg.end - seg.start ).reduce( ( a, b ) => a + b, 0 ) * status.media.time.duration / 100;
+    }
+
     async updateStatus ( status : ReceiverStatus ) {
         if ( status && status.session ) {
-            const id = status.session;
+            const id = status.session.id;
     
             const history = await this.mediaManager.database.tables.history.get( id );
     
@@ -65,10 +70,16 @@ export class MediaSessionsManager {
 
                 const last = history.positionHistory[ lastIndex ];
 
-                if ( Math.abs( history.position - last ) <= 60 ) {
-                    history.positionHistory[ lastIndex ] = history.position;
+                if ( Math.abs( history.position - last.end ) <= 60 ) {
+                    history.positionHistory[ lastIndex ].end = history.position;
                 } else {
-                    history.positionHistory.push( history.position );
+                    history.positionHistory.push( { start: history.position, end: history.position } );
+                }
+
+                if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
+                    const media = await this.mediaManager.get( history.reference.kind, history.reference.id );
+                    
+                    await this.mediaManager.watchTracker.watch( media );
                 }
                 
                 history.updatedAt = new Date();
@@ -85,7 +96,8 @@ export class MediaSessionsManager {
             reference: { id: record.id, kind: record.kind  },
             position: options.startTime || 0,
             receiver: this.receiver.name,
-            positionHistory: [ options.startTime || 0 ],
+            positionHistory: [ { start: options.startTime || 0, end: options.startTime || 0 } ],
+            watched: false,
             createdAt: new Date(),
             updatedAt: new Date()
         } );

@@ -5,8 +5,8 @@ import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from 
 import * as regexEscape from 'regex-escape';
 import * as r from 'rethinkdb';
 
-export abstract class BaseTableController<R> extends BaseController {
-    abstract readonly table : BaseTable<R>;
+export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<R>> extends BaseController {
+    abstract readonly table : T;
 
     defaultSortField : string = 'title';
 

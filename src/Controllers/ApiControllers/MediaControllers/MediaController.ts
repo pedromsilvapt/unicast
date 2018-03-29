@@ -4,8 +4,9 @@ import * as r from 'rethinkdb';
 import { MediaKind, MediaRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
+import { MediaTable } from "../../../Database";
 
-export abstract class MediaTableController<R> extends BaseTableController<R> {
+export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
     getWatchedQuery ( req : Request, query : r.Sequence ) : r.Sequence {
         if ( req.query.watched === 'include' ) {
             query = query.filter( { watched: true } );
@@ -57,15 +58,15 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
                     return { collections };
                 } ).filter( ( doc : any ) => {
                     if ( included.length > 0 && excluded.length > 0 ) {
-                        return doc( "collections" ).setIntersection( included ).isEmpty().not().and(
-                            doc( "collections" ).setIntersection( excluded ).isEmpty()
+                        return doc( "collections" ).setIntersection( r.expr( included ) ).isEmpty().not().and(
+                            doc( "collections" ).setIntersection( r.expr( excluded ) ).isEmpty()
                         );
                     } else if ( excluded.length > 0 ) {
-                        return doc( "collections" ).setIntersection( excluded ).isEmpty();
+                        return doc( "collections" ).setIntersection( r.expr( excluded ) ).isEmpty();
                     } else if ( included.length > 0 ) {
-                        return doc( "collections" ).setIntersection( included ).isEmpty().not();
+                        return doc( "collections" ).setIntersection( r.expr( included ) ).isEmpty().not();
                     }
-                } ).without( 'collections' );
+                } );
             }
         }
 
@@ -90,10 +91,21 @@ export abstract class MediaTableController<R> extends BaseTableController<R> {
 
     @Route( 'get', '/:id/triggers' )
     async triggers ( req : Request, res : Response ) : Promise<MediaTrigger[]> {
-        const media = await this.table.get( req.params.id ) as any as MediaRecord;
+        const media : MediaRecord = await this.table.get( req.params.id );
         
         const triggers = await this.server.triggerdb.queryMediaRecord( media );
 
         return triggers;
+    }
+
+    @Route( 'post', '/:id/watch/:status' )
+    async watch ( req : Request, res : Response ) : Promise<R> {
+        const media = await this.table.get( req.params.id );
+
+        const watched : boolean = req.params.status === 'true';
+        
+        await this.server.media.watchTracker.watch( media, watched );
+
+        return this.table.get( req.params.id );
     }
 }

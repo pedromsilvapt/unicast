@@ -3,6 +3,7 @@ import { UnicastServer } from "../../UnicastServer";
 import { MediaSessionsManager } from "./MediaSessionsManager";
 import { Transcoder } from "../../Transcoding/Transcoder";
 import { EventEmitter } from "events";
+import { HistoryRecord } from "../../Database";
 
 export enum ReceiverStatusState {
     Stopped = 'STOPPED',
@@ -12,12 +13,13 @@ export enum ReceiverStatusState {
 }
 
 export interface ReceiverStatus {
-    session : string;
+    session : HistoryRecord;
     timestamp : Date;
     state : ReceiverStatusState;
     media : {
         time : ReceiverTimeStatus;
         record : MediaRecord;
+        session: HistoryRecord;
     }
     volume : ReceiverVolumeStatus;
     subtitlesStyle : ReceiverSubtitlesStyleStatus;
@@ -86,7 +88,7 @@ export interface IMediaReceiver extends EventEmitter {
 
     setVolume ( volume : number ) : Promise<ReceiverStatus>;
 
-    callCommand<R = ReceiverStatus, A = any[]> ( commandName : string, args : A ) : Promise<R>;
+    callCommand<R = ReceiverStatus, A extends any[] = any[]> ( commandName : string, args : A ) : Promise<R>;
 
     toJSON () : any;
 }
