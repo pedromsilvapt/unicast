@@ -9,6 +9,10 @@ export class AsyncInterval {
 
     protected timestamp ?: Date;
 
+    get isAwake () : boolean {
+        return !!this.timeout;
+    }
+
     constructor ( callback : ( ...args : any[] ) => Promise<void>, ms : number ) {
         this.callback = callback;
         this.ms = ms;

@@ -544,6 +544,10 @@ export class PlaylistsTable extends BaseTable<PlaylistRecord> {
 
 export class HistoryTable extends BaseTable<HistoryRecord> {
     readonly tableName : string = 'history';
+
+    indexesSchema : IndexSchema[] = [ 
+        { name: 'createdAt' }
+    ];
 }
 
 export class CollectionsTable extends BaseTable<CollectionRecord> {

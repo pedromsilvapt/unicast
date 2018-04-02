@@ -54,8 +54,8 @@ export class MessagesFactory {
         this.sender = sender;
     }
 
-    async getStreamUrl ( session : string, stream : MediaStream ) : Promise<string> {
-        return await this.sender.host() + this.sender.getUrlFor( session, stream.id );
+    getStreamUrl ( session : string, stream : MediaStream ) : string {
+        return this.sender.host() + this.sender.getUrlFor( session, stream.id );
     }
 
     getSubtitlesLanguage ( query : string ) : Language {
@@ -90,7 +90,7 @@ export class MessagesFactory {
             tracks.push( {
                 trackId: index,
                 type: 'TEXT',
-                trackContentId: await this.getStreamUrl( id, subtitle ), //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
+                trackContentId: this.getStreamUrl( id, subtitle ), //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
                 trackContentType: 'text/vtt',
                 name: language.name,
                 language: language[ '2' ],
@@ -99,7 +99,7 @@ export class MessagesFactory {
         }
 
         return {
-            contentId: await this.getStreamUrl( id, video ), //sender.url( 'stream', extend( { id: videoStream.id }, urlParams ) ) + range,
+            contentId: this.getStreamUrl( id, video ), //sender.url( 'stream', extend( { id: videoStream.id }, urlParams ) ) + range,
             contentType: video.mime,
             tracks: tracks.length > 0 ? tracks : null,
             duration: video.duration,

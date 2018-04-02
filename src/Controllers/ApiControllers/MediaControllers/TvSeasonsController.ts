@@ -27,7 +27,7 @@ export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecor
     async transform ( req : Request, res : Response, season : TvSeasonMediaRecord ) : Promise<any> {
         const url = await this.server.getMatchingUrl( req );
         
-        ( season as any ).cachedArtwork = this.cacheArtwork( url, season.kind, season.id, season.art );
+        ( season as any ).cachedArtwork = this.server.artwork.getCachedObject( url, season.kind, season.id, season.art );
         
         if ( req.query.episodes === 'true' ) {
             ( season as any ).episodes = await this.server.database.tables.episodes.find( query => {
@@ -35,7 +35,7 @@ export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecor
             } );
 
             for ( let episode of ( season as any).episodes ) {
-                episode.cachedArtwork = this.cacheArtwork( url, episode.kind, episode.id, episode.art );        
+                episode.cachedArtwork = this.server.artwork.getCachedObject( url, episode.kind, episode.id, episode.art );        
             }
         }
 

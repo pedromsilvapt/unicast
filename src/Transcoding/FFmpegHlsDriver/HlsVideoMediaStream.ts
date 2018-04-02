@@ -53,11 +53,13 @@ export class HlsVideoMediaStream extends VideoMediaStream {
     async init () : Promise<void> {
         this.folder = await this.storage.getRandomFolder( 'ffmpeg-hls' );
 
-        const url = await this.storage.server.getUrl( `/media/send/chromecast/${ this.session.receiver }/session/${ this.session.id }/stream/${ this.id }?part=` );
+        const url = this.storage.server.getUrl( `/media/send/chromecast/${ this.session.receiver }/session/${ this.session.id }/stream/${ this.id }?part=` );
 
         this.driver.setSegmentLocationPrefix( url );
 
-        this.task = new FFmpegHlsTranscodingTask( this.inputStream, this.driver, this.folder );
+        const record = await this.storage.server.media.get( this.session.reference.kind, this.session.reference.id );
+
+        this.task = new FFmpegHlsTranscodingTask( record, this.inputStream, this.driver, this.folder );
 
         this.task.setStateStart();
     }
@@ -86,7 +88,7 @@ export class HlsVideoMediaStream extends VideoMediaStream {
         if ( !stream ) {
             this.inputStream.close();
             
-            this.task.setStartCancel();
+            this.task.setStateCancel();
         }
     }
 

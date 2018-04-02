@@ -311,7 +311,7 @@ export class IntervalJobScheduler<P> implements IJobScheduler<P> {
 
         const results = await Promise.all( jobs.map( job => queue.run( job ) ) );
 
-        if ( !await queue.canRun( await this.findNext( queue ) ) ) {
+        if ( jobs.length == 0 || !await queue.canRun( await this.findNext( queue ) ) ) {
             this.sleep( queue );
         }
     }
@@ -329,15 +329,19 @@ export class IntervalJobScheduler<P> implements IJobScheduler<P> {
     }
 
     sleep ( queue : PersistentQueue<P> ) {
-        queue.diagnostics.debug( `Going to sleep.` );
-        
-        this.intervalToken.sleep();
+        if ( this.intervalToken.isAwake ) {
+            queue.diagnostics.debug( `Going to sleep.` );
+            
+            this.intervalToken.sleep();
+        }
     }
 
     awake ( queue : PersistentQueue<P> ) {
-        queue.diagnostics.debug( `Waking up.` );
-        
-        this.intervalToken.awake();
+        if ( !this.intervalToken.isAwake ) {
+            queue.diagnostics.debug( `Waking up.` );
+            
+            this.intervalToken.awake();
+        }
     }
 
     acquire () : Promise<() => void> {

@@ -43,7 +43,11 @@ export class MediaSessionsManager {
                 poller.currentPriority = 1;
             }
 
-            await this.updateStatus( status );
+            try {
+                await this.updateStatus( status );
+            } catch ( err ) {
+                this.mediaManager.server.onError.notify( err );
+            }
         }, [ 5 * 1000, 60 * 1000 ], 1 );
 
         this.receiver.on( 'pause', () => this.statusPoller.currentPriority = 1 );
@@ -51,6 +55,8 @@ export class MediaSessionsManager {
 
         this.receiver.on( 'resume', () => this.statusPoller.currentPriority = 0 );
         this.receiver.on( 'play', () => this.statusPoller.currentPriority = 0 );
+
+        this.statusPoller.pause();
     }
 
     getSessionPercentage ( history : HistoryRecord, status : ReceiverStatus ) : number {
@@ -58,8 +64,8 @@ export class MediaSessionsManager {
     }
 
     async updateStatus ( status : ReceiverStatus ) {
-        if ( status && status.session ) {
-            const id = status.session.id;
+        if ( status && status.media && status.media.session ) {
+            const id = status.media.session.id;
     
             const history = await this.mediaManager.database.tables.history.get( id );
     
@@ -76,6 +82,7 @@ export class MediaSessionsManager {
                     history.positionHistory.push( { start: history.position, end: history.position } );
                 }
 
+                console.log( history.watched, this.getSessionPercentage( history, status ) );
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
                     const media = await this.mediaManager.get( history.reference.kind, history.reference.id );
                     
@@ -116,11 +123,11 @@ export class MediaSessionsManager {
             const cancel = new CancelToken();
 
             const media = await this.mediaManager.get( history.reference.kind, history.reference.id ) as PlayableMediaRecord;
-
+            
             const originalStreams = await this.mediaManager.providers.streams( media.sources );
-
+            
             const streams = await this.receiver.transcoder.transcode( history, media, originalStreams, {}, cancel );
-
+            
             cancel.whenCancelled().then( () => {
                 for ( let stream of streams ) {
                     stream.close();

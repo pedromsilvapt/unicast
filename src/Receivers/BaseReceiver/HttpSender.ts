@@ -2,6 +2,7 @@ import { IMediaReceiver } from "./IMediaReceiver";
 import { Request, Response, Next } from "restify";
 import { MediaStreamType, MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import * as rangeParser      from 'range-parser';
+import { serveMedia } from "../../ES2017/HttpServeMedia";
 
 export class HttpSender {
     readonly receiver : IMediaReceiver;
@@ -12,7 +13,7 @@ export class HttpSender {
         this.receiver.server.http.get( this.getUrlPattern(), this.serve.bind( this ) );
     }
 
-    async host () : Promise<string> {
+    host () : string {
         return this.receiver.server.getUrl();
     }
 
@@ -40,42 +41,12 @@ export class HttpSender {
     
             const stream = await this.getStream( streams, req.params.stream, req.query );
             
-            if ( stream.type === MediaStreamType.Subtitles ) {
-                res.set( 'Content-Type', stream.mime + ';charset=utf-8' );
-            } else {
-                res.set( 'Content-Type', stream.mime );
-            }
-    
-            const range = stream.size && req.header( 'range' ) ? rangeParser( stream.size, req.header( 'range' ) )[ 0 ] : null;
-
-            let reader = null;
-
-            if ( range ) {
-                res.set( 'Content-Range', 'bytes ' + range.start + '-' + range.end + '/' + stream.size );
-                res.set( 'Accept-Ranges', 'bytes' );
-                res.set( 'Content-Length', '' + ( ( range.end - range.start ) + 1 ) );
-                
-                ( res as any ).writeHead( 206, res.headers() );
-                
-                reader = stream.reader( range )
-                
-                reader.pipe( res );
-            } else if ( stream.size ) {
-                res.set( 'Content-Length', '' + stream.size );
-    
-                ( res as any ).writeHead( 200, res.headers() );
-                
-                reader = stream.reader();
-                
-                reader.pipe( res );
-            } else {
-                ( res as any ).writeHead( 200, res.headers() );
-                
-                reader = stream.reader();
-                
-                reader.pipe( res );
-            }
-        
+            let mime = stream.type === MediaStreamType.Subtitles
+                ? stream.mime + ';charset=utf-8'
+                : stream.mime;
+            
+            let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
+            
             if ( reader ) {
                 req.on( 'close', () => stream.close( reader ) );
             }
@@ -84,7 +55,7 @@ export class HttpSender {
         } catch ( error ) {
            console.error( error ) ;
 
-           res.send( 0, { error: true } );
+           res.send( 500, { error: true } );
 
            next();
         }

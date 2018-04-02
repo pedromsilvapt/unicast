@@ -10,8 +10,11 @@ import { CancelToken } from "../../ES2017/CancelToken";
 import { BackgroundTaskState, BackgroundTask, BackgroundTaskMetric } from "../../BackgroundTask";
 import { Deferred } from "../../ES2017/Deferred";
 import { SegmentsScheduler, SegmentsSchedulerJob } from "./SegmentsScheduler";
+import { MediaRecord } from "../../MediaRecord";
 
 export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
+    record : MediaRecord;
+
     input : VideoMediaStream;
 
     driver : FFmpegHlsDriver;
@@ -26,8 +29,10 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     
     protected averageMetric : AverageBackgroundMetric<number>;
 
-    constructor ( input : VideoMediaStream, driver : FFmpegHlsDriver, destination : string ) {
+    constructor ( record : MediaRecord, input : VideoMediaStream, driver : FFmpegHlsDriver, destination : string ) {
         super();
+
+        this.record = record;
 
         this.input = input;
 
@@ -55,12 +60,16 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
             throw new Error( `Could not find an encoding process with the id "${ id }"` );
         }
 
-        this.encoders.get( id ).setStartCancel();
+        this.encoders.get( id ).setStateCancel();
 
         this.encoders.delete( id );
     }
 
     createProcessFor ( index : number, cancel ?: CancelToken ) : string {
+        if ( this.state === BackgroundTaskState.Cancelled || this.state === BackgroundTaskState.Finished ) {
+            throw new Error( 'Cannot start process for a terminated task.' );
+        }
+
         console.log( 'starting process for', index );
 
         const segment = this.segments.findNextEmpty( index );
@@ -82,7 +91,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
             if ( cancel ) {
                 cancel.whenCancelled().then( () => {
-                    encoder.setStartCancel();
+                    encoder.setStateCancel();
 
                     this.encoders.delete( id );
                 } );
@@ -106,7 +115,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
     protected onCancel () {
         for ( let [ id, encoder ] of Array.from( this.encoders ) ) {
-            encoder.setStartCancel();
+            encoder.setStateCancel();
             
             this.encoders.delete( id );
         }
@@ -174,7 +183,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
             
             await this.driver.server.storage.ensureDir( path.join( this.mainTask.destination, id ) );
 
-            const args = [ ...this.driver.getCompiledArguments( this.mainTask.input ), path.join( this.mainTask.destination, id, 'index.m3u8' ) ];
+            const args = [ ...this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), path.join( this.mainTask.destination, id, 'index.m3u8' ) ];
 
             if ( this.state != BackgroundTaskState.Running ) {
                 return;

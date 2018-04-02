@@ -10,6 +10,8 @@ import { boxblur, source, Stream, concat, silence, blackout, mute, sources, filt
 import { StaticStream } from "composable/lib/Stream";
 import { Compiler, EmissionsFragment, compile } from "composable/lib/Compiler/Compiler";
 import { MediaMetadata, TrackMediaMetadata } from "../../MediaTools";
+import * as path from 'path';
+import { MediaRecord } from "../../MediaRecord";
 
 export class FFmpegDriverFactory extends DriverFactory<FFmpegDriver> {
     constructor () {
@@ -252,18 +254,20 @@ export class FFmpegDriver implements TranscodingDriver {
         return this;
     }
     
-    getCompiledArguments ( stream : MediaStream ) : string[] {
+    getCompiledArguments ( record : MediaRecord, stream : MediaStream ) : string[] {
         const args : string[] = [];
 
         if ( this.startTime !== null ) {
             args.push( '-ss', '' + this.startTime );
         }
 
-        if ( stream.getInputForDriver( this.factory.name ) ) {
-            args.push( '-i', stream.getInputForDriver( this.factory.name ) );
-        } else {
-            args.push( '-i', 'pipe:0' );
-        }
+        args.push( '-i', this.server.getUrl( this.server.streams.getUrlFor( record.kind, record.id, stream.id ) ) );
+
+        // if ( stream.getInputForDriver( this.factory.name ) ) {
+        //     args.push( '-i', stream.getInputForDriver( this.factory.name ) );
+        // } else {
+        //     args.push( '-i', 'pipe:0' );
+        // }
 
         if ( this.outputDuration !== null ) {
             args.push( '-to', '' + this.outputDuration );
@@ -356,10 +360,12 @@ export class FFmpegDriver implements TranscodingDriver {
                 }
             }
 
-            filtersComplex.push( filters( dynamicStreams ).compile( compiler ).slice( 1, -1 ) );
-    
-            if ( filtersComplex.length ) {
-                args.push( '-filter_complex', filtersComplex.join( ';' ) );
+            if ( dynamicStreams.length ) {
+                filtersComplex.push( filters( dynamicStreams ).compile( compiler ).slice( 1, -1 ) );
+        
+                if ( filtersComplex.length ) {
+                    args.push( '-filter_complex', filtersComplex.join( ';' ) );
+                }
             }
 
             args.push( ...maps );
@@ -370,9 +376,9 @@ export class FFmpegDriver implements TranscodingDriver {
 
     getCommandPath () {
         const customPath = this.server.config.get( 'ffmpeg.path' );
-        
+
         if ( customPath ) {
-            return customPath + '\\' + 'ffmpeg.exe';
+            return path.join( customPath, 'ffmpeg.exe' );
         }
 
         return 'ffmpeg';

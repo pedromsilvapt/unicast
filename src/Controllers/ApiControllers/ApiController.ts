@@ -10,6 +10,7 @@ import { ProvidersController } from "./MediaControllers/ProvidersController";
 import { TasksController } from "./TasksController";
 import { SubtitlesController } from "./MediaControllers/SubtitlesController";
 import * as sortBy from 'sort-by';
+import { SessionsController } from "./MediaControllers/SessionsController";
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -41,6 +42,9 @@ export class ApiController extends BaseController {
 
     @Controller( ProvidersController, '/media/providers' )
     providers : ProvidersController;
+
+    @Controller( SessionsController, '/media/sessions' )
+    sessions : SessionsController;
 
     @Route( 'get', '/close' )
     async close () {

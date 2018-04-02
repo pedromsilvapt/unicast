@@ -7,6 +7,7 @@ import { UnicastServer } from "../../UnicastServer";
 import { FFmpegTranscodingTask } from "../FFmpegDriver/FFmpegTranscodingTask";
 import { spawn } from 'child_process';
 import { FFmpegHlsTranscodingTask } from "./FFmpegHlsTranscodingTask";
+import { MediaRecord } from "../../MediaRecord";
 
 export class FFmpegHlsDriverFactory extends DriverFactory<FFmpegHlsDriver> {
     constructor () {
@@ -121,12 +122,12 @@ export class FFmpegHlsDriver extends FFmpegDriver {
         return this;
     }
 
-    getCompiledArguments ( stream : MediaStream ) : string[] {
+    getCompiledArguments ( record : MediaRecord, stream : MediaStream ) : string[] {
         if ( this.copyTimestamps && typeof this.startTime === 'number' ) {
             this.outputDuration += this.startTime;
         }
 
-        const args : string[] = super.getCompiledArguments( stream );
+        const args : string[] = super.getCompiledArguments( record, stream );
 
         if ( this.copyTimestamps && typeof this.startTime === 'number' ) {
             this.outputDuration -= this.startTime;

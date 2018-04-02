@@ -172,7 +172,6 @@ export class ChromecastReceiver extends BaseReceiver {
 
         if ( !status || !status.media || !status.media.metadata.session ) {
             return {
-                session: null,
                 timestamp: new Date(),
                 state: ReceiverStatusState.Stopped,
                 media: {
@@ -188,7 +187,6 @@ export class ChromecastReceiver extends BaseReceiver {
         const [ streams, record, options ] = await this.sessions.get( status.media.metadata.session );
 
         const normalized : ReceiverStatus = {
-            session: status.media.metadata.session,
             timestamp: new Date(),
             state: status.playerState,
             media: {
@@ -197,7 +195,9 @@ export class ChromecastReceiver extends BaseReceiver {
                 session: await this.server.database.tables.history.get( status.media.metadata.session )
             },
             volume: { level: Math.round( status.volume.level * 100 ), muted: status.volume.muted },
-            subtitlesStyle: null
+            subtitlesStyle: {
+                size: this.client.lastSubtitlesStyle.fontScale
+            }
         }
 
         return normalized;
@@ -254,7 +254,7 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async callCommand<R = any, A extends any[] = any[]> ( commandName : string, args : A ) : Promise<R> {    
-        if ( 'commandName' in this ) {
+        if ( commandName in this ) {
             return this[ commandName ]( ...args );
         }
 

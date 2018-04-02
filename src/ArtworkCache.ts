@@ -5,6 +5,8 @@ import { UnicastServer } from "./UnicastServer";
 import { Singleton } from "./ES2017/Singleton";
 import * as fs from 'mz/fs';
 import * as sharp from 'sharp';
+import { MediaKind } from "./MediaRecord";
+import { FsReadResilientStream } from "./ES2017/ResilientStream";
 
 export interface ArtworkCacheOptions {
     width ?: number;
@@ -39,6 +41,22 @@ export class ArtworkCache {
         this.server = server;
 
         this.cache = new MapCachePersistence( this.server.storage.getPath( 'cache/artwork.json' ) );
+    }
+
+    getCachedObject (  url : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
+        const cached : any = {};
+
+        for ( let key of Object.keys( art ) ) {
+            if ( typeof art[ key ] === 'string' ) {
+                cached[ key ] = `${url}/api/media/artwork/${ kind }/${ id }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
+            } else if ( art[ key ] && typeof art[ key ] === 'object' ) {
+                cached[ key ] = this.getCachedObject( url, kind, id, art[ key ], [ ...( prefix || [] ), key ] );
+            } else {
+                cached[ key ] = art[ key ];
+            }
+        }
+
+        return cached;
     }
 
     areOptionsEqual ( a : ArtworkCacheOptions, b : ArtworkCacheOptions ) : boolean {
@@ -307,3 +325,14 @@ export class MapCachePersistence<K, V> extends CachePersistence<Map<K, V>> {
         return this.set( key, value );
     }
 }
+
+// const reader = new FsReadResilientStream( 'K:\\Shows\\Game of Thrones\\Season 7\\Game.of.Thrones.S07E07.The.Dragon.and.the.Wolf.1080p.AMZN.WEB-DL.DDP5.1.H.264-GoT.mkv' );
+
+// const writer = reader.pipe( fs.createWriteStream( 'storage/GOAT.mkv' ) );
+
+// setTimeout( () => {
+//     console.log( 'ERROR TRIGGGGGGGGGERED' );
+
+//     reader.stream.emit( 'error', { code: 'UNKNOWN' } );
+// }, 2000 );
+

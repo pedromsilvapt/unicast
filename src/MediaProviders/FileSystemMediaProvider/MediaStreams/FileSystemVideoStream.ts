@@ -5,6 +5,7 @@ import { MediaRange } from "../../MediaStreams/MediaStream";
 import * as fs from 'mz/fs';
 import * as mime from 'mime';
 import { MediaTools } from "../../../MediaTools";
+import { ResilientReadStream } from "../../../ES2017/ResilientStream";
 
 export class FileSystemVideoMediaStream extends VideoMediaStream {
     metadata : any;
@@ -30,6 +31,7 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
 
     getInputForDriver<I = any> ( driver : string ) : I {
         if ( driver === 'ffmpeg' || driver === 'ffmpeg-hls' ) {
+            // getUrlFor
             return this.file as any;
         }
 
@@ -47,6 +49,6 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
             options.end = range.end;
         }
 
-        return fs.createReadStream( this.file, options );
+        return new ResilientReadStream( ( start, end ) => fs.createReadStream( this.file, { start, end } ), options );
     }
 }

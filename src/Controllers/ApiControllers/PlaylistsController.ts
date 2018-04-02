@@ -36,11 +36,21 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
         return playlist;
     }
 
+    async getPlaylistItems ( req : Request, playlist : PlaylistRecord ) : Promise<MediaRecord[]> {
+        const url = await this.server.getMatchingUrl( req );      
+
+        const items = await Promise.all( ( playlist.references || [] ).map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
+
+        for ( let item of items ) {
+            ( item as any ).cachedArtwork = this.server.artwork.getCachedObject( url, item.kind, item.id, item.art );            
+        }
+
+        return items.filter( item => !!item );
+    }
+
     async transform ( req : Request, res : Response, playlist : PlaylistRecord ) : Promise<any> {
         if ( req.query.items === 'true' ) {
-            ( playlist as any ).items = await Promise.all( ( playlist.references || [] ).map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
-
-            ( playlist as any ).items = ( playlist as any ).items.filter( item => !!item );
+            ( playlist as any ).items = await this.getPlaylistItems( req, playlist );
         }
 
         return playlist;
@@ -79,9 +89,7 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        const items = await Promise.all( playlist.references.map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
-
-        return items.filter( item => !!item );
+        return await this.getPlaylistItems( req, playlist );
     }
 
     @Route( 'post', '/:id/items' )

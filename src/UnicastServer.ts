@@ -1,6 +1,6 @@
 import { ProvidersManager } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord } from "./MediaRecord";
+import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord } from "./MediaRecord";
 import { Database, BaseTable, CollectionRecord, MediaTable, TvEpisodesMediaTable } from "./Database";
 import { MediaSourceDetails } from "./MediaProviders/MediaSource";
 import { Config } from "./Config";
@@ -26,6 +26,8 @@ import { Hookable, Hook } from "./Hookable";
 import * as r from 'rethinkdb';
 import * as itt from 'itt';
 import { Semaphore } from "data-semaphore";
+import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
+import { serveMedia } from "./ES2017/HttpServeMedia";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -45,8 +47,10 @@ export class UnicastServer {
     readonly receivers : ReceiversManager;
 
     readonly providers : ProvidersManager;
-
+    
     readonly media : MediaManager;
+
+    readonly streams : HttpRawMediaServer;
 
     readonly tasks : BackgroundTasksManager;
 
@@ -86,7 +90,7 @@ export class UnicastServer {
         this.providers = new ProvidersManager( this );
 
         this.media = new MediaManager( this );        
-
+   
         this.subtitles = new SubtitlesManager( this );
 
         this.artwork = new ArtworkCache( this );
@@ -96,6 +100,8 @@ export class UnicastServer {
         this.transcoding = new TranscodingManager( this );
 
         this.http = new MultiServer( [ restify.createServer() ] );
+
+        this.streams = new HttpRawMediaServer( this );  
 
         if ( Config.get<boolean>( 'server.ssl.enabled' ) && fs.existsSync( './server.key' ) ) {
             const keyFile = Config.get<string>( 'server.ssl.key' );
@@ -154,31 +160,27 @@ export class UnicastServer {
         } );
     }
 
-    async getIpV4 () : Promise<string> {
-        if ( this.cachedIpV4 ) {
-            return this.cachedIpV4;
-        }
-
-        return this.cachedIpV4 = await internalIp.v4();
+    getIpV4 () : string {
+        return this.cachedIpV4;
     }
 
-    async getPort () : Promise<number> {
+    getPort () : number {
         return this.config.get( 'server.port' );
     }
 
-    async getSecurePort () : Promise<number> {
+    getSecurePort () : number {
         return this.config.get( 'server.ssl.port' );
     }
 
-    async getUrl ( path ?: string ) : Promise<string> {
-        return `http://${ await this.getIpV4() }:${ await this.getPort() }` + ( path || '' );
+    getUrl ( path ?: string ) : string {
+        return `http://${ this.getIpV4() }:${ this.getPort() }` + ( path || '' );
     }
 
-    async getSecureUrl ( path ?: string ) : Promise<string> {
-        return `https://${ await this.getIpV4() }:${ await this.getSecurePort() }` + ( path || '' );
+    getSecureUrl ( path ?: string ) : string {
+        return `https://${ this.getIpV4() }:${ this.getSecurePort() }` + ( path || '' );
     }
 
-    async getMatchingUrl ( req : restify.Request, path ?: string ) : Promise<string> {
+    getMatchingUrl ( req : restify.Request, path ?: string ) : string {
         if ( ( req.connection as any ).encrypted ) {
             return this.getSecureUrl( path );
         } else {
@@ -187,13 +189,13 @@ export class UnicastServer {
     }
 
     async listen () : Promise<void> {
+        this.cachedIpV4 = await internalIp.v4();
+
         await this.onStart.notify();
 
-        await this.getIpV4();
+        const port : number = this.getPort();
 
-        const port : number = await this.getPort();
-
-        const sslPort : number = await this.getSecurePort();
+        const sslPort : number = this.getSecurePort();
     
         // Attach all api controllers
         new ApiController( this, '/api' ).install();
@@ -207,10 +209,10 @@ export class UnicastServer {
         } );
 
         // Start the static server
-        routes( await this.getUrl(), await this.getUrl( '/api' ) ).applyRoutes( this.http.servers[ 0 ] );
+        routes( this.getUrl(), this.getUrl( '/api' ) ).applyRoutes( this.http.servers[ 0 ] );
 
         if ( this.http.servers.length > 1 ) {
-            routes( await this.getSecureUrl(), await this.getSecureUrl( '/api' ) ).applyRoutes( this.http.servers[ 1 ] );
+            routes( this.getSecureUrl(), this.getSecureUrl( '/api' ) ).applyRoutes( this.http.servers[ 1 ] );
         }
 
         await this.database.install();
@@ -221,10 +223,10 @@ export class UnicastServer {
 
         await this.storage.clean();
 
-        this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getUrl() );
+        this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + this.getUrl() );
         
         if ( this.isHttpsEnabled ) {
-            this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + await this.getSecureUrl() );
+            this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + this.getSecureUrl() );
         }
     }
 
@@ -247,6 +249,59 @@ export class UnicastServer {
     }
 }
 
+export class HttpRawMediaServer {
+    server : UnicastServer;
+
+    constructor ( server : UnicastServer ) {
+        this.server = server;
+
+        this.server.http.get( this.getUrlPattern(), this.serve.bind( this ) );
+    }
+
+    host () : string {
+        return this.server.getUrl();
+    }
+
+    getUrlFor ( kind : string, id : string, stream : string ) : string {
+        return `/media/raw/${ kind }/${ id }/stream/${ stream }`;
+    }
+
+    getUrlPattern () : string {
+        return this.getUrlFor( ':kind', ':id', ':stream' );
+    }
+
+    async serve ( req : restify.Request, res : restify.Response, next : restify.Next ) : Promise<void> {
+        try {
+            const record = await this.server.media.get<PlayableMediaRecord>( req.params.kind, req.params.id );
+
+            if ( !record.sources ) {
+                throw new Error( `Record does not have sources.` );
+            }
+
+            const streams = await this.server.providers.streams( record.sources );
+
+            const stream = streams.find( stream => stream.id == req.params.stream );
+
+            let mime = stream.type === MediaStreamType.Subtitles
+                ? stream.mime + ';charset=utf-8'
+                : stream.mime;
+            
+            let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
+            
+            if ( reader ) {
+                req.on( 'close', () => stream.close( reader ) );
+            }
+
+            next();
+        } catch ( error ) {
+           console.error( error ) ;
+
+           res.send( 500, { error: true } );
+
+           next();
+        }
+    }
+}
 
 export class MediaManager {
     readonly server  : UnicastServer;
@@ -286,9 +341,9 @@ export class MediaManager {
     get ( kind : MediaKind.TvSeason, id : string ) : Promise<TvSeasonMediaRecord>;
     get ( kind : MediaKind.TvEpisode, id : string ) :Promise<TvEpisodeMediaRecord>;
     get ( kind : MediaKind.Custom, id : string ) : Promise<CustomMediaRecord>;
-    get ( kind : MediaKind, id : string ) : Promise<MediaRecord>;
-    get ( kind : MediaKind, id : string ) : Promise<MediaRecord> {
-        let table : BaseTable<MediaRecord> = this.getTable( kind );
+    get<R extends MediaRecord = MediaRecord> ( kind : MediaKind, id : string ) : Promise<R>;
+    get<R extends MediaRecord = MediaRecord> ( kind : MediaKind, id : string ) : Promise<R> {
+        let table : BaseTable<R> = this.getTable( kind ) as BaseTable<R>;
 
         return table.get( id );
     }

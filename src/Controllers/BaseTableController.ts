@@ -10,6 +10,8 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
 
     defaultSortField : string = 'title';
 
+    defaultSortFieldDirection : 'asc' | 'desc' = 'asc';
+
     sortingFields : string[] = [ 'title' ];
 
     searchFields : string[] = [ 'title' ];
@@ -54,7 +56,11 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
                 query = query.orderBy( { index: r.asc( req.query.sort.field ) } );
             }
         } else if ( this.defaultSortField ) {
-            query = query.orderBy( { index: this.defaultSortField } );
+            if ( this.defaultSortFieldDirection === 'desc' ) {
+                query = query.orderBy( { index: r.desc( this.defaultSortField ) } );
+            } else {
+                query = query.orderBy( { index: this.defaultSortField } );
+            }
         }
 
         if ( req.query.search ) {

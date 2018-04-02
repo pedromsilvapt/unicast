@@ -8,6 +8,9 @@ task( 'build', async context => {
         target : 'server@es6',
         output : "dist/$name.js",
         useTypescriptCompiler : true,
+        log: {
+            showBundledFiles: false // Don't list all the bundled files every time we bundle
+        },
         plugins: [ 
             JSONPlugin(),
             RawPlugin( [ '.txt.js', '.txt', '.txt.ts' ] )

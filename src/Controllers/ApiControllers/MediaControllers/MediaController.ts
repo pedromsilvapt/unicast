@@ -73,22 +73,6 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         return query;
     }
 
-    cacheArtwork ( url : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) : any {
-        const cached : any = {};
-
-        for ( let key of Object.keys( art ) ) {
-            if ( typeof art[ key ] === 'string' ) {
-                cached[ key ] = `${url}/api/media/artwork/${ kind }/${ id }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
-            } else if ( art[ key ] && typeof art[ key ] === 'object' ) {
-                cached[ key ] = this.cacheArtwork( url, kind, id, art[ key ], [ ...( prefix || [] ), key ] );
-            } else {
-                cached[ key ] = art[ key ];
-            }
-        }
-
-        return cached;
-    }
-
     @Route( 'get', '/:id/triggers' )
     async triggers ( req : Request, res : Response ) : Promise<MediaTrigger[]> {
         const media : MediaRecord = await this.table.get( req.params.id );

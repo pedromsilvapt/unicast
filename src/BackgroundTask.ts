@@ -111,8 +111,8 @@ export class BackgroundTask extends EventEmitter {
 
     protected onCancel () {}
 
-    setStartCancel () : this {
-        if ( this.cancelable && this.state !== BackgroundTaskState.Cancelled ) {
+    setStateCancel () : this {
+        if ( this.cancelable && this.state !== BackgroundTaskState.Cancelled && this.state !== BackgroundTaskState.Finished ) {
             this.stopwatch.pause();
 
             this.state = BackgroundTaskState.Cancelled;

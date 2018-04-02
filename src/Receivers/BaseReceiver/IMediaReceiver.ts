@@ -13,7 +13,6 @@ export enum ReceiverStatusState {
 }
 
 export interface ReceiverStatus {
-    session : HistoryRecord;
     timestamp : Date;
     state : ReceiverStatusState;
     media : {

@@ -55,7 +55,7 @@ export class PlayerController extends BaseController {
 
             const session = await device.sessions.register( record, options );
 
-            return device.play( session );
+            return this.preprocessStatus( req, await device.play( session ) );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -72,7 +72,7 @@ export class PlayerController extends BaseController {
 
             const session = await device.sessions.register( record, options );
 
-            return device.play( session );
+            return this.preprocessStatus( req, await device.play( session ) );            
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -139,7 +139,7 @@ export class PlayerController extends BaseController {
 
             const session = await device.sessions.register( record, options );
 
-            return device.play( session );
+            return this.preprocessStatus( req, await device.play( session ) );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -156,7 +156,8 @@ export class PlayerController extends BaseController {
     
             const session = await device.sessions.register( record );
 
-            return device.play( session );
+            return this.preprocessStatus( req, await device.play( session ) );
+            
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -167,7 +168,8 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.pause();
+            return this.preprocessStatus( req, await device.pause() );
+            
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -178,7 +180,8 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.resume();
+            return this.preprocessStatus( req, await device.resume() );
+            
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -189,7 +192,8 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.stop();
+            return this.preprocessStatus( req, await device.stop() );
+            
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -217,12 +221,22 @@ export class PlayerController extends BaseController {
         }
     }
 
+    protected async preprocessStatus ( req, status : ReceiverStatus ) : Promise<ReceiverStatus> {
+        if ( status && status.media && status.media.record ) {
+            const url = await this.server.getMatchingUrl( req );
+    
+            ( status.media.record as any ).cachedArtwork = this.server.artwork.getCachedObject( url, status.media.record.kind, status.media.record.id, status.media.record.art );
+        }
+
+        return status;
+    }
+
     @Route( 'get', '/:device/status' )
     async status ( req : Request, res : Response ) {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.status();
+            return this.preprocessStatus( req, await device.status() );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -233,7 +247,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.seek( +req.params.time );
+            return this.preprocessStatus( req, await device.seek( +req.params.time ) );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -244,7 +258,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.seekTo( +req.params.time );
+            return this.preprocessStatus( req, await device.seekTo( +req.params.time ) );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -255,7 +269,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.mute();
+            return this.preprocessStatus( req, await device.mute() );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -266,7 +280,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.unmute();
+            return this.preprocessStatus( req, await device.unmute() );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -279,7 +293,7 @@ export class PlayerController extends BaseController {
         if ( device ) {
             const volume : number = parseFloat( req.params.volume );
 
-            return device.setVolume( volume );
+            return this.preprocessStatus( req, await device.setVolume( volume ) );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -291,8 +305,10 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             const size : number = parseFloat( req.params.size );
+            
+            const status = await device.callCommand<ReceiverStatus>( 'changeSubtitlesSize', [ size ] );
 
-            return device.callCommand<ReceiverStatus>( 'changeSubtitlesSize', [ size ] );
+            return this.preprocessStatus( req, status );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
