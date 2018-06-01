@@ -8,9 +8,9 @@ import { MediaTable } from "../../../Database";
 
 export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
     getWatchedQuery ( req : Request, query : r.Sequence ) : r.Sequence {
-        if ( req.query.watched === 'include' ) {
+        if ( req.query.filterWatched === 'include' ) {
             query = query.filter( { watched: true } );
-        } else if ( req.query.watched === 'exclude' ) {
+        } else if ( req.query.filterWatched === 'exclude' ) {
             query = query.filter( { watched: false } );
         }
 
@@ -18,11 +18,11 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
     }
 
     getGenresQuery ( req : Request, query : r.Sequence ) : r.Sequence {
-        if ( typeof req.query.genres === 'object' ) {
-            const genres = Object.keys( req.query.genres );
+        if ( typeof req.query.filterGenres === 'object' ) {
+            const genres = Object.keys( req.query.filterGenres );
 
-            const included = genres.filter( genre => req.query.genres[ genre ] === 'include' );
-            const excluded = genres.filter( genre => req.query.genres[ genre ] === 'exclude' );
+            const included = genres.filter( genre => req.query.filterGenres[ genre ] === 'include' );
+            const excluded = genres.filter( genre => req.query.filterGenres[ genre ] === 'exclude' );
 
             if ( included.length > 0 || excluded.length > 0 ) {
                 query = query.filter( ( doc ) => {
@@ -43,11 +43,11 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
     }
 
     getCollectionsQuery ( req : Request, query : r.Sequence ) : r.Sequence {
-        if ( typeof req.query.collections === 'object' ) {
-            const collections = Object.keys( req.query.collections );
+        if ( typeof req.query.filterCollections === 'object' ) {
+            const collections = Object.keys( req.query.filterCollections );
 
-            const included = collections.filter( collection => req.query.collections[ collection ] === 'include' );
-            const excluded = collections.filter( collection => req.query.collections[ collection ] === 'exclude' );
+            const included = collections.filter( collection => req.query.filterCollections[ collection ] === 'include' );
+            const excluded = collections.filter( collection => req.query.filterCollections[ collection ] === 'exclude' );
 
             if ( included.length > 0 || excluded.length > 0 ) {
                 query = ( query as any ).merge( ( record ) => {

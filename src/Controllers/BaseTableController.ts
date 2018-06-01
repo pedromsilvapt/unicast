@@ -41,19 +41,19 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
     }
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        if ( req.query.sort ) {
-            let sort = typeof req.query.sort === 'string' ?
-                { field: req.query.sort, direction: 'asc' } :
-                { direction: 'asc', ...req.query.sort };
+        if ( req.query.filterSort ) {
+            let sort = typeof req.query.filterSort === 'string' ?
+                { field: req.query.filterSort, direction: 'asc' } :
+                { direction: 'asc', ...req.query.filterSort };
 
-            if ( !this.sortingFields.includes( req.query.sort.field ) ) {
-                throw new InvalidArgumentError( `Invalid sort field "${ req.query.sort.field }" requested.` );
+            if ( !this.sortingFields.includes( req.query.filterSort.field ) ) {
+                throw new InvalidArgumentError( `Invalid sort field "${ req.query.filterSort.field }" requested.` );
             }
 
-            if ( req.query.sort.direction == 'desc' ) {
-                query = query.orderBy( { index: r.desc( req.query.sort.field ) } );
+            if ( req.query.filterSort.direction == 'desc' ) {
+                query = query.orderBy( { index: r.desc( req.query.filterSort.field ) } );
             } else {
-                query = query.orderBy( { index: r.asc( req.query.sort.field ) } );
+                query = query.orderBy( { index: r.asc( req.query.filterSort.field ) } );
             }
         } else if ( this.defaultSortField ) {
             if ( this.defaultSortFieldDirection === 'desc' ) {
