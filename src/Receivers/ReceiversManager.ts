@@ -2,7 +2,6 @@ import { EntityManager, EntityFactoryManager } from "../EntityManager";
 import { IMediaReceiver } from "./BaseReceiver/IMediaReceiver";
 import { UnicastServer } from "../UnicastServer";
 import { ReceiverFactory } from "./BaseReceiver/ReceiverFactory";
-import { CancelToken } from "../ES2017/CancelToken";
 
 export class ReceiversManager extends EntityManager<IMediaReceiver, string> {
     readonly factories : ReceiverFactoriesManager;

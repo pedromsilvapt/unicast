@@ -1,14 +1,13 @@
 import { ChromecastReceiver } from "./ChromecastReceiver";
 import { ReceiverFactory } from "../BaseReceiver/ReceiverFactory";
-import { CancelToken } from "../../ES2017/CancelToken";
 import { ConfigInstances } from "../../Config";
 import { ChromecastReceiverSSDPScanner, ChromecastReceiverMDNSScanner } from "./ChromecastReceiverScanner";
-import { toArray } from "../../ES2017/AsyncIterable";
+import { CancelToken } from "data-cancel-token";
 
 export class ChromecastReceiverFactory extends ReceiverFactory<ChromecastReceiver> {
     type: string = 'chromecast';
 
-    async * entitiesFromScan( existingDevices : ChromecastReceiver[], cancel : CancelToken ) : AsyncIterable<ChromecastReceiver> {
+    async * entitiesFromScan ( existingDevices : ChromecastReceiver[], cancel : CancelToken ) : AsyncIterable<ChromecastReceiver> {
         const scanner = new ChromecastReceiverMDNSScanner( this.server.diagnostics );
 
         scanner.missedConnectionsThreshold = 6;

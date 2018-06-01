@@ -2,7 +2,7 @@ import { MediaPlayOptions, IMediaReceiver, ReceiverStatusState, ReceiverStatus }
 import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import { MediaRecord, PlayableMediaRecord, MediaKind, TvEpisodeMediaRecord } from "../../MediaRecord";
 import { MediaManager } from "../../UnicastServer";
-import { CancelToken } from "../../ES2017/CancelToken";
+import { CancelToken } from 'data-cancel-token';
 import { EventEmitter } from "events";
 import { HistoryRecord } from "../../Database";
 import { Optional } from 'data-optional';
@@ -128,7 +128,7 @@ export class MediaSessionsManager {
             
             const streams = await this.receiver.transcoder.transcode( history, media, originalStreams, {}, cancel );
             
-            cancel.whenCancelled().then( () => {
+            cancel.cancellationPromise.then( () => {
                 for ( let stream of streams ) {
                     stream.close();
                 }

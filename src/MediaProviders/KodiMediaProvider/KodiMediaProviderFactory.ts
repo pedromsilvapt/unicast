@@ -1,4 +1,4 @@
-import { CancelToken } from "../../ES2017/CancelToken";
+import { CancelToken } from 'data-cancel-token';
 import { ConfigInstances } from "../../Config";
 import { KodiMediaProvider } from "./KodiMediaProvider";
 import { ProviderFactory } from "../BaseMediaProvider/ProviderFactory";

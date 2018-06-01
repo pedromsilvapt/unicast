@@ -1,5 +1,4 @@
 import { IMediaReceiver } from "./IMediaReceiver";
-import { CancelToken } from "../../ES2017/CancelToken";
 import { UnicastServer } from "../../UnicastServer";
 import { ConfigurableEntityFactory } from "../../EntityFactory";
 import { ConfigInstances } from "../../Config";

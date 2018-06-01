@@ -7,7 +7,7 @@ import { FFmpegHlsDriver, FFmpegHlsFlag, FFmpegHlsPlaylistType } from "../../../
 import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
 import { MediaRecord } from "../../../MediaRecord";
 import { HistoryRecord } from "../../../Database";
-import { CancelToken } from "../../../ES2017/CancelToken";
+import { CancelToken } from 'data-cancel-token';
 import { MediaTrigger } from "../../../TriggerDb";
 
 export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOptions> {

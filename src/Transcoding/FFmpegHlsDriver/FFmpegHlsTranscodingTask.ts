@@ -6,9 +6,9 @@ import { SegmentsMap, Segment } from "./SegmentsMap";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import { FFmpegHlsDriver } from "./FFmpegHlsDriver";
 import * as uid from 'uid';
-import { CancelToken } from "../../ES2017/CancelToken";
+import { CancelToken } from 'data-cancel-token';
 import { BackgroundTaskState, BackgroundTask, BackgroundTaskMetric } from "../../BackgroundTask";
-import { Deferred } from "../../ES2017/Deferred";
+import { Future } from '@pedromsilva/data-future';
 import { SegmentsScheduler, SegmentsSchedulerJob } from "./SegmentsScheduler";
 import { MediaRecord } from "../../MediaRecord";
 
@@ -90,7 +90,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
             } );
 
             if ( cancel ) {
-                cancel.whenCancelled().then( () => {
+                cancel.cancellationPromise.then( () => {
                     encoder.setStateCancel();
 
                     this.encoders.delete( id );
@@ -133,7 +133,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
 
     process : ChildProcess;
 
-    protected completed : Deferred<void> = new Deferred();
+    protected completed : Future<void> = new Future();
 
     cancelable : boolean = true;
 

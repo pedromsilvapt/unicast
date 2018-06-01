@@ -28,6 +28,7 @@
     "typescript": "^2.6.2"
   },
   "dependencies": {
+    "@pedromsilva/data-future": "^1.1.1",
     "algorithms": "^0.10.0",
     "array-filter-query-builder": "^0.5.3",
     "await-semaphore": "^0.1.1",
@@ -36,6 +37,8 @@
     "chalk": "^2.1.0",
     "composable": "^0.2.4",
     "config": "^1.26.2",
+    "data-async-iterators": "^0.5.0",
+    "data-cancel-token": "^0.5.2",
     "data-optional": "0.0.2",
     "data-semaphore": "^0.3.2",
     "date-fns": "^1.28.5",

@@ -1,7 +1,7 @@
-import { Deferred } from "../../ES2017/Deferred";
 import { LinkedList } from "../../ES2017/LinkedList";
 import { delay } from "./HlsVideoMediaStream";
 import { EventEmitter } from 'events';
+import { Future } from "@pedromsilva/data-future";
 
 export class SegmentsMap<T> extends EventEmitter {
     totalSize : number;
@@ -138,7 +138,7 @@ export class SegmentsMap<T> extends EventEmitter {
             return Promise.resolve( this.get( index ) );
         }
 
-        const watcher = new Deferred<T>();
+        const watcher = new Future<T>();
         
         this.watchers.append( { index, watcher } );
 
@@ -150,7 +150,7 @@ export class SegmentsMap<T> extends EventEmitter {
 
 export interface SegmentWatcher<T> {
     index : number;
-    watcher : Deferred<T>;
+    watcher : Future<T>;
 }
 
 export interface Segment {

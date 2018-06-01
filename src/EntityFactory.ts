@@ -1,7 +1,6 @@
 import { EventEmitter } from "events";
 import { EntityManager } from "./EntityManager";
-import { CancelToken } from "./ES2017/CancelToken";
-import { toIterable, merge } from "./ES2017/AsyncIterable";
+import { fromPromises, CancelToken } from 'data-async-iterators';
 import { UnicastServer } from "./UnicastServer";
 
 export class IEntity {
@@ -38,7 +37,7 @@ export abstract class ConfigurableEntityFactory<E extends IEntity> extends Entit
             entities.push( this.createFromConfig( config ) );
         }
 
-        return toIterable( entities );
+        return fromPromises( entities );
     }
 
     async * entitiesFromScan ( hardcoded : E[], cancel : CancelToken ) : AsyncIterable<E> {}

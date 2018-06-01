@@ -1,5 +1,5 @@
 import * as uid from 'uid';
-import { CancelToken } from './ES2017/CancelToken';
+import { CancelToken } from 'data-cancel-token'
 import { EventEmitter } from 'events';
 
 export function getMillisecondsProcessTime ( previous ?: [ number, number ] ) : number {
@@ -219,7 +219,7 @@ export class BackgroundTask extends EventEmitter {
 
             const isUnstarted : boolean = this.state === BackgroundTaskState.Unstarted;
 
-            const isCanceled : boolean = cancel && cancel.isCancelled();
+            const isCanceled : boolean = cancel && cancel.cancellationRequested;
 
             if ( token && isIddle || isPaused || isCanceled ) {
                 clearInterval( token );

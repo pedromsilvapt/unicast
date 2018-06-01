@@ -1,9 +1,9 @@
 import DefaultMediaRemote from './Remotes/DefaultMedia';
-import { deferred } from '../../ES2017/AsyncIterable';
 import { GeneralRemote } from './Remotes/General';
 import { Diagnostics } from '../../Diagnostics';
 import { Client } from 'node-ssdp';
 import * as mdns from 'multicast-dns';
+import { emits, shared, SharedIterable } from 'data-async-iterators';
 
 export interface ChromecastReceiverIdentification {
     name : string;
@@ -28,7 +28,7 @@ export abstract class ChromecastReceiverScanner {
 
     endDevices : Function;
 
-    iterable : AsyncIterableIterator<ChromecastReceiverIdentification>;
+    iterable : SharedIterable<ChromecastReceiverIdentification>;
 
     history : Map<string, ChromecastReceiverIdentification> = new Map;
 
@@ -47,13 +47,13 @@ export abstract class ChromecastReceiverScanner {
 
         this.timeout = timeout;
 
-        const [ push, end, iterable ] = deferred<ChromecastReceiverIdentification>();
+        const emitter = emits<ChromecastReceiverIdentification>();
 
-        this.pushDevice = push;
+        this.pushDevice = emitter.value.bind( emitter );
 
-        this.endDevices = end;
+        this.endDevices = emitter.end.bind( emitter );
 
-        this.iterable = iterable;
+        this.iterable = shared( emitter );
     }
 
     addDevice ( name : string, address : string, status : 'online' | 'offline' = 'online' ) {
@@ -133,7 +133,7 @@ export abstract class ChromecastReceiverScanner {
             this.timeoutToken = this.intervalToken = setInterval( this.onSearch.bind( this ), this.interval );
         }
 
-        return this.iterable;    
+        return this.iterable.fork();    
     }
 
     destroy () {

@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import { CancelToken } from "./ES2017/CancelToken";
+import { CancelToken } from 'data-cancel-token';
 import { EntityFactory, IEntity } from "./EntityFactory";
 import { UnicastServer } from "./UnicastServer";
 
@@ -87,7 +87,7 @@ export abstract class EntityFactoryManager<E extends IEntity, M extends EntityMa
 
         try {
             for await ( let entity of factory.entities( cancel ) ) {
-                if ( !cancel.isCancelled() ) {
+                if ( !cancel.cancellationRequested ) {
                     this.entitiesManager.add( entity )
                 }
             }

@@ -1,6 +1,6 @@
 import { SegmentsMap, Segment } from "./SegmentsMap";
 import { EventEmitter } from "events";
-import { CancelToken } from "../../ES2017/CancelToken";
+import { CancelToken } from 'data-cancel-token';
 import { isAfter } from 'date-fns';
 import * as sortBy from 'sort-by';
 
@@ -170,7 +170,7 @@ export class SegmentsSchedulerJob extends EventEmitter {
         this.requests.set( this.lastSegmentRequested, this.lastSegmentRequestedDate );
 
         if ( cancel ) {
-            cancel.whenCancelled().then( () => {
+            cancel.cancellationPromise.then( () => {
                 this.requests.delete( index );
 
                 if ( index === this.lastSegmentRequested ) {
