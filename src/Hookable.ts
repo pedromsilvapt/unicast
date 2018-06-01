@@ -23,7 +23,7 @@ export class Hookable {
     }
 
     get ( name : string ) {
-        if ( this.hooks.has( name ) ) {
+        if ( !this.hooks.has( name ) ) {
             if ( this.allowImplicitCreation ) {
                 return this.create( name );
             } else {

@@ -195,7 +195,7 @@ export class ConnectionPool {
             }
         }
 
-        conn = conn || await this.createConnection();;
+        conn = conn || await this.createConnection();
 
         if ( conn.timeout ) {
             clearTimeout( conn.timeout );

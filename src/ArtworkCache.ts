@@ -20,9 +20,11 @@ export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.Wr
     
         input.pipe( output );
 
-        input.on( 'end', () => resolve() );
-
         input.on( 'error', reject );
+
+        output.on( 'finish', () => resolve() );
+
+        output.on( 'error', reject );
     } );
 }
 
