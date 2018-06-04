@@ -39,13 +39,8 @@ export class PersistentQueue<P> {
         this._scheduler = scheduler;
 
         if ( this._scheduler ) {
-            this._scheduler.start( this );
-
-            // this.scheduler.findNext( this, 5 )
-            //     .then( x => console.log( 'success', x ), x => console.error( 'error', x ) );
+            this.server.database.installed.then( () => this._scheduler.start( this ) );
         }
-
-        // this.find().then( x => console.log( 'success', x ), x => console.error( 'error', x ) );
     }
 
     protected get table () : PersistentQueueTable<JobRecord<P>> {

@@ -114,7 +114,7 @@ export class SegmentsMap<T> extends EventEmitter {
     }
 
     protected triggerWatcher ( index : number, value : T ) : void {
-        this.watchers.filter( ( record ) => {
+        this.watchers.removeIf( ( record ) => {
             if ( record.index == index ) {
                 record.watcher.resolve( delay( 1000, value ) );
             }
@@ -124,7 +124,7 @@ export class SegmentsMap<T> extends EventEmitter {
     }
 
     protected flushWatchers () : void {
-        this.watchers.filter( ( record ) => {
+        this.watchers.removeIf( ( record ) => {
             if ( this.has( record.index ) ) {
                 record.watcher.resolve( this.get( record.index ) );
             }

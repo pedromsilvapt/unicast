@@ -28,8 +28,9 @@
     "typescript": "^2.6.2"
   },
   "dependencies": {
-    "@pedromsilva/data-future": "^1.1.1",
+    "@pedromsilva/data-future": "^1.1.2",
     "algorithms": "^0.10.0",
+    "argv-set-env": "^1.0.1",
     "array-filter-query-builder": "^0.5.3",
     "await-semaphore": "^0.1.1",
     "cache-stream": "^0.1.0",
@@ -56,6 +57,7 @@
     "itt": "^0.3.8",
     "jimp": "^0.2.28",
     "js-yaml": "^3.9.1",
+    "keypress": "^0.2.1",
     "mess": "^0.1.2",
     "mnml-tpl": "^1.0.2",
     "multicast-dns": "^6.1.1",
@@ -63,6 +65,7 @@
     "node-ssdp": "^3.2.5",
     "object-path": "^0.11.4",
     "opensubtitles-api": "^4.0.0",
+    "parse-key": "^0.2.1",
     "parse-torrent-name": "^0.5.4",
     "pidusage": "^1.2.0",
     "pump": "^1.0.2",

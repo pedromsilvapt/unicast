@@ -24,14 +24,16 @@ export class BackgroundTask extends EventEmitter {
     static fromPromise<T = any> ( fn : ( task : BackgroundTask ) => Promise<T> ) : [ BackgroundTask, Promise<T> ] {
         const task = new BackgroundTask().setStateStart();
 
-        const promise = fn( task ).catch( error => {
-            task.addError( error );
-
-            return Promise.reject( error );
-        } ).then( t => {
+        const promise = fn( task ).then( t => {
             task.setStateFinish();
 
             return t;
+        }, error => {
+            task.addError( error );
+
+            task.setStateFinish();            
+
+            return Promise.reject( error );
         } );
         
         return [ task, promise ];
@@ -182,23 +184,27 @@ export class BackgroundTask extends EventEmitter {
     protected onProgress () {}
 
     addTotal ( amount : number = 1 ) {
-        this.total += amount;
-
-        this.onProgress();
-
-        this.emit( 'progress' );
+        if ( amount != 0 ) {
+            this.total += amount;
+    
+            this.onProgress();
+    
+            this.emit( 'progress' );
+        }
 
         return this;
     }
 
     addDone ( amount : number = 1 ) : this {
-        this.done += amount;
-
-        this.onProgress();
-
-        this.emit( 'progress' );
-
-        this.emit( 'add-done', amount );
+        if ( amount != 0 ) {
+            this.done += amount;
+    
+            this.onProgress();
+    
+            this.emit( 'progress' );
+    
+            this.emit( 'add-done', amount );
+        }
 
         return this;
     }

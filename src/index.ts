@@ -18,3 +18,9 @@ server.transcoding.registerDriver( new FFmpegDriverFactory() );
 server.transcoding.registerDriver( new FFmpegHlsDriverFactory() );
 
 server.listen().catch( err => console.error( err.message, err.stack ) );
+
+export { server };
+
+export function close () {
+    return server.close();
+}

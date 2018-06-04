@@ -81,7 +81,7 @@ export class UnicastServer {
         
         this.diagnostics = new Diagnostics( this );
 
-        this.database = new Database( this.config );
+        this.database = new Database( this );
 
         this.tasks = new BackgroundTasksManager();
 
@@ -230,15 +230,24 @@ export class UnicastServer {
         }
     }
 
-    async close () {
-        await this.onClose.notify();
+    async close ( timeout : number = 0 ) {
+        this.diagnostics.info( 'unicast', 'Shutting down...' );
 
+        await Promise.race( [
+            this.onClose.notify(),
+            new Promise( resolve => timeout > 0 && setTimeout( resolve, timeout ) )
+        ] );
+        
         this.http.close();
+        
+        this.diagnostics.info( 'unicast', 'Server closed.' );
     }
 
-    async quit ( delay : number = 0 ) {
+    async quit ( delay : number = 0, timeout : number = 0 ) {
         try {
-            await this.close();
+            await this.close( timeout );
+        } catch ( err ) {
+            console.error( err.message, err.stack );
         } finally {
             if ( delay > 0 ) {
                 setTimeout( () => process.exit(), delay );

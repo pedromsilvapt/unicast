@@ -327,14 +327,3 @@ export class MapCachePersistence<K, V> extends CachePersistence<Map<K, V>> {
         return this.set( key, value );
     }
 }
-
-// const reader = new FsReadResilientStream( 'K:\\Shows\\Game of Thrones\\Season 7\\Game.of.Thrones.S07E07.The.Dragon.and.the.Wolf.1080p.AMZN.WEB-DL.DDP5.1.H.264-GoT.mkv' );
-
-// const writer = reader.pipe( fs.createWriteStream( 'storage/GOAT.mkv' ) );
-
-// setTimeout( () => {
-//     console.log( 'ERROR TRIGGGGGGGGGERED' );
-
-//     reader.stream.emit( 'error', { code: 'UNKNOWN' } );
-// }, 2000 );
-

@@ -61,6 +61,7 @@ typings/
 storage/
 
 config/local.yaml
+config/local-*.yaml
 
 lib/
 

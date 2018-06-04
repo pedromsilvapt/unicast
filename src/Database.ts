@@ -1,10 +1,12 @@
 import * as r from 'rethinkdb';
 import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "./MediaRecord";
-// import { Semaphore } from 'await-semaphore';
-import { Semaphore } from 'data-semaphore';
+import { Semaphore, StateSemaphore } from 'data-semaphore';
 import { Config } from "./Config";
 import { IDatabaseLocalSubtitle } from './Subtitles/SubtitlesRepository';
 import * as itt from 'itt';
+import { UnicastServer } from './UnicastServer';
+import { ChildProcess, spawn } from 'child_process';
+import { Future } from '@pedromsilva/data-future';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -38,32 +40,54 @@ export class Database {
 
     tables : DatabaseTables;
 
-    constructor ( config : Config ) {
-        this.config = config;
+    daemon : DatabaseDaemon;
+
+    protected installedFuture : Future<void> = new Future();
+
+    installed : Promise<void> = this.installedFuture.promise;
+
+    constructor ( server : UnicastServer ) {
+        this.config = server.config;
 
         this.connections = new ConnectionPool( this );
 
         this.tables = new DatabaseTables( this.connections );
+
+        if ( this.config.get( 'database.autostart.enable' ) ) {
+            this.daemon = new DatabaseDaemon( server );
+        }
     }
 
-    connect () : Promise<r.Connection> {
+    async connect () : Promise<r.Connection> {
+        if ( this.daemon ) {
+            await this.daemon.start();
+        }
+        
         return r.connect( this.config.get<r.ConnectionOptions>( 'database' ) );
     }
 
     async install () {
-        const databaseName : string = this.config.get<string>( 'database.db' );
+        try {
+            const databaseName : string = this.config.get<string>( 'database.db' );
 
-        const conn = await this.connections.acquire();
+            const conn = await this.connections.acquire();
+    
+            try {
+                const databases = await r.dbList().run( conn );
+        
+                if ( !databases.includes( databaseName ) ) {
+                    await r.dbCreate( databaseName ).run( conn );
+                }
+        
+                await this.tables.install();
+            } finally {
+                await this.connections.release( conn );
+            }
 
-        const databases = await r.dbList().run( conn );
-
-        if ( !databases.includes( databaseName ) ) {
-            await r.dbCreate( databaseName ).run( conn );
+            this.installedFuture.resolve();
+        } catch ( err ) {
+            this.installedFuture.reject( err );
         }
-
-        await this.connections.release( conn );
-
-        await this.tables.install();
     }
 }
 
@@ -154,10 +178,12 @@ export class ConnectionPool {
 
     semaphore : Semaphore;
 
+    closing : Future<void> = null;
+
     constructor ( db : Database ) {
         this.database = db;
 
-        this.semaphore = new Semaphore( this.maxConnections );
+        this.semaphore =  new Semaphore( this.maxConnections );
     }
 
     protected async createConnection () : Promise<ConnectionResource> {
@@ -183,6 +209,10 @@ export class ConnectionPool {
     }
 
     async acquire () : Promise<r.Connection> {
+        if ( this.closing && this.usedConnections.size == 0 ) {
+            return new Promise<r.Connection>( () => {} );
+        }
+
         const release = await this.semaphore.acquire();
 
         let conn : ConnectionResource;
@@ -212,7 +242,7 @@ export class ConnectionPool {
         return conn.connection;
     }
     
-    async release ( connection : r.Connection ) : Promise<void> {
+    release ( connection : r.Connection ) : void {
         if ( this.usedConnections.has( connection ) ) {
             const resource = this.usedConnections.get( connection );
 
@@ -220,7 +250,11 @@ export class ConnectionPool {
 
             resource.inUse = false;
 
-            if ( resource.usageCount <= this.maxConnectionUsage && this.maxConnectionWait > 0 ) {
+            if ( this.closeCheck() )  {
+                this.destroyConnection( resource );
+
+                this.closing.resolve();
+            } else if ( resource.usageCount <= this.maxConnectionUsage && this.maxConnectionWait > 0 ) {
                 resource.timeout = setTimeout( () => this.destroyConnection( resource ), this.maxConnectionWait );
 
                 this.freeConnections.push( resource );
@@ -230,6 +264,32 @@ export class ConnectionPool {
 
             resource.release();
         }
+    }
+
+    closeCheck () {
+        if ( this.closing && !this.semaphore.isLocked && this.usedConnections.size == 0 )  {
+            for ( let conn of this.freeConnections ) {
+                this.destroyConnection( conn );
+            }
+
+            return true;
+        }
+    }
+
+    async close () {
+        if ( this.closing ) {
+            return this.closing.promise;
+        }
+
+        this.closing = new Future<void>();
+
+        if ( this.closeCheck() ) {
+            this.closing.resolve();
+        }
+
+        await this.closing.promise;
+
+        this.closing = null;
     }
 }
 
@@ -269,13 +329,15 @@ export abstract class BaseTable<R extends { id ?: string }> {
     async install () {
         const conn = await this.pool.acquire();
 
-        const tables : string[] = await ( r as any ).tableList().run( conn );
-
-        if ( !tables.includes( this.tableName ) ) {
-            await ( r as any ).tableCreate( this.tableName ).run( conn );
+        try {
+            const tables : string[] = await ( r as any ).tableList().run( conn );
+    
+            if ( !tables.includes( this.tableName ) ) {
+                await ( r as any ).tableCreate( this.tableName ).run( conn );
+            }
+        } finally {
+            await this.pool.release( conn );
         }
-
-        await this.pool.release( conn );
 
         await this.installIndexes();
     }
@@ -283,33 +345,37 @@ export abstract class BaseTable<R extends { id ?: string }> {
     async installIndexes () {
         const conn = await this.pool.acquire();
 
-        const indexes = await this.query().indexList().run( conn );
+        try {
+            const indexes = await this.query().indexList().run( conn );
         
-        for ( let index of this.indexesSchema ) {
-            if ( indexes.includes( index.name ) ) {
-                continue;
+            for ( let index of this.indexesSchema ) {
+                if ( indexes.includes( index.name ) ) {
+                    continue;
+                }
+    
+                if ( index.expression ) {
+                    await ( this.query().indexCreate as any )( index.name, index.expression, index.options ).run( conn );
+                } else {
+                    await ( this.query().indexCreate as any )( index.name, index.options ).run( conn );
+                }
             }
-
-            if ( index.expression ) {
-                await ( this.query().indexCreate as any )( index.name, index.expression, index.options ).run( conn );
-            } else {
-                await ( this.query().indexCreate as any )( index.name, index.options ).run( conn );
-            }
+    
+            await ( this.query() as any ).indexWait().run( conn );
+        } finally {
+            await this.pool.release( conn );
         }
-
-        await ( this.query() as any ).indexWait().run( conn );
-
-        await this.pool.release( conn );
     }
 
     async get ( id : string ) : Promise<R> {
         const connection = await this.pool.acquire();
 
-        const item = await this.query().get( id ).run( connection ) as any as Promise<R>;
-
-        await this.pool.release( connection );
-
-        return item;
+        try {
+            const item = await this.query().get( id ).run( connection ) as any as Promise<R>;
+    
+            return item;
+        } finally {
+            this.pool.release( connection );
+        }
     }
 
     async has ( id : string ) : Promise<boolean> {
@@ -323,122 +389,138 @@ export abstract class BaseTable<R extends { id ?: string }> {
         
         const connection = await this.pool.acquire();
 
-        const table = 
-        // opts.index ? 
-        //     this.query().getAll( ...keys, opts ) :
-            this.query().getAll( ...keys );
-
-        const cursor = await table.run( connection );
-        
-        const items = await cursor.toArray();
-
-        await cursor.close();
-
-        await this.pool.release( connection );
-        
-        return items;
+        try {
+            const table = 
+            // opts.index ? 
+            //     this.query().getAll( ...keys, opts ) :
+                this.query().getAll( ...keys );
+    
+            const cursor = await table.run( connection );
+            
+            const items = await cursor.toArray();
+    
+            await cursor.close();
+    
+            return items;
+        } finally {
+            await this.pool.release( connection );
+        }
     }
 
     async find<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : Promise<T[]> {
         const connection = await this.pool.acquire();
 
-        let table = this.query();
-        
-        let sequence : r.Sequence = table;
-
-        if ( query ) {
-            sequence = query( table );
+        try {
+            let table = this.query();
+            
+            let sequence : r.Sequence = table;
+    
+            if ( query ) {
+                sequence = query( table );
+            }
+    
+            const cursor = await sequence.run( connection );
+    
+            const items = await cursor.toArray();
+    
+            await cursor.close();
+                
+            return items;
+        } finally {
+            await this.pool.release( connection );
         }
-
-        const cursor = await sequence.run( connection );
-
-        const items = await cursor.toArray();
-
-        await cursor.close();
-
-        await this.pool.release( connection );
-        
-        return items;
     }
 
     async create ( record : R ) : Promise<R> {
         const connection = await this.pool.acquire();
 
-        for ( let field of Object.keys( record ) ) {
-            if ( record[ field ] === void 0 ) {
-                record[ field ] = null;
+        try {
+            for ( let field of Object.keys( record ) ) {
+                if ( record[ field ] === void 0 ) {
+                    record[ field ] = null;
+                }
             }
+    
+            const res = await this.query().insert( record ).run( connection );
+    
+            record.id = res.generated_keys[ 0 ];
+            
+            return record;
+        } finally {
+            this.pool.release( connection );
         }
-
-        const res = await this.query().insert( record ).run( connection );
-
-        this.pool.release( connection );
-
-        record.id = res.generated_keys[ 0 ];
-
-        return record;
     }
 
     async update ( id : string, record : any ) : Promise<R> {
         const connection = await this.pool.acquire();
 
-        const res = await this.query().get( id ).update( record ).run( connection );
-
-        this.pool.release( connection );
-
-        return record;
+        try {
+            const res = await this.query().get( id ).update( record ).run( connection );
+    
+            return record;
+        } finally {
+            this.pool.release( connection );
+        }
     }
 
     async updateMany ( predicate : RethinkPredicate, update : any, limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
-        
-        let query = this.query().filter( predicate );
 
-        if ( limit && limit < Infinity ) {
-            query = query.limit( limit );
+        try {
+            let query = this.query().filter( predicate );
+    
+            if ( limit && limit < Infinity ) {
+                query = query.limit( limit );
+            }
+    
+            const operation = await query.update( update ).run( connection );
+    
+            return operation.replaced;
+        } finally {
+            this.pool.release( connection );
         }
-
-        const operation = await query.update( update ).run( connection );
-
-        this.pool.release( connection );
-
-        return operation.replaced;
     }
 
     async delete ( id : string ) : Promise<boolean> {
         const connection = await this.pool.acquire();
-        
-        const operation = await this.query().get( id ).delete().run( connection );
 
-        this.pool.release( connection );
-
-        return operation.deleted > 0;
+        try {
+            const operation = await this.query().get( id ).delete().run( connection );
+    
+            return operation.deleted > 0;
+        } finally {
+            this.pool.release( connection );
+        }
     }
 
     async deleteMany ( predicate : RethinkPredicate, limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
         
-        let query = this.query().filter( predicate );
-
-        if ( limit && limit < Infinity ) {
-            query = query.limit( limit );
+        try {
+            let query = this.query().filter( predicate );
+    
+            if ( limit && limit < Infinity ) {
+                query = query.limit( limit );
+            }
+            
+            const operation = await query.delete().run( connection );
+    
+            return operation.deleted;
+        } finally {
+            this.pool.release( connection );
         }
-        
-        const operation = await query.delete().run( connection );
-
-        this.pool.release( connection );
-
-        return operation.deleted;
     }
 
     async deleteAll ( limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
-        
-        const res = await this.query().delete().run( connection );
 
-        this.pool.release( connection );
-
-        return res.deleted;
+        try {
+            const res = await this.query().delete().run( connection );
+    
+            return res.deleted;
+        } finally {
+            this.pool.release( connection );
+        }
     }
 }
 
@@ -577,6 +659,82 @@ export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {
 
 export class PersistentQueueTable<R extends JobRecord> extends BaseTable<R> {
     tableName : string = 'job_queue';
+}
+
+export class DatabaseDaemon {
+    server : UnicastServer;
+
+    process : ChildProcess;
+
+    protected futureStart : Future<void>;
+
+    protected futureClose : Future<void>;
+
+    constructor ( server : UnicastServer ) {
+        this.server = server;
+
+        server.onClose.subscribe( this.close.bind( this ) );
+    }
+
+    start () {
+        if ( this.futureStart != null ) {
+            return this.futureStart.promise;
+        }
+
+        this.futureStart = new Future<void>();
+        this.futureClose = new Future<void>();
+
+        this.server.diagnostics.info( 'Database', 'Starting engine' );
+
+        const config = this.server.config.get( 'database.autostart' );
+
+        this.process = spawn( config.command, config.args, {
+            cwd: config.cwd
+        } );
+
+        this.process.stdout.on( 'data', d => {
+            const lines = d.toString()
+                .split( '\n' )
+                .map( line => line.trim() )
+                .filter( line => line != '' );
+
+            for ( let line of lines ) {
+                this.server.diagnostics.info( 'Database', line );
+                    
+                if ( line.startsWith( 'Server ready,' ) ) {
+                    setTimeout( () => this.futureStart.resolve(), 5000 );
+                }
+            }
+        } );
+
+        this.process.on( 'exit', () => {
+            this.futureClose.resolve();            
+        } )
+
+        this.process.on( 'close', () => {
+            this.futureClose.resolve();
+        } );
+
+        return this.futureStart.promise;
+    }
+
+    async close () {
+        if ( !this.futureClose ) {
+            return;
+        }
+
+        await this.start();
+        
+        await this.server.database.connections.close();
+   
+        this.process.kill();
+
+        const promise = await this.futureClose.promise;
+
+        this.process = null;
+        this.futureClose = null;
+        this.futureStart = null;
+    }
 }
 
 export interface PlaylistRecord {

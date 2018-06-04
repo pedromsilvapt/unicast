@@ -61,7 +61,7 @@ export class LinkedList<T> {
         }
     }
 
-    filter ( predicate : ( value : T ) => boolean ) : this {
+    removeIf ( predicate : ( value : T ) => boolean ) : this {
         let previous : LinkedListLink<T> = null;
 
         let cursor = this.head;

@@ -1,8 +1,8 @@
-const { FuseBox, JSONPlugin, RawPlugin } = require( "fuse-box" );
+const { FuseBox, JSONPlugin, RawPlugin, QuantumPlugin } = require( "fuse-box" );
 const { task, src, watch, tsc } = require( "fuse-box/sparky" );
 const fs = require( 'mz/fs' );
 
-task( 'build', async context => {
+const build = async ( isProduction, watch ) => {
     const fuse = FuseBox.init( {
         homeDir : "src",
         target : 'server@es6',
@@ -13,19 +13,32 @@ task( 'build', async context => {
         },
         plugins: [ 
             JSONPlugin(),
-            RawPlugin( [ '.txt.js', '.txt', '.txt.ts' ] )
+            RawPlugin( [ '.txt.js', '.txt', '.txt.ts' ] ),
+            isProduction && QuantumPlugin( {
+                uglify: true,
+                css: true,
+                bakeApiIntoBundle: true,
+                ensureES5: false,
+                processPolyfill: true
+            } )
         ]
     } );
     
     fuse.bundle( "vendor" )
-        .instructions( "~ index.ts" )
+        .instructions( "~ cli.ts" )
     
-    fuse.bundle( "app" )
+    const app = fuse.bundle( "app" )
         .completed( proc => proc.start() )
-        .instructions( "> [index.ts]" ).watch()
+        .instructions( "> [cli.ts]" );
+
+    if ( watch ) app.watch();
     
     await fuse.run();
-} );
+};
+
+task( 'build:dev', async context => build( false, true ) );
+
+task( 'build:rel', async context => build( true, true ) );
 
 task( 'check', async context => {
     await tsc( __dirname, {
@@ -35,4 +48,4 @@ task( 'check', async context => {
     } );
 } );
 
-task( 'default', [ 'build' ] );
+task( 'default', [ 'build:dev' ] );
