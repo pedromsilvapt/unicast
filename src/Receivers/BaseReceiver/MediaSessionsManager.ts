@@ -8,6 +8,7 @@ import { HistoryRecord } from "../../Database";
 import { Optional } from 'data-optional';
 import * as sortBy from 'sort-by';
 import { TranscodingBackgroundTask } from "../../Transcoding/TranscodingDriver";
+import { Synchronized } from "data-semaphore";
 
 export class MediaSessionsManager {
     protected records : Map<string, Promise<[MediaStream[], MediaRecord, MediaPlayOptions, CancelToken]>> = new Map;
@@ -183,11 +184,14 @@ export class MediaSessionsManager {
         return await this.records.get( id );
     }
 
+    @Synchronized()
     async release ( id : string ) {
         if ( this.records.has( id ) ) {
             const [ streams, record, options, cancel ] = await this.records.get( id );
 
             cancel.cancel();
+
+            this.records.delete( id );
         }
     }
 }

@@ -100,6 +100,10 @@ export class ChromecastReceiver extends BaseReceiver {
 
         this.client.lastSubtitlesStyle = media.textTrackStyle;
 
+        if ( this.sessions.current != null ) {
+            await this.sessions.release( this.sessions.current );
+        }
+
         await this.client.load( media, options );
 
         this.sessions.current = id;
