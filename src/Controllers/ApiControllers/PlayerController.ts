@@ -307,7 +307,7 @@ export class PlayerController extends BaseController {
             const size : number = parseFloat( req.params.size );
             
             const status = await device.callCommand<ReceiverStatus>( 'changeSubtitlesSize', [ size ] );
-
+    
             return this.preprocessStatus( req, status );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );

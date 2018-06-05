@@ -106,17 +106,13 @@ export class ChromecastReceiver extends BaseReceiver {
 
         this.emit( 'play', id );
 
+        this.changeSubtitlesSize( this.client.lastSubtitlesStyle.fontScale );
+
         // this.emit( 'playing', id, record, playOptions );
 
         // await super.play( item );
 
         // this.emit( 'play', item );
-
-        // TODO Remove
-        
-        // setTimeout( () => this.seekTo( 4 * 60 + 38 * 60 ), 20000 );
-
-        // setTimeout( () => this.seekTo( 3 * 60 + 30 + 38 * 60 ), 45000 );
 
         return this.status();
     }
@@ -198,7 +194,7 @@ export class ChromecastReceiver extends BaseReceiver {
             subtitlesStyle: {
                 size: this.client.lastSubtitlesStyle.fontScale
             }
-        }
+        };
 
         return normalized;
     }

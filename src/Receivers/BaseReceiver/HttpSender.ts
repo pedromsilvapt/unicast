@@ -48,6 +48,7 @@ export class HttpSender {
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
             
             if ( reader ) {
+                reader.on( 'error', () => stream.close( reader ) );
                 req.on( 'close', () => stream.close( reader ) );
             }
 

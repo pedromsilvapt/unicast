@@ -24,17 +24,17 @@ export class Player {
         this.disableSubtitles = co( () => ( {
             type: 'EDIT_TRACKS_INFO',
             activeTrackIds: []
-        } ), util.promisify( native.media.sessionRequest.bind( native.native ) ) ) as any;
+        } ), util.promisify( native.media.sessionRequest.bind( native.media ) ) ) as any;
 
         this.setActiveSubtitles = co( index => ( {
             type: 'EDIT_TRACKS_INFO',
             activeTrackIds: [ index ]
-        } ), util.promisify( native.media.sessionRequest.bind( native.native ) ) );
+        } ), util.promisify( native.media.sessionRequest.bind( native.media ) ) );
 
         this.setSubtitlesStyle = co( style => ( {
             type: 'EDIT_TRACKS_INFO',
             textTrackStyle: style
-        } ), util.promisify( native.media.sessionRequest.bind( native.native ) ) );
+        } ), util.promisify( native.media.sessionRequest.bind( native.media ) ) );
     }
 
     public getStatus : () => Promise<any>;
