@@ -200,11 +200,18 @@ export class GeneralRemote extends EventEmitter {
         ] );
     }
 
-    close ( efective : boolean = true ) {
+
+    async disconnect () {
+        return this.close( false );
+    }
+
+    async close ( effective : boolean = true ) {
         if ( this.isOpened ) {
             this.emit( 'closing' );
 
-            this.client.stop( this.player );
+            if ( effective ) {
+                await this.client.stop( this.player ).catch( err => this.onPlayerError( err ) );
+            }
         }
 
         this.player = null;
@@ -224,7 +231,11 @@ export class GeneralRemote extends EventEmitter {
             // This way, if the connection drops unnexpectedly, we can check this variable to see if it is purposeful or if needs a reconnection
             this.isConnected = false;
 
-            this.client.close();
+            try {
+                this.client.close();
+            } catch ( err ) {
+                this.onPlayerError( err );
+            }
         }
 
         this.client = null;

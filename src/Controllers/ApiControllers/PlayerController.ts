@@ -204,7 +204,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.disconnect();
+            return { success: await device.disconnect() };
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -215,7 +215,18 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return device.reconnect();
+            return { success: await device.reconnect() };
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( [ 'get', 'post' ], '/:device/turnoff' )
+    async turnoff ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            return { success: await device.turnoff() };
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }

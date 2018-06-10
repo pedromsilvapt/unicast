@@ -10,6 +10,7 @@ import { HttpSender } from "../BaseReceiver/HttpSender";
 import { ChromecastHttpSender } from "./ChromecastHttpSender";
 import { ChromecastHlsTranscoder } from "./Transcoders/ChromecastHlsTranscoder";
 import { InvalidArgumentError } from "restify-errors";
+import { Client } from "./Remotes/Interfaces/Client";
 
 export class ChromecastReceiver extends BaseReceiver {
     readonly address : string;
@@ -59,7 +60,13 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async disconnect () : Promise<boolean> {
-        this.client.close();
+        try {
+            await this.client.disconnect();
+        } catch ( err ) {
+            this.server.diagnostics.error( 'Receivers/Chromecast', err.message, err );
+
+            this.client = new DefaultMediaRemote( this.address );
+        }
         
         return true;
     }
@@ -70,6 +77,22 @@ export class ChromecastReceiver extends BaseReceiver {
         } finally {
             return this.connect();
         }
+    }
+
+    async turnoff () : Promise<boolean> {
+        try {
+            await this.client.close();
+        } catch ( err ) {
+            this.server.diagnostics.error( 'Receivers/Chromecast', err.message, err );
+
+            this.client = new DefaultMediaRemote( this.address );
+        }
+
+        if ( this.sessions.current ) {
+            this.sessions.release( this.sessions.current );
+        }
+        
+        return true;
     }
 
     async play ( id : string ) : Promise<ReceiverStatus> {
