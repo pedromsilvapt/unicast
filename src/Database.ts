@@ -367,6 +367,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
     }
 
     async get ( id : string ) : Promise<R> {
+        if ( !id ) {
+            return null;
+        }
+
         const connection = await this.pool.acquire();
 
         try {
@@ -455,7 +459,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         const connection = await this.pool.acquire();
 
         try {
-            const res = await this.query().get( id ).update( record ).run( connection );
+            await this.query().get( id ).update( record ).run( connection );
     
             return record;
         } finally {

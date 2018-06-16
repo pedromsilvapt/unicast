@@ -1,4 +1,4 @@
-import { ProvidersManager } from "./MediaProviders/ProvidersManager";
+import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord } from "./MediaRecord";
 import { Database, BaseTable, CollectionRecord, MediaTable, TvEpisodesMediaTable } from "./Database";
@@ -445,12 +445,12 @@ export class MediaManager {
         return table.create( record );
     }
 
-    async createFromSources ( sources : MediaSourceDetails[] ) : Promise<MediaRecord> {
+    async createFromSources ( sources : MediaSourceLike ) : Promise<MediaRecord> {
         let normalized = this.server.providers.normalizeSources( sources );
 
         let media = await this.server.providers.getMediaRecordFor( normalized );
-
-        if ( media.id ) {
+        
+        if ( media && media.id ) {
             let table = this.getTable( media.kind );
 
             const existingMedia = await table.get( media.id );
@@ -458,8 +458,14 @@ export class MediaManager {
             if ( existingMedia ) {
                 return existingMedia;
             }
+        }
 
+        if ( media ) {
             delete media.id;
+
+            ( media as any ).sources = normalized;
+            
+            media.transient = true;
 
             return this.store( media );
         }

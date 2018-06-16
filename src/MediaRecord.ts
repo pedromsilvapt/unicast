@@ -44,6 +44,7 @@ export interface MediaRecord {
     title : string;
     art : MediaRecordArt;
     external : ExternalReferences;
+    transient ?: boolean;
 }
 
 export interface PlayableMediaRecord extends MediaRecord {

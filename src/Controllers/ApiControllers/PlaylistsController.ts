@@ -5,6 +5,7 @@ import { Request, Response } from "restify";
 import { Route } from "../BaseController";
 import * as r from 'rethinkdb';
 import { MediaRecord } from "../../MediaRecord";
+import { MediaSourceLike } from "../../MediaProviders/ProvidersManager";
 
 export class PlaylistsController extends BaseTableController<PlaylistRecord> {
     defaultSortField : string = 'createdAt';
@@ -106,9 +107,17 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
             throw new InvalidArgumentError( `The request body must be an array.` );
         }
 
-        for ( let item of references ) {
-            if ( typeof item !== 'object' || typeof item.kind !== 'string' || typeof item.id !== 'string' ) {
-                throw new InvalidArgumentError( `Array's elements must be objects with the string properties "kind" and "id".` );
+        for ( let [ index, item ] of references.entries() ) {
+            if ( !item.id && item.sources ) {
+                const sources : MediaSourceLike = item.sources;
+
+                const record = await this.server.media.createFromSources( sources );
+
+                references[ index ] = { kind: record.kind, id: record.id };
+            } else {
+                if ( typeof item !== 'object' || typeof item.kind !== 'string' || typeof item.id !== 'string' ) {
+                    throw new InvalidArgumentError( `Array's elements must be objects with the string properties "kind" and "id".` );
+                }
             }
         }
 

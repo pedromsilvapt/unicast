@@ -7,6 +7,8 @@ import { RepositoriesManager } from "../MediaRepositories/RepositoriesManager";
 import { ProviderFactory } from "./BaseMediaProvider/ProviderFactory";
 import { UnicastServer } from "../UnicastServer";
 
+export type MediaSourceLike = string | MediaSourceDetails | ( string | MediaSourceDetails )[];
+
 export class ProvidersManager extends EntityManager<IMediaProvider, string> {
     protected cached : { [ property : string ] : MediaSource } = {};
 
@@ -72,7 +74,7 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
 
     async open ( source : (string | MediaSourceDetails)[] ) : Promise<MediaSource[]>;
     async open ( source : string | MediaSourceDetails ) : Promise<MediaSource> ;
-    async open ( source : string | MediaSourceDetails | ( string | MediaSourceDetails )[] ) : Promise<MediaSource[] | MediaSource> {
+    async open ( source : MediaSourceLike ) : Promise<MediaSource[] | MediaSource> {
         if ( source instanceof Array ) {
             return Promise.all( source.map( this.open, this ) );
         }

@@ -1,9 +1,6 @@
 import { MediaSource } from "../MediaSource";
 import { MediaStream } from "../MediaStreams/MediaStream";
 import { MediaRecord } from "../../MediaRecord";
-import isSubtitle from 'is-subtitle';
-import isVideo from 'is-video';
-import * as fs from 'mz/fs';
 import { KodiMediaProvider } from "./KodiMediaProvider";
 
 export class KodiMediaSource extends MediaSource {
