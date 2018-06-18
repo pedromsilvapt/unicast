@@ -7,6 +7,10 @@ import { MediaTrigger } from "../../../TriggerDb";
 import { MediaTable } from "../../../Database";
 
 export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
+    getTransientQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+        return ( query.filter as any )( doc => doc( 'transient' ).eq( false ), { default: true } );
+    }
+
     getWatchedQuery ( req : Request, query : r.Sequence ) : r.Sequence {
         if ( req.query.filterWatched === 'include' ) {
             query = query.filter( { watched: true } );

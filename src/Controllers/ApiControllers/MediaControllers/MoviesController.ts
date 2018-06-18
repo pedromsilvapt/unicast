@@ -14,11 +14,12 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
     }
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        return this.getCollectionsQuery( req,
+        return this.getTransientQuery( req, 
+                this.getCollectionsQuery( req,
                 this.getGenresQuery( req, 
                 this.getWatchedQuery( req,
                     super.getQuery( req, res, query )
-                ) ) );
+                ) ) ) );
     }
 
     async transform ( req : Request, res : Response, movie : MovieMediaRecord ) : Promise<any> {

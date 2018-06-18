@@ -31,7 +31,7 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
             query = query.filter( { tvSeasonId: req.query.season } );
         }
 
-        return this.getWatchedQuery( req, query );
+        return this.getTransientQuery( req, this.getWatchedQuery( req, query ) );
     }
 
     async transform ( req : Request, res : Response, episode : TvEpisodeMediaRecord ) : Promise<any> {
