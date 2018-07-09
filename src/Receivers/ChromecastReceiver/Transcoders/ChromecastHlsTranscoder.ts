@@ -31,6 +31,8 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             defaultAudioCodec: 'aac',
             forceVideoTranscoding: false,
             forceAudioTranscoding: false,
+            preset: FFmpegPreset.Faster,
+            threads: 7,
             ...options
         };
     }
@@ -87,7 +89,11 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
                 driver.addMap( '0:v:0', '0:a:0' );
             }
             
-            driver.setPreset( FFmpegPreset.Faster );
+            driver.setThreads( options.threads );
+
+            driver.setPreset( options.preset );
+
+            driver.setFramerate( video.framerate );
         }
 
         if ( conditionAudio || conditionVideo ) {
@@ -129,4 +135,6 @@ export interface ChromecastTranscoderOptions {
     defaultAudioCodec : string;
     forceVideoTranscoding : boolean;
     forceAudioTranscoding : boolean;
+    preset : FFmpegPreset;
+    threads: number;
 }

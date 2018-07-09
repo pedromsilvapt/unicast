@@ -237,7 +237,8 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
             tasks.push( 
                 task.do( 
                     this.cleanResources( task, record )
-                        .finally( () => this.cacheComputedFields( task, record ) ) 
+                        .catch( () => this.cacheComputedFields( task, record ) )
+                        .then( () => this.cacheComputedFields( task, record ) )
                 )
             );
         }

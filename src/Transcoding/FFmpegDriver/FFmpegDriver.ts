@@ -40,6 +40,8 @@ export class FFmpegDriver implements TranscodingDriver {
 
     protected outputDuration : number = null;
 
+    protected threads : number = 0;
+
     protected videoCodecs : Map<string, string> = new Map;
     
     protected audioCodecs : Map<string, string> = new Map;
@@ -66,6 +68,8 @@ export class FFmpegDriver implements TranscodingDriver {
     
     protected disabledVideo : boolean = false;
 
+    protected framerate : number;
+
     constructor ( server : UnicastServer ) {
         this.server = server;
     }
@@ -80,6 +84,16 @@ export class FFmpegDriver implements TranscodingDriver {
         this.outputDuration = time;
 
         return this;
+    }
+
+    setFramerate ( framerate : number ) {
+        this.framerate = framerate;
+        
+        return this;
+    }
+
+    getFramerate () : number {
+        return this.framerate;
     }
 
     setVideoCodec ( codec : string, stream : string = null ) : this {
@@ -138,6 +152,12 @@ export class FFmpegDriver implements TranscodingDriver {
 
     setPreset ( preset : FFmpegPreset | string ) : this {
         this.preset = preset;
+        
+        return this;
+    }
+
+    setThreads ( threads : number ) : this {
+        this.threads = threads;
         
         return this;
     }
@@ -225,6 +245,10 @@ export class FFmpegDriver implements TranscodingDriver {
     import ( driver : FFmpegDriver ) : this {
         this.factory = driver.factory as any;
 
+        this.threads = driver.threads;
+
+        this.framerate = driver.framerate;
+
         this.videoCodecs = new Map( driver.videoCodecs );
         
         this.audioCodecs = new Map( driver.audioCodecs );
@@ -269,6 +293,10 @@ export class FFmpegDriver implements TranscodingDriver {
         //     args.push( '-i', 'pipe:0' );
         // }
 
+        if ( this.threads != 0 ) {
+            args.push( '-threads', '' + this.threads );
+        }
+
         if ( this.outputDuration !== null ) {
             args.push( '-to', '' + this.outputDuration );
         }
@@ -280,10 +308,6 @@ export class FFmpegDriver implements TranscodingDriver {
                 args.push( '-c:v:' + stream, codec );
             }
         }
-
-        /*
-        -i K:\Shows\12 Monkeys\Season 2 BluRay\12.Monkeys.S02E01.1080p.BluRay.x264-SHORTBREHD.mkv -c:v libx264 -c:a aac -crf 22 -preset faster -format hls -filter_complex [0:v:0]boxblur=luma_radius=20:enable='between(t,5,10)'[stream0];[stream0]boxblur=luma_radius=40:enable='between(t,15,20)'[stream1];[stream1]boxblur=luma_radius=60:enable='between(t,25,30)'[stream2];color=black:size=1920x1080:rate=24000/1001:duration=5[stream3];[stream2][stream3]overlay=enable='between(t,35,40)'[stream4];color=black:size=1920x1080:rate=24000/1001:duration=5[stream5];[stream4][stream5]overlay=enable='between(t,45,50)'[stream6];[0:a:0]volume=volume=0:enable='between(t,45,50)'[stream7] -map stream6 -map stream0 -start_number 0 -hls_time 3 -hls_base_url http://192.168.0.4:3030/media/send/chromecast/ChromeSilvas/session/f15a8905-a4cd-42e0-91ae-679d1a21fb18/stream/d796a07adb85736c42a5b79fb1f2488c0511197c?part= -hls_list_size 0 -hls_flags split_by_time -hls_playlist_type event -force_key_frames expr:gte(t,n_forced*3) -ac 2
-        */
 
         for ( let [ stream, codec ] of this.audioCodecs ) {
             if ( !stream ) {
@@ -315,6 +339,10 @@ export class FFmpegDriver implements TranscodingDriver {
             } else {
                 args.push( '-ar:' + stream, rate );
             }
+        }
+
+        if ( this.framerate ) {
+            args.push( '-r', '' + this.framerate );
         }
 
         if ( this.constantRateFactor !== null ) {

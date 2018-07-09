@@ -297,6 +297,12 @@ export class HttpRawMediaServer {
             
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
             
+            reader.on( 'error', () => {
+                if ( reader ) {
+                    stream.close( reader );
+                }
+            } );
+            
             if ( reader ) {
                 req.on( 'close', () => stream.close( reader ) );
             }
@@ -359,6 +365,32 @@ export class MediaManager {
 
     getAll ( refs : [ MediaKind, string ][] ) : Promise<MediaRecord[]> {
         return Promise.all( refs.map( ( [ kind, id ] ) => this.get( kind, id ) ) );
+    }
+
+    async loadAll<T> ( records : T[], key : string, mapper : ( T ) => [ MediaKind, string ] | { kind: MediaKind, id : string } ) : Promise<T[]> {
+        const normalizedMapper = ( record : T ) => {
+            const ref = mapper( record );
+
+            if ( ref instanceof Array ) {
+                return ref;
+            }
+
+            return [ ref.kind, ref.id ] as [ MediaKind, string ];
+        }
+
+        const index : any = {};
+
+        for ( let reference of await this.getAll( records.map( normalizedMapper ) ) ) {
+            index[ reference.kind + '|' + reference.id ] = reference;
+        }
+
+        for ( let record of records ) {
+            const ref = normalizedMapper( record );
+
+            record[ key ] = index[ ref[ 0 ] + '|' + ref[ 1 ] ];
+        }
+
+        return records;
     }
 
     async getSeason ( show : string, season : number ) : Promise<TvSeasonMediaRecord> {

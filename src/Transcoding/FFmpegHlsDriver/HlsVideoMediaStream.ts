@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as mime from 'mime';
 import { HistoryRecord } from "../../Database";
 import { HlsVirtualPlaylist } from "./HlsVirtualPlaylist";
+import { Readable } from "stream";
 
 export function delay<T = void> ( time, value : T = null ) : Promise<T> {
     return new Promise<T>( resolve => setTimeout( resolve.bind( null, value ), time ) );
@@ -124,7 +125,7 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
         if ( !this.index.task.segments.has( this.number + 3 ) || !this.index.task.segments.has( this.number + 3 ) ) {
             this.index.task.scheduler.request( this.number );
             
-            await this.index.task.segments.waitFor( this.number + 3 );
+            await this.index.task.segments.waitFor( Math.min( this.number + 3, this.index.task.segments.totalCount - 1 ) );
             await this.index.task.segments.waitFor( this.number );
         }
 
@@ -135,8 +136,59 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
         this.mime = mime.lookup( this.file );
     }
 
+    async openAsync ( range : MediaRange, readable : Readable ) : Promise<void> {
+        let tries = 0;
+        const maxTries = 10;
+
+        while ( true ) {
+            try {
+                let buffer = await fs.readFile( this.file );
+
+                if ( range ) {
+                    buffer = buffer.slice( range.start || 0, range.end );
+                }
+
+                readable.push( buffer );
+                readable.push( null );
+
+                break;
+            } catch ( error ) {
+                console.error( 'Retry', tries, 'error', error.message );
+                tries++;
+
+                if ( tries >= maxTries ) {
+                    readable.destroy( error );
+
+                    break;
+                }
+
+                // TODO Check import
+                await delay( 2000, void 0 );
+            }
+        }
+    }
+
     open ( range ?: MediaRange ) : NodeJS.ReadableStream {
-        return fs.createReadStream( this.file, range );
+        const stream = new Readable();
+
+        this.openAsync( range, stream )
+            .catch( err => stream.destroy( err ) );
+
+        return stream;
+        // console.log( 'open', this.index.task.segments.get( this.number ).id, this.number, this.index.task.getSegmentTime( this.number ), range );
+        // const options : any = {};
+        
+        // if ( typeof range.start === 'number' ) {
+        //     options.start = range.start;
+        // }
+
+        // if ( typeof range.end === 'number' ) {
+        //     options.end = range.end;
+        // }
+
+        // return new ResilientReadStream( ( start, end ) => fs.createReadStream( this.file, { start, end } ), options );
+
+        // return fs.createReadStream( this.file, range );
     }
     
     toJSON () {

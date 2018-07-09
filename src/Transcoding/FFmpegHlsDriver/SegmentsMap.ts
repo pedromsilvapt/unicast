@@ -116,7 +116,7 @@ export class SegmentsMap<T> extends EventEmitter {
     protected triggerWatcher ( index : number, value : T ) : void {
         this.watchers.removeIf( ( record ) => {
             if ( record.index == index ) {
-                record.watcher.resolve( delay( 1000, value ) );
+                record.watcher.resolve( value );
             }
 
             return !record.watcher.isResolved;

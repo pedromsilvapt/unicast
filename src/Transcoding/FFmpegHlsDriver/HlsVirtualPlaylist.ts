@@ -28,7 +28,10 @@ export class HlsVirtualPlaylist {
         const lines : string[] = [];
 
         const duration : number = this.driver.getSegmentDuration();
-        const durationString : string = '#EXTINF:' + '3.003200,'
+
+        const dur = 1000 * this.driver.getSegmentDuration();        
+
+        const durationString : string = '#EXTINF:' + Math.min( Math.ceil( dur / 23.98 ) * 23.98 / 1000, this.input.duration ) + ',';
 
         lines.push( 
             '#EXTM3U',
@@ -36,11 +39,14 @@ export class HlsVirtualPlaylist {
             '#EXT-X-TARGETDURATION:' + ( duration + 1 ),
             '#EXT-X-MEDIA-SEQUENCE:0',
             '#EXT-X-PLAYLIST-TYPE:VOD',
+            '#EXT-X-DISCONTINUITY'
         );
 
-        for ( let i = 0, s = 0; s < this.input.duration; i++ ) {
+        let i = 0;
+
+        for ( let s = 0; s < this.input.duration; i++ ) {
             lines.push( 
-                durationString,
+                s + duration > this.input.duration ? '#EXTINF:' + ( this.input.duration - s ) + ',' : durationString,
                 ( this.driver.getSegmentLocationPrefix() || '' ) + 'index' + i + '.ts'
             );
 

@@ -1,5 +1,6 @@
 import { SubtitlesMediaStream } from "../../../MediaProviders/MediaStreams/SubtitlesStream";
 import * as srt2vtt from 'srt-to-vtt';
+import * as pump from 'pump';
 
 const streamLength = ( stream : NodeJS.ReadableStream ) : Promise<number> => {
     return new Promise<number>( ( resolve, reject ) => {
@@ -33,6 +34,6 @@ export class SubtitlesConvertMediaStream extends SubtitlesMediaStream {
     }
 
     open () {
-        return this.stream.open().pipe( srt2vtt() );
+        return pump( this.stream.open(), srt2vtt() );
     }
 }

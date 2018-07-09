@@ -79,7 +79,11 @@ export class Database {
                     await r.dbCreate( databaseName ).run( conn );
                 }
         
+                await ( r.db( databaseName ) as any ).wait().run( conn );
+
                 await this.tables.install();
+
+                await ( r.db( databaseName ) as any ).wait().run( conn );
             } finally {
                 await this.connections.release( conn );
             }

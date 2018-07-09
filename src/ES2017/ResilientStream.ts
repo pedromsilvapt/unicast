@@ -1,7 +1,7 @@
-import { Readable, Writable, WritableOptions, PassThrough } from "stream";
+import { Writable, WritableOptions, PassThrough, Readable } from "stream";
 import * as fs from "mz/fs";
 
-export type StreamFactory = ( start ?: number, end ?: number ) => NodeJS.ReadableStream;
+export type StreamFactory = ( start ?: number, end ?: number ) => Readable;
 
 export class BytesCountStream extends Writable {
     count : number = 0;
@@ -31,7 +31,7 @@ export class ResilientReadStream extends PassThrough {
 
     _createStream : StreamFactory;
 
-    protected stream : NodeJS.ReadableStream;
+    protected stream : Readable;
 
     retries : number = 0;
 
@@ -63,7 +63,7 @@ export class ResilientReadStream extends PassThrough {
 
     protected createStream () {
         try {
-            this.stream = this._createStream( this.options.start + this.readBytes, this.options.end );
+            this.stream = this._createStream( ( this.options.start || 0 ) + this.readBytes, this.options.end );
 
             this.stream.once( 'error', ( error ) => {
                 this.retryOrFail( error );
@@ -103,6 +103,15 @@ export class ResilientReadStream extends PassThrough {
         this.retryInterval = this.options.nextInterval( this.retryInterval, this.retries );
         
         setTimeout( () => this.createStream(), this.retryInterval );
+    }
+
+    public _destroy ( err : Error, cb : Function ) {
+        if ( this.stream ) {
+            this.stream.destroy();
+            this.counter.destroy();
+        }
+
+        cb();
     }
 }
 

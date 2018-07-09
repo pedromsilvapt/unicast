@@ -6,11 +6,9 @@ import { MediaStream, MediaStreamType } from "../../MediaProviders/MediaStreams/
 import { UnicastServer } from "../../UnicastServer";
 import { MessagesFactory } from "./MessagesFactory";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
-import { HttpSender } from "../BaseReceiver/HttpSender";
 import { ChromecastHttpSender } from "./ChromecastHttpSender";
 import { ChromecastHlsTranscoder } from "./Transcoders/ChromecastHlsTranscoder";
 import { InvalidArgumentError } from "restify-errors";
-import { Client } from "./Remotes/Interfaces/Client";
 
 export class ChromecastReceiver extends BaseReceiver {
     readonly address : string;
@@ -102,38 +100,46 @@ export class ChromecastReceiver extends BaseReceiver {
         // Find the video stream
         const video : VideoMediaStream = streams.find( stream => stream.type === MediaStreamType.Video ) as VideoMediaStream;
 
-        if ( !video ) {
-            throw new Error( `Trying to play media with no video stream is not currently supported.` );
+        try {
+            if ( !video ) {
+                throw new Error( `Trying to play media with no video stream is not currently supported.` );
+            }
+    
+            const options : ChromecastPlayOptions = {
+                autoplay: true || playOptions.autostart,
+                currentTime: playOptions.startTime
+            };
+    
+            let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );
+    
+            if ( media.tracks && media.tracks.length ) {
+                options.activeTrackIds = [ media.tracks[ 0 ].trackId ];
+            }
+    
+            if ( !media.textTrackStyle ) {
+                media.textTrackStyle = this.client.lastSubtitlesStyle || this.getSubtitlesStyle();
+            }
+    
+            this.client.lastSubtitlesStyle = media.textTrackStyle;
+    
+            if ( this.sessions.current != null ) {
+                await this.sessions.release( this.sessions.current );
+            }
+    
+            await this.client.load( media, options );
+    
+            this.sessions.current = id;
+    
+            this.emit( 'play', id );
+    
+            this.changeSubtitlesSize( this.client.lastSubtitlesStyle.fontScale );
+        } catch ( err ) {
+            this.sessions.release( id );
+
+            if ( this.sessions.current == id ) this.sessions.current = null;
+
+            throw err;
         }
-
-        const options : ChromecastPlayOptions = {
-            autoplay: true || playOptions.autostart,
-            currentTime: playOptions.startTime
-        };
-
-        let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );
-
-        if ( media.tracks && media.tracks.length ) {
-            options.activeTrackIds = [ media.tracks[ 0 ].trackId ];
-        }
-
-        if ( !media.textTrackStyle ) {
-            media.textTrackStyle = this.client.lastSubtitlesStyle || this.getSubtitlesStyle();
-        }
-
-        this.client.lastSubtitlesStyle = media.textTrackStyle;
-
-        if ( this.sessions.current != null ) {
-            await this.sessions.release( this.sessions.current );
-        }
-
-        await this.client.load( media, options );
-
-        this.sessions.current = id;
-
-        this.emit( 'play', id );
-
-        this.changeSubtitlesSize( this.client.lastSubtitlesStyle.fontScale );
 
         // this.emit( 'playing', id, record, playOptions );
 

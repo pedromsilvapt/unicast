@@ -40,7 +40,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         
         this.destination = destination;
 
-        this.segments = new SegmentsMap( this.input.duration, 3.003200 );
+        this.segments = new SegmentsMap( this.input.duration, this.getSegmentTime( 1 ) );
 
         this.scheduler = new SegmentsScheduler( this.segments );
 
@@ -52,7 +52,11 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     }
 
     getSegmentTime ( index : number ) : number {
-        return Math.min( index * 3.003200, this.input.duration );
+        const framerate = this.input.metadata.tracks.find( track => track.type == 'video' ).framerate;
+
+        const dur = 1000 * this.driver.getSegmentDuration();        
+
+        return Math.min( index * Math.ceil( dur / framerate ) * framerate / 1000, this.input.duration );
     }
 
     destroyProcess ( id : string ) {
@@ -69,8 +73,6 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         if ( this.state === BackgroundTaskState.Cancelled || this.state === BackgroundTaskState.Finished ) {
             throw new Error( 'Cannot start process for a terminated task.' );
         }
-
-        console.log( 'starting process for', index );
 
         const segment = this.segments.findNextEmpty( index );
 
@@ -185,6 +187,8 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
 
             const args = [ ...this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), path.join( this.mainTask.destination, id, 'index.m3u8' ) ];
 
+            console.log( args.join( ' ' ) );
+
             if ( this.state != BackgroundTaskState.Running ) {
                 return;
             }
@@ -198,31 +202,33 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
             let lastSegment : number = this.segment.start;
 
             child.stderr.on( 'data', d => {
-                const line = d.toString().trim();
+                const lines = d.toString().split( '\n' ).map( l => l.trim() ).filter( l => l );
                 
-                if ( line.startsWith( '[hls @' ) && line.endsWith( 'for writing' ) ) {
-                    const matches = line.match( /index([0-9]*)\.ts/i );
-                    
-                    if ( matches && matches.length ) {
-                        while ( lastSegment <= +matches[ 1 ] ) {
-                            this.addDone( 1 );
-
-                            this.mainTask.scheduler.insert( lastSegment, { id } );
-                            
-                            lastSegment++;
+                for ( let line of lines ) {
+                    if ( line.startsWith( '[hls @' ) && line.endsWith( 'for writing' ) ) {
+                        const matches = line.match( /index([0-9]*)\.ts/i );
+                        
+                        if ( matches && matches.length ) {
+                            while ( lastSegment <= +matches[ 1 ] ) {
+                                this.addDone( 1 );
+    
+                                this.mainTask.scheduler.insert( lastSegment, { id } );
+                                
+                                lastSegment++;
+                            }
+    
+                            this.doneSegment.start = this.segment.start;
+                            this.doneSegment.end = lastSegment - 1;
                         }
-
-                        this.doneSegment.start = this.segment.start;
-                        this.doneSegment.end = lastSegment - 1;
                     }
                 }
-             } ).on( 'end', () => {
-                 if ( this.doneSegment.end === this.segment.end ) {
-                     this.completed.resolve();
-    
-                     this.setStateFinish();
-                 }
-             } );
+            } ).on( 'end', () => {
+                if ( this.doneSegment.end === this.segment.end ) {
+                    this.completed.resolve();
+
+                    this.setStateFinish();
+                }
+            } );
 
             child.stderr.pipe( progressStream( Infinity ) ).on( 'data', status => {
                 this.speedMetrics.register( +status.speed.slice( 0, status.speed.length - 1 ) );
@@ -282,8 +288,6 @@ export class AverageBackgroundMetric<T> extends BackgroundTaskMetric<number> {
     }
 
     removeSubMetric  ( metric : BackgroundTaskMetric<T> ) {
-        this.metrics.delete( metric );
-
         this.metrics.delete( metric );
     }
 

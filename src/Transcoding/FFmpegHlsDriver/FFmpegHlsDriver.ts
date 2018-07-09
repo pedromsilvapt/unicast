@@ -165,8 +165,14 @@ export class FFmpegHlsDriver extends FFmpegDriver {
             }
         }
 
-        if ( this.forceKeyFrames ) {
-            args.push( '-force_key_frames', `expr:gte(t,n_forced*${ this.segmentDuration })` );
+        if ( this.forceKeyFrames && this.framerate ) {
+            // TODO Framerate
+            const framesPerSegment = Math.ceil( this.segmentDuration * this.framerate );
+
+            // args.push( '-force_key_frames', `expr:gte(t,n_forced*${ this.segmentDuration })` );
+
+            args.push( '-g', '' + Math.ceil( framesPerSegment ), '-keyint_min', '' + Math.ceil( framesPerSegment ), '-sc_threshold', '0' );
+            // args.push( '-x264opts', `keyint=${framesPerSegment}:min-keyint=${framesPerSegment}:no-scenecut` );
         }
 
         // args.push( '-ar', '44100' );
