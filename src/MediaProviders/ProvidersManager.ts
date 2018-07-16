@@ -9,6 +9,11 @@ import { UnicastServer } from "../UnicastServer";
 
 export type MediaSourceLike = string | MediaSourceDetails | ( string | MediaSourceDetails )[];
 
+export interface CacheOptions {
+    readCache ?: boolean;
+    writeCache ?: boolean;
+}
+
 export class ProvidersManager extends EntityManager<IMediaProvider, string> {
     protected cached : { [ property : string ] : MediaSource } = {};
 
@@ -72,12 +77,45 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
         return provider.make( this, source );
     }
 
-    async open ( source : (string | MediaSourceDetails)[] ) : Promise<MediaSource[]>;
-    async open ( source : string | MediaSourceDetails ) : Promise<MediaSource> ;
-    async open ( source : MediaSourceLike ) : Promise<MediaSource[] | MediaSource> {
+    forgetAll () {
+        this.cached = {};
+    }
+
+    forget ( source : MediaSourceLike ) : void {
         if ( source instanceof Array ) {
-            return Promise.all( source.map( this.open, this ) );
+            source.map( this.forget, this );
+        } else {
+            if ( typeof source === 'string' ) {
+                source = { id: source } as MediaSourceDetails;
+            }
+
+            // Find the provider type associated with this source.
+            // Note this is the provider type (the class), not the instance of the provider yet
+            const provider : IMediaProvider = this.match( source );
+
+            // Make sure we found a provider
+            if ( !provider ) {
+                throw new Error( `Could not find a provider for "${ source.id }"` );
+            }
+
+            // Asks the provider for a cache key for this source (should be unique)
+            const cacheKey : string = provider.cacheKey( source );
+
+            // If the resource is already cached, return it
+            if ( cacheKey && cacheKey in this.cached ) {
+                delete this.cached[ cacheKey ];
+            }
         }
+    }
+
+    async open ( source : (string | MediaSourceDetails)[], cacheOptions ?: CacheOptions ) : Promise<MediaSource[]>;
+    async open ( source : string | MediaSourceDetails, cacheOptions ?: CacheOptions ) : Promise<MediaSource> ;
+    async open ( source : MediaSourceLike, cacheOptions : CacheOptions = {} ) : Promise<MediaSource[] | MediaSource> {
+        if ( source instanceof Array ) {
+            return Promise.all( source.map( source => this.open( source, cacheOptions ) ) );
+        }
+
+        cacheOptions = { readCache: true, writeCache: true, ...cacheOptions };
 
         if ( typeof source === 'string' ) {
             source = { id: source } as MediaSourceDetails;
@@ -96,7 +134,7 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
         const cacheKey : string = provider.cacheKey( source );
 
         // If the resource is already cached, return it
-        if ( cacheKey && cacheKey in this.cached ) {
+        if ( cacheKey && cacheKey in this.cached && cacheOptions.readCache ) {
             return this.cached[ cacheKey ].load();
         }
 
@@ -104,15 +142,15 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
         const instance = this.make( provider, source );
 
         // And if possible use the cache key to save the resource
-        if ( cacheKey ) {
+        if ( cacheKey && cacheOptions.writeCache ) {
             this.cached[ cacheKey ] = instance;
         }
 
         return instance.load();
     }
 
-    async streams ( sourcesList : string | MediaSourceDetails | ( string | MediaSourceDetails )[] ) : Promise<MediaStream[]> {
-        const sources = await this.open( sourcesList as any ) as MediaSource | MediaSource[];
+    async streams ( sourcesList : string | MediaSourceDetails | ( string | MediaSourceDetails )[], cacheOptions : CacheOptions = {} ) : Promise<MediaStream[]> {
+        const sources = await this.open( sourcesList as any, cacheOptions ) as MediaSource | MediaSource[];
 
         if ( sources instanceof Array ) {
             return sources.reduce( ( memo, source ) => memo.concat( source.streams ), [] );
@@ -121,13 +159,13 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
         return sources.streams;
     }
 
-    async getMediaRecordFor ( sourcesList : MediaSourceDetails[] ) : Promise<MediaRecord> {
+    async getMediaRecordFor ( sourcesList : MediaSourceDetails[], cacheOptions : CacheOptions = {} ) : Promise<MediaRecord> {
         const primary = sourcesList.find( source => typeof source !== 'string' && source.primary );
 
         const selected = primary || sourcesList[ 0 ];
 
         if ( selected !== null ) {
-            const source = await this.open( selected );
+            const source = await this.open( selected, cacheOptions );
 
             return source.info();
         }

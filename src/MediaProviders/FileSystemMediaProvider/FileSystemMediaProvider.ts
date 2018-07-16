@@ -13,6 +13,10 @@ export class FileSystemMediaProvider extends BaseMediaProvider {
     
     UNIX_MATCH = /^(\.|~)?\//;
 
+    cacheKey () {
+        return null;
+    }
+
     getMediaRepositories () : IMediaRepository[] {
         return [];
     }

@@ -50,9 +50,7 @@ export class SubtitlesController extends BaseController {
     }
 
     protected async validateSubtitle ( media : PlayableMediaRecord, subtitleFile : string ) {
-        const subtitles = await this.server.subtitles.list( media );
-
-        const streams = await this.server.providers.streams( media.sources );
+        const streams = await this.server.providers.streams( media.sources, { writeCache: false } );
 
         const video = streams.find( stream => stream.type === MediaStreamType.Video ) as FileSystemVideoMediaStream;
         
@@ -101,7 +99,7 @@ export class SubtitlesController extends BaseController {
 
     @Route( 'post', '/:kind/:id' )
     async save ( req : Request ) : Promise<ILocalSubtitle[]> {
-        const media = await this.server.media.get( req.params.kind, req.params.id );
+        const media = await this.server.media.get<PlayableMediaRecord>( req.params.kind, req.params.id );
         
         const body = typeof req.body === 'string' ? JSON.parse( req.body ) : req.body;
 
@@ -109,16 +107,20 @@ export class SubtitlesController extends BaseController {
 
         await this.server.subtitles.store( media, subtitle )
 
+        this.server.providers.forget( media.sources );
+
         return this.server.subtitles.list( media );
     }
 
     @Route( 'del', '/:kind/:id/local/:sub' )
     async delete ( req : Request ) : Promise<ILocalSubtitle[]> {
-        const media = await this.server.media.get( req.params.kind, req.params.id );
+        const media = await this.server.media.get<PlayableMediaRecord>( req.params.kind, req.params.id );
         
         const subtitle = await this.server.subtitles.get( media, req.params.sub );
 
         await this.server.subtitles.delete( media, subtitle );
+
+        this.server.providers.forget( media.sources );
 
         return this.server.subtitles.list( media );
     }
