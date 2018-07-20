@@ -45,6 +45,7 @@ export interface MediaPlayOptions {
     playlistPosition ?: number;
     mediaKind ?: string;
     mediaId ?: string;
+    subtitlesOffset ?: number;
 }
 
 export interface IMediaReceiver extends EventEmitter {

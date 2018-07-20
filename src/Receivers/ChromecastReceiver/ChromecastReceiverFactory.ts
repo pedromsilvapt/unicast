@@ -26,6 +26,6 @@ export class ChromecastReceiverFactory extends ReceiverFactory<ChromecastReceive
     }
 
     async createFromConfig ( config : any ) : Promise<ChromecastReceiver> {
-        return new ChromecastReceiver( this.server, config.name, config.address );
+        return new ChromecastReceiver( this.server, config.name, config.address, config.subtitles || {} );
     }
 }

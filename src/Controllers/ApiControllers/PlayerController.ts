@@ -6,6 +6,7 @@ import { InvalidArgumentError, HttpError } from 'restify-errors';
 import { setTimeout } from "timers";
 import { MediaPlayOptions, ReceiverStatus } from "../../Receivers/BaseReceiver/IMediaReceiver";
 import { MediaRecord } from "../../MediaRecord";
+import * as Case from 'case';
 
 export class InvalidDeviceArgumentError extends InvalidArgumentError {
     constructor ( device : string ) {
@@ -125,7 +126,7 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.get( kind, id );
     
-            const { playlistId, playlistPosition, startTime, autostart } = req.body;
+            const { playlistId, playlistPosition, startTime, autostart, subtitlesOffset } = req.body;
 
             const options : MediaPlayOptions = playlistId ? { playlistId, playlistPosition } : {};
 
@@ -135,6 +136,10 @@ export class PlayerController extends BaseController {
 
             if ( autostart ) {
                 options.autostart = autostart !== 'false';
+            }
+
+            if ( subtitlesOffset ) {
+                options.subtitlesOffset = +subtitlesOffset;
             }
 
             const session = await device.sessions.register( record, options );
@@ -318,6 +323,19 @@ export class PlayerController extends BaseController {
             const size : number = parseFloat( req.params.size );
             
             const status = await device.callCommand<ReceiverStatus>( 'changeSubtitlesSize', [ size ] );
+    
+            return this.preprocessStatus( req, status );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+    
+    @Route( 'post', '/:device/:command' )
+    async command ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const status = await device.callCommand<ReceiverStatus>( Case.camel( req.params.command ), req.body.args || [] );
     
             return this.preprocessStatus( req, status );
         } else {

@@ -21,7 +21,7 @@ export abstract class BaseController implements Annotated {
 
         this.server = server;
 
-        this.diagnostics = this.server.diagnostics.service( `unicast/controller/${ this.name || this.constructor.name }` );
+        this.diagnostics = this.server.diagnostics.service( `${ this.server.name }/controller/${ this.name || this.constructor.name }` );
     }
 
     routes : RoutesDeclarations;

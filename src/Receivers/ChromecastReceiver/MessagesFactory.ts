@@ -5,7 +5,6 @@ import * as truncate from 'truncate';
 import { SubtitlesMediaStream } from "../../MediaProviders/MediaStreams/SubtitlesStream";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import { HttpSender } from "../BaseReceiver/HttpSender";
-import { deflate } from "zlib";
 
 export interface ChromecastPlayTrackMessage {
     trackId: number,

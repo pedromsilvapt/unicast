@@ -9,7 +9,7 @@ function loadYamlFile ( file : string ) : any {
     if ( fs.existsSync( file ) ) {
         const content = fs.readFileSync( file, { encoding: 'utf8' } );
 
-        return yaml.safeLoad( content );
+        return yaml.load( content );
     }
 
     return {};

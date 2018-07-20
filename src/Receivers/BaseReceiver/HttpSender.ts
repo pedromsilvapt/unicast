@@ -1,16 +1,20 @@
 import { IMediaReceiver } from "./IMediaReceiver";
 import { Request, Response, Next } from "restify";
 import { MediaStreamType, MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
-import * as rangeParser      from 'range-parser';
 import { serveMedia } from "../../ES2017/HttpServeMedia";
+import { DiagnosticsService } from "../../Diagnostics";
 
 export class HttpSender {
     readonly receiver : IMediaReceiver;
+
+    readonly diagnostics : DiagnosticsService;
 
     constructor ( receiver : IMediaReceiver ) {
         this.receiver = receiver;
 
         this.receiver.server.http.get( this.getUrlPattern(), this.serve.bind( this ) );
+
+        this.diagnostics = this.receiver.server.diagnostics.service( `${ this.receiver.server.name }/sender/${ this.receiver.name }` );
     }
 
     host () : string {
@@ -47,7 +51,9 @@ export class HttpSender {
             
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
             
-            reader.on( 'error', () => {
+            reader.on( 'error', err => {
+                this.diagnostics.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stack }`, err );
+
                 if ( reader ) {
                     stream.close( reader );
                 }
@@ -59,7 +65,7 @@ export class HttpSender {
 
             next();
         } catch ( error ) {
-           console.error( error ) ;
+           this.diagnostics.error( `Fetching stream type "${ req.params.stream }": ${ error.message + error.stack }`, error );
 
            res.send( 500, { error: true } );
 

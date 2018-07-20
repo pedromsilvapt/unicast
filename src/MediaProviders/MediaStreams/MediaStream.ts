@@ -1,7 +1,6 @@
 import * as rangeStream from 'range-stream';
 import * as pump from 'pump';
 import * as sha1 from 'sha1';
-import { IMediaProvider } from "../BaseMediaProvider/IMediaProvider";
 import { MediaSource } from "../MediaSource";
 
 export enum MediaStreamType {

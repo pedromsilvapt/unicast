@@ -10,6 +10,10 @@ import { ChromecastHttpSender } from "./ChromecastHttpSender";
 import { ChromecastHlsTranscoder } from "./Transcoders/ChromecastHlsTranscoder";
 import { InvalidArgumentError } from "restify-errors";
 
+export interface ChromecastSubtitlesConfig {
+    lineFilters ?: (string | RegExp)[]
+}
+
 export class ChromecastReceiver extends BaseReceiver {
     readonly address : string;
 
@@ -19,10 +23,14 @@ export class ChromecastReceiver extends BaseReceiver {
 
     sender : ChromecastHttpSender;
 
-    constructor ( server : UnicastServer, name : string, address : string ) {
+    subtitlesConfig : ChromecastSubtitlesConfig;
+
+    constructor ( server : UnicastServer, name : string, address : string, subtitlesConfig : ChromecastSubtitlesConfig = {} ) {
         super( server, name );
 
         this.address = address;
+
+        this.subtitlesConfig = subtitlesConfig;
 
         this.client = new DefaultMediaRemote( this.address );
         
@@ -106,7 +114,7 @@ export class ChromecastReceiver extends BaseReceiver {
             }
     
             const options : ChromecastPlayOptions = {
-                autoplay: true || playOptions.autostart,
+                autoplay: typeof playOptions.autostart === 'boolean' ? playOptions.autostart : true,
                 currentTime: playOptions.startTime
             };
     

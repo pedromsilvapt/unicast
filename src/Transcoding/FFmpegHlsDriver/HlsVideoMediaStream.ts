@@ -169,7 +169,11 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
     }
 
     open ( range ?: MediaRange ) : NodeJS.ReadableStream {
-        const stream = new Readable();
+        const stream = new Readable( { 
+            read () {
+                return null;
+            } 
+        } );
 
         this.openAsync( range, stream )
             .catch( err => stream.destroy( err ) );

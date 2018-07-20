@@ -160,6 +160,10 @@ export class UnicastServer {
         } );
     }
 
+    get name () {
+        return this.http.name;
+    }
+
     getIpV4 () : string {
         return this.cachedIpV4;
     }
@@ -223,10 +227,10 @@ export class UnicastServer {
 
         await this.storage.clean();
 
-        this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + this.getUrl() );
+        this.diagnostics.info( this.name, this.name + ' listening on ' + this.getUrl() );
         
         if ( this.isHttpsEnabled ) {
-            this.diagnostics.info( 'unicast', this.http.name + ' listening on ' + this.getSecureUrl() );
+            this.diagnostics.info( this.name, this.name + ' listening on ' + this.getSecureUrl() );
         }
     }
 
