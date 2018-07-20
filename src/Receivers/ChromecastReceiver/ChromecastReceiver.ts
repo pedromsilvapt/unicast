@@ -101,12 +101,14 @@ export class ChromecastReceiver extends BaseReceiver {
         return true;
     }
 
-    async play ( id : string ) : Promise<ReceiverStatus> {
+    async play ( id : string, customOptions : Partial<MediaPlayOptions> = {} ) : Promise<ReceiverStatus> {
         // Get the session information
-        const [ streams, record, playOptions ] = await this.sessions.get( id );
+        const [ streams, record, recordPlayOptions ] = await this.sessions.get( id );
 
         // Find the video stream
         const video : VideoMediaStream = streams.find( stream => stream.type === MediaStreamType.Video ) as VideoMediaStream;
+
+        const playOptions : MediaPlayOptions = { ...recordPlayOptions, ...customOptions };
 
         try {
             if ( !video ) {
@@ -130,7 +132,7 @@ export class ChromecastReceiver extends BaseReceiver {
     
             this.client.lastSubtitlesStyle = media.textTrackStyle;
     
-            if ( this.sessions.current != null ) {
+            if ( this.sessions.current != null && this.sessions.current != id ) {
                 await this.sessions.release( this.sessions.current );
             }
     
@@ -288,6 +290,47 @@ export class ChromecastReceiver extends BaseReceiver {
         await this.client.setVolumeMuted( false );
 
         return this.status();
+    }
+
+    async getSubtitlesOffset () : Promise<number> {
+        if ( !this.sessions.current ) {
+            return 0;
+        }
+
+        const [ streams, record, options ] = await this.sessions.get( this.sessions.current );
+
+        return options.subtitlesOffset || 0;
+    }
+
+    async setSubtitlesOffset ( offset : number ) {
+        const status = await this.pause();
+        
+        const id = this.sessions.current;
+        
+        const [ streams, record, options ] = await this.sessions.get( id );
+
+        this.sessions.update( id, {
+            ...options,
+            subtitlesOffset: offset
+        } );
+
+        return this.play( id, { startTime: status.media.time.current } );
+    }
+
+    async increaseSubtitlesOffset ( offset : number = null ) {
+        if ( typeof offset !== 'number' ) {
+            offset = 250;
+        }
+
+        return this.setSubtitlesOffset( ( await this.getSubtitlesOffset() ) + offset );
+    }
+
+    async decreaseSubtitlesOffset ( offset : number = null ) {
+        if ( typeof offset !== 'number' ) {
+            offset = 250;
+        }
+
+        return this.setSubtitlesOffset( ( await this.getSubtitlesOffset() ) - offset );
     }
 
     async callCommand<R = any, A extends any[] = any[]> ( commandName : string, args : A ) : Promise<R> {    

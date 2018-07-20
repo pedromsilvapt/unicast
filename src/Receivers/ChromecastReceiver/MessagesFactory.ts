@@ -89,7 +89,7 @@ export class MessagesFactory {
             tracks.push( {
                 trackId: index,
                 type: 'TEXT',
-                trackContentId: this.getStreamUrl( id, subtitle ), //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
+                trackContentId: this.getStreamUrl( id, subtitle ) + `?offset=${ options.subtitlesOffset || 0 }`, //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
                 trackContentType: 'text/vtt',
                 name: language.name,
                 language: language[ '2' ],

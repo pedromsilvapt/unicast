@@ -222,15 +222,3 @@ export enum FFmpegHlsPlaylistType {
     Event = 'event',
     Live = 'live'
 }
-
-// export function mute ( input : Stream, start : number, end : number, duration : number ) {
-//     const preMute = atrim( input, 0, start );
-
-//     const posMute = atrim( input, end, duration );
-
-//     const muted = silence( end - start );
-
-//     const [ output ] = concat( [], [ preMute, muted, posMute ] );
-
-//     return output;
-// }

@@ -35,7 +35,7 @@ export abstract class BaseReceiver extends EventEmitter implements IMediaReceive
 
     abstract turnoff () : Promise<boolean>;
     
-    abstract play ( session : string ) : Promise<ReceiverStatus>;
+    abstract play ( session : string, options ?: Partial<MediaPlayOptions> ) : Promise<ReceiverStatus>;
 
     abstract pause () : Promise<ReceiverStatus>;
 
