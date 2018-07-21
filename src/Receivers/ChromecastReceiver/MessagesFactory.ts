@@ -4,7 +4,7 @@ import { MediaRecord, MovieMediaRecord, MediaKind, TvShowMediaRecord, TvSeasonMe
 import * as truncate from 'truncate';
 import { SubtitlesMediaStream } from "../../MediaProviders/MediaStreams/SubtitlesStream";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
-import { HttpSender } from "../BaseReceiver/HttpSender";
+import { ChromecastHttpSender } from "./ChromecastHttpSender";
 
 export interface ChromecastPlayTrackMessage {
     trackId: number,
@@ -47,10 +47,98 @@ export interface Language {
 };
 
 export class MessagesFactory {
-    readonly sender : HttpSender;
+    readonly sender : ChromecastHttpSender;
     
-    constructor ( sender : HttpSender ) {
+    constructor ( sender : ChromecastHttpSender ) {
         this.sender = sender;
+    }
+
+    getDelayConfig () : { preloadCount: number, duration: number } {
+        let config = null;
+
+        if ( this.sender.receiver.config.subtitles ) {
+            config = this.sender.receiver.config.subtitles.delay;
+        }
+
+        if ( config ) {
+            return config;
+        }
+
+        return { preloadCount: 0, duration: 0 };
+    }
+
+    createSingleTrackMessage ( id : string, index : number, stream : SubtitlesMediaStream, language : Language, offset : number ) : ChromecastPlayTrackMessage {
+        return {
+            trackId: index,
+            type: 'TEXT',
+            trackContentId: this.getStreamUrl( id, stream ) + `?offset=${ offset }`, //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
+            trackContentType: 'text/vtt',
+            name: language.name,
+            language: language[ '2' ],
+            subtype: 'SUBTITLES'
+        }
+    }
+
+    getTracksForSingleSubtitle ( id : string, index : number, stream : SubtitlesMediaStream, options : MediaPlayOptions ) : ChromecastPlayTrackMessage[] {
+        const config = this.getDelayConfig();
+
+        const preloadedCount = config.preloadCount || 0;
+
+        const preloadedOffset = config.duration;
+
+        const baseIndex = ( preloadedCount * 2 + 1 ) * index;
+
+        const currentOffset = options.subtitlesOffset || 0;
+
+        const tracks : ChromecastPlayTrackMessage[] = [];
+        
+        const defaultLanguage : string = this.sender.receiver.server.config.get<string>( 'primaryLanguage', 'en-US' );
+
+        const language = this.getSubtitlesLanguage( 
+            // TODO
+            ( stream as any ).language || defaultLanguage
+        );
+
+        for ( let i = 0; i < preloadedCount; i++ ) {
+            let offset = ( options.subtitlesOffset || 0 ) - ( ( preloadedCount - i ) * preloadedOffset );
+
+            tracks.push( this.createSingleTrackMessage( id, baseIndex + i, stream, language, offset ) );
+        }
+
+        tracks.push( this.createSingleTrackMessage( id, baseIndex + preloadedCount, stream, language, currentOffset ) );
+        
+        for ( let i = 0; i < preloadedCount; i++ ) {
+            let offset = ( options.subtitlesOffset || 0 ) + ( ( i + 1 ) * preloadedOffset );
+            
+            tracks.push( this.createSingleTrackMessage( id, baseIndex + preloadedCount + ( i + 1 ), stream, language, offset ) );
+        }
+
+        return tracks;
+    }
+
+    getTrackIndexForOffset ( index : number, options : MediaPlayOptions, targetOffset : number ) : number {
+        const config = this.getDelayConfig();
+
+        const preloadedCount = config.preloadCount || 0;
+
+        const preloadedOffset = config.duration;
+
+        const baseIndex = ( preloadedCount * 2 + 1 ) * index;
+
+        const rest = targetOffset - ( options.subtitlesOffset || 0 );
+
+        if ( rest % preloadedOffset == 0 && Math.abs( rest / preloadedOffset ) <= preloadedCount ) {
+            console.log( 'subtitle index for', targetOffset, 'is', baseIndex + preloadedCount + ( rest / preloadedOffset ) );
+            return baseIndex + preloadedCount + ( rest / preloadedOffset );
+        }
+
+        console.log( 'subtitle index for', targetOffset, 'is', null );
+        return null;
+    }
+
+    getTrackForSubtitles ( id : string, streams : SubtitlesMediaStream[], options : MediaPlayOptions ) : ChromecastPlayTrackMessage[] {
+        return streams.map( ( stream, index ) => this.getTracksForSingleSubtitle( id, index, stream, options ) )
+            .reduce( ( array, tracks ) => array.concat( tracks ), [] );
     }
 
     getStreamUrl ( session : string, stream : MediaStream ) : string {
@@ -76,31 +164,12 @@ export class MessagesFactory {
 
         const subtitles : SubtitlesMediaStream[] = streams.filter( stream => stream.enabled ).filter( stream => stream.type === MediaStreamType.Subtitles ) as SubtitlesMediaStream[];
 
-        let tracks : ChromecastPlayTrackMessage[] = [];
-
-        const defaultLanguage : string = this.sender.receiver.server.config.get<string>( 'primaryLanguage', 'en-US' );
-        
-        for ( let [ index, subtitle ] of subtitles.entries() ) {
-            const language = this.getSubtitlesLanguage( 
-                // TODO
-                ( subtitle as any ).language || defaultLanguage
-            );
-
-            tracks.push( {
-                trackId: index,
-                type: 'TEXT',
-                trackContentId: this.getStreamUrl( id, subtitle ) + `?offset=${ options.subtitlesOffset || 0 }`, //sender.url( 'stream', extend( { id: subtitles.id }, urlParams ) ) + range,
-                trackContentType: 'text/vtt',
-                name: language.name,
-                language: language[ '2' ],
-                subtype: 'SUBTITLES'
-            } );
-        }
+        let tracks : ChromecastPlayTrackMessage[] = this.getTrackForSubtitles( id, subtitles, options );
 
         return {
             contentId: this.getStreamUrl( id, video ), //sender.url( 'stream', extend( { id: videoStream.id }, urlParams ) ) + range,
             contentType: video.mime,
-            tracks: tracks.length > 0 ? tracks : null,
+            tracks: tracks.length > this.getTrackIndexForOffset( 0, options, 0 ) ? tracks : null,
             duration: video.duration,
             streamType: 'BUFFERED',
             metadata: {
@@ -108,6 +177,9 @@ export class MessagesFactory {
                 metadataType: 0,
                 session: id,
                 title: truncate( record.title, 40 ),
+                options: {
+                    originalSubtitlesOffset: options.subtitlesOffset || 0,
+                },
                 images: [
                     { url: record.art.thumbnail || record.art.poster }
                 ]

@@ -12,6 +12,10 @@ import { InvalidArgumentError } from "restify-errors";
 
 export interface ChromecastSubtitlesConfig {
     lineFilters ?: (string | RegExp)[]
+    delay: {
+        preloadCount : number;
+        duration : number;
+    }
 }
 
 export class ChromecastReceiver extends BaseReceiver {
@@ -25,12 +29,16 @@ export class ChromecastReceiver extends BaseReceiver {
 
     subtitlesConfig : ChromecastSubtitlesConfig;
 
-    constructor ( server : UnicastServer, name : string, address : string, subtitlesConfig : ChromecastSubtitlesConfig = {} ) {
+    config : {
+        subtitles ?: ChromecastSubtitlesConfig;
+    }
+
+    constructor ( server : UnicastServer, name : string, address : string, config : { subtitles ?: ChromecastSubtitlesConfig } = {} ) {
         super( server, name );
 
         this.address = address;
 
-        this.subtitlesConfig = subtitlesConfig;
+        this.config = config;
 
         this.client = new DefaultMediaRemote( this.address );
         
@@ -216,7 +224,8 @@ export class ChromecastReceiver extends BaseReceiver {
                 media: {
                     time: { duration: 0, current: 0 },
                     record: null,
-                    session: null
+                    session: null,
+                    options: {}
                 },
                 volume: { level: 1, muted: false },
                 subtitlesStyle: null
@@ -231,7 +240,8 @@ export class ChromecastReceiver extends BaseReceiver {
             media: {
                 time: { duration: status.media.duration, current: status.currentTime },
                 record: record,
-                session: await this.server.database.tables.history.get( status.media.metadata.session )
+                session: await this.server.database.tables.history.get( status.media.metadata.session ),
+                options: status.media.metadata.options
             },
             volume: { level: Math.round( status.volume.level * 100 ), muted: status.volume.muted },
             subtitlesStyle: {
@@ -296,25 +306,40 @@ export class ChromecastReceiver extends BaseReceiver {
         if ( !this.sessions.current ) {
             return 0;
         }
-
+        
         const [ streams, record, options ] = await this.sessions.get( this.sessions.current );
-
+        
         return options.subtitlesOffset || 0;
     }
 
     async setSubtitlesOffset ( offset : number ) {
-        const status = await this.pause();
-        
+        let status = await this.status();
+
         const id = this.sessions.current;
         
         const [ streams, record, options ] = await this.sessions.get( id );
 
-        this.sessions.update( id, {
+        const index = this.messagesFactory.getTrackIndexForOffset( 0, {
+            ...options,
+            subtitlesOffset: status.media.options.originalSubtitlesOffset
+        }, offset );
+
+        await this.sessions.update( id, {
             ...options,
             subtitlesOffset: offset
         } );
 
-        return this.play( id, { startTime: status.media.time.current } );
+        if ( index === null ) {
+            status = await this.pause();
+
+            // TODO The media play options should always be updated
+            // But if they are updated when using a preloaded track
+            // It changes the value that is necessary to calculate the index of the new track
+            // We should study the option of storing that data in the play metadata instead and replace it before querying the index
+            return this.play( id, { startTime: status.media.time.current } );
+        } else {
+            return this.changeSubtitles( index );
+        }
     }
 
     async increaseSubtitlesOffset ( offset : number = null ) {

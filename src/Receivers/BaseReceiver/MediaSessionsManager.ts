@@ -186,7 +186,7 @@ export class MediaSessionsManager {
 
     async update ( id : string, options : MediaPlayOptions ) {
         if ( this.records.has( id ) ) {
-            const record = this.records.get( id );
+            const record = await this.records.get( id );
 
             record[ 2 ] = options;
         }

@@ -19,6 +19,7 @@ export interface ReceiverStatus {
         time : ReceiverTimeStatus;
         record : MediaRecord;
         session: HistoryRecord;
+        options: any;
     }
     volume : ReceiverVolumeStatus;
     subtitlesStyle : ReceiverSubtitlesStyleStatus;

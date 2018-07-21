@@ -330,12 +330,39 @@ export class PlayerController extends BaseController {
         }
     }
     
-    @Route( 'post', '/:device/:command' )
+    @Route( 'post', '/:device/command/:command' )
     async command ( req : Request, res : Response ) {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
             const status = await device.callCommand<ReceiverStatus>( Case.camel( req.params.command ), req.body.args || [] );
+    
+            return this.preprocessStatus( req, status );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    // TODO TEMP
+    @Route( 'get', '/:device/add-subtitles-delay' )
+    async addSubtitlesDelay ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const status = await device.callCommand<ReceiverStatus>( 'increaseSubtitlesOffset', [] );
+    
+            return this.preprocessStatus( req, status );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+    
+    @Route( 'get', '/:device/sub-subtitles-delay' )
+    async subSubtitlesDelay ( req : Request, res : Response ) {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const status = await device.callCommand<ReceiverStatus>( 'decreaseSubtitlesOffset', [] );
     
             return this.preprocessStatus( req, status );
         } else {

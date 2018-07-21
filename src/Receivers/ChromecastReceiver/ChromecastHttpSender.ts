@@ -10,7 +10,13 @@ export class ChromecastHttpSender extends HttpSender {
     receiver : ChromecastReceiver;
 
     getFilterPipeline () : FilterPipeline {
-        const config = this.receiver.subtitlesConfig.lineFilters;
+        const subtitles = this.receiver.config.subtitles;
+
+        if ( !subtitles ) {
+            return null;
+        }
+
+        const config = subtitles.lineFilters;
 
         if ( config ) {
             return new FilterPipeline( config, true );
