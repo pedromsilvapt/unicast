@@ -231,7 +231,7 @@ export class PlayerController extends BaseController {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            return { success: await device.turnoff() };
+            return this.preprocessStatus( req, await device.turnoff() );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }

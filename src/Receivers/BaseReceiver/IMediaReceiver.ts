@@ -68,7 +68,7 @@ export interface IMediaReceiver extends EventEmitter {
 
     reconnect () : Promise<boolean>;
 
-    turnoff () : Promise<boolean>;
+    turnoff () : Promise<ReceiverStatus>;
 
     play ( session : string ) : Promise<ReceiverStatus>;
 

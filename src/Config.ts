@@ -400,7 +400,7 @@ export class ArrayTypeSchema extends TypeSchema {
 
     run ( data : any ) {
         if ( data instanceof Array ) {
-            return data.map( entry => this.subSchema.run( data ) );
+            return data.map( entry => this.subSchema.run( entry ) );
         }
         
         return data;

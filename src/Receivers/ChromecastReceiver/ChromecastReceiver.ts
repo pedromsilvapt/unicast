@@ -108,7 +108,7 @@ export class ChromecastReceiver extends BaseReceiver {
         }
     }
 
-    async turnoff () : Promise<boolean> {
+    async turnoff () : Promise<ReceiverStatus> {
         try {
             await this.client.close();
         } catch ( err ) {
@@ -121,7 +121,7 @@ export class ChromecastReceiver extends BaseReceiver {
             this.sessions.release( this.sessions.current );
         }
         
-        return true;
+        return this.status();
     }
 
     async play ( id : string, customOptions : Partial<MediaPlayOptions> = {} ) : Promise<ReceiverStatus> {
@@ -146,7 +146,7 @@ export class ChromecastReceiver extends BaseReceiver {
             let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );
     
             if ( media.tracks && media.tracks.length ) {
-                const activeTrackIndex = this.messagesFactory.getTrackIndexForOffset( 0, playOptions, 0 );
+                const activeTrackIndex = this.messagesFactory.getTrackIndexForOffset( 0, playOptions, playOptions.subtitlesOffset );
 
                 if ( activeTrackIndex !== null ) {
                     options.activeTrackIds = [ media.tracks[ activeTrackIndex ].trackId ];
