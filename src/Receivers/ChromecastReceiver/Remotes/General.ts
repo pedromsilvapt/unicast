@@ -1,8 +1,5 @@
 import { EventEmitter }     from 'events';
-import * as objectPath      from 'object-path';
-import { Client as NativeClient, DefaultMediaReceiver }           from 'castv2-client';
-import * as util           from 'util';
-import * as promisify       from 'es6-promisify';
+import { Client as NativeClient }           from 'castv2-client';
 import { Client } from './Interfaces/Client';
 import { Player } from './Interfaces/Player';
 import { Singleton } from '../../../ES2017/Singleton';

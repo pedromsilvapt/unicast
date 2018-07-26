@@ -169,7 +169,7 @@ export class MessagesFactory {
         return {
             contentId: this.getStreamUrl( id, video ), //sender.url( 'stream', extend( { id: videoStream.id }, urlParams ) ) + range,
             contentType: video.mime,
-            tracks: tracks.length > this.getTrackIndexForOffset( 0, options, 0 ) ? tracks : null,
+            tracks: tracks.length ? tracks : null,
             duration: video.duration,
             streamType: 'BUFFERED',
             metadata: {

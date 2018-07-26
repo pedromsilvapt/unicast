@@ -15,6 +15,10 @@ export interface ChromecastSubtitlesConfig {
     delay: {
         preloadCount : number;
         duration : number;
+    },
+    style?: {
+        default?: any;
+        custom?: any[];
     }
 }
 
@@ -27,7 +31,7 @@ export class ChromecastReceiver extends BaseReceiver {
 
     sender : ChromecastHttpSender;
 
-    subtitlesConfig : ChromecastSubtitlesConfig;
+    subtitlesStyle : ChromecastSubtitlesStyles;
 
     config : {
         subtitles ?: ChromecastSubtitlesConfig;
@@ -47,6 +51,17 @@ export class ChromecastReceiver extends BaseReceiver {
         this.messagesFactory = new MessagesFactory( this.sender );
 
         this.transcoder = new ChromecastHlsTranscoder( this );
+
+        this.subtitlesStyle = new ChromecastSubtitlesStyles( {
+            ...this.getDefaultSubtitlesStyle(),
+            ...this.config.subtitles.style.default
+        }, this.config.subtitles.style.custom || [ {
+            backgroundColor: '#00000000',
+        }, {
+            backgroundColor: '#00000055',
+        }, {
+            backgroundColor: '#000000AA',
+        } ] );
 
         const events : string[] = [ 
             'connected', 'playing', 'played', 'stopping', 'stopped',
@@ -131,14 +146,16 @@ export class ChromecastReceiver extends BaseReceiver {
             let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );
     
             if ( media.tracks && media.tracks.length ) {
-                options.activeTrackIds = [ media.tracks[ 0 ].trackId ];
+                const activeTrackIndex = this.messagesFactory.getTrackIndexForOffset( 0, playOptions, 0 );
+
+                if ( activeTrackIndex !== null ) {
+                    options.activeTrackIds = [ media.tracks[ activeTrackIndex ].trackId ];
+                } else {
+                    this.server.onError.notify( new Error( `No active track index found for delay 0.` ) );
+                }
             }
     
-            if ( !media.textTrackStyle ) {
-                media.textTrackStyle = this.client.lastSubtitlesStyle || this.getSubtitlesStyle();
-            }
-    
-            this.client.lastSubtitlesStyle = media.textTrackStyle;
+            media.textTrackStyle = this.subtitlesStyle.style;
     
             if ( this.sessions.current != null && this.sessions.current != id ) {
                 await this.sessions.release( this.sessions.current );
@@ -150,7 +167,7 @@ export class ChromecastReceiver extends BaseReceiver {
     
             this.emit( 'play', id );
     
-            this.changeSubtitlesSize( this.client.lastSubtitlesStyle.fontScale );
+            await this.changeSubtitlesSize( this.subtitlesStyle.fontScale );
         } catch ( err ) {
             this.sessions.release( id );
 
@@ -168,9 +185,9 @@ export class ChromecastReceiver extends BaseReceiver {
         return this.status();
     }
 
-    getSubtitlesStyle () {
+    getDefaultSubtitlesStyle () {
         return {
-            backgroundColor: '#00000000', // see http://dev.w3.org/csswg/css-color/#hex-notation
+            backgroundColor: '#00000000', // see http://dev.w3.org/csswg/css-color/#hex-notation //#000000AA
             foregroundColor: '#FFFFFFFF', // see http://dev.w3.org/csswg/css-color/#hex-notation
             edgeType: 'OUTLINE', // can be: "NONE", "OUTLINE", "DROP_SHADOW", "RAISED", "DEPRESSED"
             edgeColor: '#000000FF', // see http://dev.w3.org/csswg/css-color/#hex-notation
@@ -245,7 +262,7 @@ export class ChromecastReceiver extends BaseReceiver {
             },
             volume: { level: Math.round( status.volume.level * 100 ), muted: status.volume.muted },
             subtitlesStyle: {
-                size: this.client.lastSubtitlesStyle.fontScale
+                size: this.subtitlesStyle.fontScale
             }
         };
 
@@ -265,9 +282,19 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async changeSubtitlesSize ( size : number ) : Promise<ReceiverStatus> {
-        this.client.lastSubtitlesStyle.fontScale = size;
+        await this.client.changeSubtitlesStyle( this.subtitlesStyle.setFontScale( size ).style );
 
-        await this.client.changeSubtitlesSize( size );
+        return this.status();
+    }
+
+    async changeSubtitlesStyle ( index : number ) : Promise<ReceiverStatus> {
+        await this.client.changeSubtitlesStyle( this.subtitlesStyle.setCustomStyleIndex( index ).style );
+
+        return this.status();
+    }
+
+    async cycleSubtitlesStyle () : Promise<ReceiverStatus> {
+        await this.client.changeSubtitlesStyle( this.subtitlesStyle.cycleCustomStyles().style );
 
         return this.status();
     }
@@ -372,5 +399,67 @@ export class ChromecastReceiver extends BaseReceiver {
             name: this.name,
             address: this.address
         };
+    }
+}
+
+export class ChromecastSubtitlesStyles {
+    defaultStyles : any;
+
+    customStyles : any[];
+
+    customStyleIndex : number;
+    
+    fontScale : number = 1;
+
+    style : any;
+
+    constructor ( defaultStyles : any, customStyles : any[] = [] ) {
+        this.defaultStyles = defaultStyles;
+
+        this.customStyles = customStyles;
+
+        this.customStyleIndex = 0;
+
+        this.fontScale = this.defaultStyles.fontScale || 1;
+
+        this.cacheStyle();
+    }
+
+    setFontScale ( scale : number ) : this {
+        if ( scale != this.fontScale ) {
+            this.fontScale = scale;
+
+            this.cacheStyle();
+        }
+
+        return this;
+    }
+
+    setCustomStyleIndex ( index : number ) : this {
+        if ( index != this.customStyleIndex ) {
+            this.customStyleIndex = index;
+
+            this.cacheStyle();
+        }
+
+        return this;
+    }
+
+    cycleCustomStyles () : this {
+        if ( this.customStyles.length > 0 ) {
+            this.setCustomStyleIndex( ( this.customStyleIndex + 1 ) % this.customStyles.length );
+        }
+
+        return this;
+    }
+
+    protected cacheStyle () {
+        let temp = { ...this.defaultStyles, fontScale: this.fontScale };
+
+        if ( this.customStyles.length > this.customStyleIndex ) {
+            temp = { ...temp, ...this.customStyles[ this.customStyleIndex ] };
+        }
+
+        this.style = temp;
     }
 }

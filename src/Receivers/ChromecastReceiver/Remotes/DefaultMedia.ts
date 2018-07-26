@@ -1,13 +1,10 @@
 import { DefaultMediaReceiver } from 'castv2-client';
 import { GeneralRemote } from './General';
-import promisify from 'es6-promisify';
 
 export default class DefaultMediaRemote extends GeneralRemote {
     application = DefaultMediaReceiver;
 
     playing : boolean = false;
-
-    lastSubtitlesStyle : any = null;
 
     async checkMediaSession () {
         if ( !this.player.native.media.currentSession ) {
@@ -52,10 +49,6 @@ export default class DefaultMediaRemote extends GeneralRemote {
         this.isOpened || await this.open();
 
         let status = await this.player.load( media, options );
-
-        if ( media.textTrackStyle ) {
-            this.lastSubtitlesStyle = media.textTrackStyle;
-        }
 
         this.playing = true;
 
@@ -110,18 +103,14 @@ export default class DefaultMediaRemote extends GeneralRemote {
         await this.player.setActiveSubtitles( index );
     }
 
-    async changeSubtitlesSize ( size : number ) {
-        if ( !this.lastSubtitlesStyle || !this.playing ) {
+    async changeSubtitlesStyle ( style : any ) {
+        if ( !this.playing ) {
             return false;
         }
 
         this.isOpened || await this.open();        
 
         await this.checkMediaSession();
-
-        let style = this.lastSubtitlesStyle;
-
-        style.fontScale = size;
 
         await this.player.setSubtitlesStyle( style );
     }
