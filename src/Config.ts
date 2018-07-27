@@ -226,6 +226,16 @@ export class SchemaValidationError {
 
         return new SchemaValidationError( this.expected, this.received, property + '.' + this.property );
     }
+
+    get message () {
+        const expectations = `Expected ${ this.expected.join( ', ' ) }, got ${ this.received } instead.`;
+
+        if ( this.property !== null ) {
+            return `${ this.property }: ${ expectations }`
+        } else {
+            return expectations;
+        }
+    }
 }
 
 export type SchemaValidationResult = null | SchemaValidationError | SchemaValidationError[];
@@ -375,7 +385,7 @@ export class ArrayTypeSchema extends TypeSchema {
 
     validate ( data : any ) : SchemaValidationResult {
         if ( data instanceof Array ) {
-            return data.map( ( item, index ) => {
+            const errors = data.map( ( item, index ) => {
                     const errors = this.subSchema.validate( item );
 
                     if ( errors instanceof Array ) {
@@ -383,7 +393,7 @@ export class ArrayTypeSchema extends TypeSchema {
                     } else if ( errors !== null ) {
                         return errors.prefix( index.toString() );
                     }
-                } ).filter( error => error !== null )
+                } ).filter( error => error != null )
                 .reduce( ( arr, errors ) => {
                     if ( errors instanceof Array ) {
                         arr.push( ...errors );
@@ -393,6 +403,12 @@ export class ArrayTypeSchema extends TypeSchema {
 
                     return arr;
                 }, [] as any[] );
+
+                if ( errors.length === 0 ) {
+                    return null;
+                }
+
+                return errors;
         }
 
         return new SchemaValidationError( 'Array', typeof data );;
@@ -438,7 +454,7 @@ export class ObjectTypeSchema extends TypeSchema {
             for ( let key of Object.keys( data ) ) {
                 if ( !( key in this.subSchema ) && this.strict ) {
                     errors.push( new SchemaValidationError( 'Undefined', typeof data[ key ], key ) )
-                } else {
+                } else if ( key in this.subSchema ) {
                     requiredKeys.delete( key );
 
                     const keyErrors = this.subSchema[ key ].validate( data[ key ] );

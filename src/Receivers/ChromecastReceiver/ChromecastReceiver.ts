@@ -15,11 +15,16 @@ export interface ChromecastSubtitlesConfig {
     delay: {
         preloadCount : number;
         duration : number;
+        rollback : number;
     },
     style?: {
         default?: any;
         custom?: any[];
     }
+}
+
+export interface ChromecastConfig {
+    subtitles ?: ChromecastSubtitlesConfig
 }
 
 export class ChromecastReceiver extends BaseReceiver {
@@ -33,11 +38,9 @@ export class ChromecastReceiver extends BaseReceiver {
 
     subtitlesStyle : ChromecastSubtitlesStyles;
 
-    config : {
-        subtitles ?: ChromecastSubtitlesConfig;
-    }
+    config : ChromecastConfig;
 
-    constructor ( server : UnicastServer, name : string, address : string, config : { subtitles ?: ChromecastSubtitlesConfig } = {} ) {
+    constructor ( server : UnicastServer, name : string, address : string, config : ChromecastConfig = {} ) {
         super( server, name );
 
         this.address = address;
@@ -146,7 +149,7 @@ export class ChromecastReceiver extends BaseReceiver {
             let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );
     
             if ( media.tracks && media.tracks.length ) {
-                const activeTrackIndex = this.messagesFactory.getTrackIndexForOffset( 0, playOptions, playOptions.subtitlesOffset );
+                const activeTrackIndex = this.messagesFactory.getTrackIndexForOffset( 0, playOptions, playOptions.subtitlesOffset || 0 );
 
                 if ( activeTrackIndex !== null ) {
                     options.activeTrackIds = [ media.tracks[ activeTrackIndex ].trackId ];
@@ -359,11 +362,7 @@ export class ChromecastReceiver extends BaseReceiver {
         if ( index === null ) {
             status = await this.pause();
 
-            // TODO The media play options should always be updated
-            // But if they are updated when using a preloaded track
-            // It changes the value that is necessary to calculate the index of the new track
-            // We should study the option of storing that data in the play metadata instead and replace it before querying the index
-            return this.play( id, { startTime: status.media.time.current } );
+            return this.play( id, { startTime: status.media.time.current - this.config.subtitles.delay.rollback } );
         } else {
             return this.changeSubtitles( index );
         }

@@ -342,31 +342,4 @@ export class PlayerController extends BaseController {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
     }
-
-    // TODO TEMP
-    @Route( 'get', '/:device/add-subtitles-delay' )
-    async addSubtitlesDelay ( req : Request, res : Response ) {
-        const device = this.server.receivers.get( req.params.device );
-
-        if ( device ) {
-            const status = await device.callCommand<ReceiverStatus>( 'increaseSubtitlesOffset', [] );
-    
-            return this.preprocessStatus( req, status );
-        } else {
-            throw new InvalidDeviceArgumentError( req.params.device );
-        }
-    }
-    
-    @Route( 'get', '/:device/sub-subtitles-delay' )
-    async subSubtitlesDelay ( req : Request, res : Response ) {
-        const device = this.server.receivers.get( req.params.device );
-
-        if ( device ) {
-            const status = await device.callCommand<ReceiverStatus>( 'decreaseSubtitlesOffset', [] );
-    
-            return this.preprocessStatus( req, status );
-        } else {
-            throw new InvalidDeviceArgumentError( req.params.device );
-        }
-    }
 }

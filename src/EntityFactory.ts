@@ -16,6 +16,8 @@ export abstract class EntityFactory<E extends IEntity> extends IEntity {
 }
 
 export abstract class ConfigurableEntityFactory<E extends IEntity> extends EntityFactory<E> {
+    virtuals : any[] = [];
+
     abstract getEntitiesConfig () : any[];
 
     async * entities ( cancel : CancelToken ) : AsyncIterable<E> {
@@ -30,11 +32,19 @@ export abstract class ConfigurableEntityFactory<E extends IEntity> extends Entit
         yield * this.entitiesFromScan( devices, cancel );
     }
 
+    entityIsVirtual ( config : any ) : boolean {
+        return false;
+    }
+
     entitiesFromConfig ( cancel : CancelToken ) : AsyncIterable<E> {
         const entities : Promise<E>[] = [];
 
         for ( let config of this.getEntitiesConfig() ) {
-            entities.push( this.createFromConfig( config ) );
+            if ( this.entityIsVirtual( config ) ) {
+                this.virtuals.push( config );
+            } else {
+                entities.push( this.createFromConfig( config ) );
+            }
         }
 
         return fromPromises( entities );
