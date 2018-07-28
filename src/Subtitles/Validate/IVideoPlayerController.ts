@@ -1,3 +1,3 @@
-export interface IVideoPlayerController {
-    play ( video : string, subtitles : string ) : Promise<void>;
+export interface IVideoPlayerController<R = void> {
+    play ( video : string, subtitles : string ) : Promise<R>;
 }

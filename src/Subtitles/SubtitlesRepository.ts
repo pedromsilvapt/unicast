@@ -22,7 +22,9 @@ export interface ISubtitlesRepository<S extends ILocalSubtitle = ILocalSubtitle>
 
     read ( media : MediaRecord, subtitle : S ) : Promise<NodeJS.ReadableStream>;
 
-    store ( media : MediaRecord, subtitle : ISubtitle, data : Buffer | NodeJS.ReadableStream ) : Promise<ILocalSubtitle>;
+    store ( media : MediaRecord, subtitle : ISubtitle, data : Buffer | NodeJS.ReadableStream ) : Promise<S>;
+
+    update ( media : MediaRecord, subtitle : S, data : Buffer | NodeJS.ReadableStream ) : Promise<S>;
 
     delete ( media : MediaRecord, subtitle : S ) : Promise<void>;
 }
@@ -102,6 +104,20 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
         };
 
         return this.table.create( local );
+    }
+
+    async update ( media : MediaRecord, subtitle : IDatabaseLocalSubtitle, data : Buffer | NodeJS.ReadableStream ) : Promise<IDatabaseLocalSubtitle> {
+        const file = subtitle.file;
+
+        if ( Buffer.isBuffer( data ) ) {
+            await fs.writeFile( file, data, { encoding: 'utf8' } );
+        } else {
+            await new Promise<void>( ( resolve, reject ) =>
+                data.pipe( fs.createWriteStream( file ) ).on( 'error', reject ).on( 'finish', resolve )
+            );
+        }
+
+        return subtitle;
     }
 
     async delete ( media : MediaRecord, subtitle : IDatabaseLocalSubtitle ) : Promise<void> {

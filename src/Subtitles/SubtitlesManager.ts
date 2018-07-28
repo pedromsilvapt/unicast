@@ -77,8 +77,16 @@ export class SubtitlesManager {
         await saveStreamTo( reader, file );
     }
 
-    async store ( media : MediaRecord, subtitle : ISubtitle ) : Promise<ILocalSubtitle> {
-        const body = await this.providers.download( subtitle );
+    async storeFromFile ( media : MediaRecord, subtitle : ISubtitle, file : string ) {
+        const reader = fs.createReadStream( file );
+
+        return this.store( media, subtitle, reader );
+    }
+
+    async store ( media : MediaRecord, subtitle : ISubtitle, body ?: Buffer | NodeJS.ReadableStream ) : Promise<ILocalSubtitle> {
+        if ( !body ) {
+            body = await this.providers.download( subtitle );
+        }
         
         const mediaRepository = this.server.repositories.get( media.repository, media.kind );
 
@@ -88,6 +96,24 @@ export class SubtitlesManager {
             return mediaRepository.subtitles.store( media, subtitle, body );
         } else {
             return this.repository.store( media, subtitle, body );
+        }
+    }
+
+    async updateFromFile ( media : MediaRecord, subtitle : ILocalSubtitle, file : string ) {
+        const reader = fs.createReadStream( file );
+
+        await this.server.subtitles.update( media, subtitle, reader );
+    }
+
+    async update ( media : MediaRecord, subtitle : ILocalSubtitle, data : Buffer | NodeJS.ReadableStream ) : Promise<ILocalSubtitle> {
+        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
+
+        if ( !mediaRepository || !mediaRepository.subtitles ) {
+            return this.repository.update( media, subtitle as IDatabaseLocalSubtitle, data );
+        } else if ( mediaRepository.subtitles.canWrite ) {
+            return mediaRepository.subtitles.update( media, subtitle, data );
+        } else {
+            return this.repository.update( media, subtitle as IDatabaseLocalSubtitle, data );
         }
     }
 

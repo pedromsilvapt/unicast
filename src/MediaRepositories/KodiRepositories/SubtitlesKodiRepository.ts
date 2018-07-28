@@ -102,7 +102,7 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         while ( await fs.exists( file ) ) file = prefix + '-' + index++ + extension;
 
         if ( Buffer.isBuffer( data ) ) {
-            await fs.writeFile( file, data, { encoding: 'utf8' } );
+            await fs.writeFile( file, data );
         } else {
             console.log( 'saving' );
             await new Promise<void>( ( resolve, reject ) =>
@@ -118,6 +118,20 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
             releaseName: path.basename( file, path.extname( file ) ),
             file: path.basename( file )
         };
+    }
+
+    async update ( media : MediaRecord, subtitle : ILocalKodiSubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalKodiSubtitle> {
+        const file = subtitle.file;
+
+        if ( Buffer.isBuffer( data ) ) {
+            await fs.writeFile( file, data );
+        } else {
+            await new Promise<void>( ( resolve, reject ) =>
+                data.pipe( fs.createWriteStream( file ) ).on( 'error', reject ).on( 'finish', resolve )
+            );
+        }
+
+        return subtitle;
     }
 
     async delete ( media : MediaRecord, subtitle : ILocalKodiSubtitle ) : Promise<void> {

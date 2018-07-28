@@ -42,7 +42,6 @@ export class MpvController implements IVideoPlayerController {
 
         return parser.fromSrt( contents, true );
     }
-
     
     random ( low : number, high : number ) : number {
         return Math.random() * ( high - low + 1 ) + low;
