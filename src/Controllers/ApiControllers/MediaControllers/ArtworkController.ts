@@ -1,4 +1,4 @@
-import { BaseController, RoutesDeclarations, Controller, Route } from "../../BaseController";
+import { BaseController, Route } from "../../BaseController";
 import { Request, Response, Next } from "restify";
 import { NotFoundError } from "restify-errors";
 import * as objectPath from 'object-path';

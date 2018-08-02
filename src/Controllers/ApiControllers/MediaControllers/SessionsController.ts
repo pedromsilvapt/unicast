@@ -1,8 +1,6 @@
 import { BaseTableController } from "../../BaseTableController";
 import { BaseTable, HistoryRecord } from "../../../Database";
 import { Request, Response } from "restify";
-import * as r from 'rethinkdb';
-import { Route } from "../../BaseController";
 
 export class SessionsController extends BaseTableController<HistoryRecord> {
     defaultSortField : string = 'createdAt';

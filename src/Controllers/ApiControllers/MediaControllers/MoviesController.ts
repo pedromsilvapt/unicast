@@ -1,6 +1,5 @@
 import { MovieMediaRecord } from "../../../MediaRecord";
-import { BaseTableController } from "../../BaseTableController";
-import { BaseTable, MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";

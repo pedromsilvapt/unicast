@@ -1,6 +1,5 @@
 import { TvShowMediaRecord } from "../../../MediaRecord";
-import { BaseTableController } from "../../BaseTableController";
-import { BaseTable, MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database";
 import { Request, Response } from "restify";
 import { MediaTableController } from "./MediaController";
 import * as r from 'rethinkdb';
@@ -36,8 +35,8 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
             }
         }
 
-        if ( req.query.categories === 'true' ) {
-            ( show as any ).categories = await this.server.media.getCollections( show.kind, show.id );
+        if ( req.query.collections === 'true' ) {
+            ( show as any ).collections = await this.server.media.getCollections( show.kind, show.id );
         }
 
         return show;

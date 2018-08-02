@@ -1,4 +1,4 @@
-import { BaseController, RoutesDeclarations, Route } from "./BaseController";
+import { BaseController, Route } from "./BaseController";
 import { BaseTable } from "../Database";
 import { Response, Request } from "restify";
 import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from "restify-errors";

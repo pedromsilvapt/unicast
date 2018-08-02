@@ -1,7 +1,7 @@
 import { BaseTableController } from "../../BaseTableController";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
-import { MediaKind, MediaRecord } from "../../../MediaRecord";
+import { MediaRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
 import { MediaTable } from "../../../Database";

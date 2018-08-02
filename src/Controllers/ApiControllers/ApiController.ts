@@ -1,4 +1,4 @@
-import { BaseController, RoutesDeclarations, Controller, Route } from "../BaseController";
+import { BaseController, Controller, Route } from "../BaseController";
 import { MoviesController } from "./MediaControllers/MoviesController";
 import { TvShowsController } from "./MediaControllers/TvShowsController";
 import { PlayerController } from "./PlayerController";
@@ -9,8 +9,8 @@ import { ArtworkController } from "./MediaControllers/ArtworkController";
 import { ProvidersController } from "./MediaControllers/ProvidersController";
 import { TasksController } from "./TasksController";
 import { SubtitlesController } from "./MediaControllers/SubtitlesController";
-import * as sortBy from 'sort-by';
 import { SessionsController } from "./MediaControllers/SessionsController";
+import * as sortBy from 'sort-by';
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )

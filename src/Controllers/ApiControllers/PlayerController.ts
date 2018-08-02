@@ -1,9 +1,8 @@
-import { BaseController, RoutesDeclarations, Controller, Route } from "../BaseController";
+import { BaseController, Controller, Route } from "../BaseController";
 import { Request, Response } from "restify";
 import { PlaylistsController } from "./PlaylistsController";
 import { MediaSourceDetails } from "../../MediaProviders/MediaSource";
 import { InvalidArgumentError, HttpError } from 'restify-errors';
-import { setTimeout } from "timers";
 import { MediaPlayOptions, ReceiverStatus } from "../../Receivers/BaseReceiver/IMediaReceiver";
 import { MediaRecord } from "../../MediaRecord";
 import * as Case from 'case';

@@ -1,7 +1,5 @@
-import { BaseController, RoutesDeclarations, Controller, Route } from "../../BaseController";
-import { Request, Response, Next } from "restify";
-import * as path from 'path';
-import * as fs from 'mz/fs';
+import { BaseController, Route } from "../../BaseController";
+import { Request, Response } from "restify";
 import { MediaSync } from "../../../MediaSync";
 import { BackgroundTask } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
