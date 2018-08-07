@@ -1,4 +1,3 @@
-// import { Semaphore } from "await-semaphore";
 import { Semaphore } from "data-semaphore";
 import * as superagent from 'superagent';
 import { UnicastServer } from "./UnicastServer";
@@ -6,7 +5,7 @@ import { Singleton } from "./ES2017/Singleton";
 import * as fs from 'mz/fs';
 import * as sharp from 'sharp';
 import { MediaKind } from "./MediaRecord";
-import { FsReadResilientStream } from "./ES2017/ResilientStream";
+import * as path from 'path';
 
 export interface ArtworkCacheOptions {
     width ?: number;
@@ -106,7 +105,9 @@ export class ArtworkCache {
         const release = await this.httpSemaphore.acquire();
 
         try {
-            this.server.diagnostics.debug( 'artwork', `Fetching ${url}, saving to ${cachePath}.`, { type: 'fetch' } );            
+            const relativeCachePath = path.relative( this.server.storage.getPath( 'cache/artwork' ), cachePath );
+
+            this.server.diagnostics.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );            
 
             await saveStreamTo( this.getReadableStream( url ), cachePath );
     
@@ -151,7 +152,9 @@ export class ArtworkCache {
         try {
             const cachePathResized = await this.server.storage.getRandomFile( '', 'jpg', 'cache/artwork/transformed' );
             
-            this.server.diagnostics.debug( 'artwork', `Transforming ${url}, saving to ${cachePathResized}.`, { type: 'transform', options } );
+            const relativeCachePath = path.relative( this.server.storage.getPath( 'cache/artwork' ), cachePathResized );
+
+            this.server.diagnostics.debug( 'artwork', `Transforming ${url}, saving to ${ relativeCachePath }.`, { type: 'transform', options } );
 
             let image = await sharp( cachePath );
 
