@@ -3,7 +3,7 @@ import { UnicastServer } from "../../UnicastServer";
 import { MediaSessionsManager } from "./MediaSessionsManager";
 import { Transcoder } from "../../Transcoding/Transcoder";
 import { EventEmitter } from "events";
-import { HistoryRecord } from "../../Database";
+import { HistoryRecord } from "../../Database/Database";
 
 export enum ReceiverStatusState {
     Stopped = 'STOPPED',

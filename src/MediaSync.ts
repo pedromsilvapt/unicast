@@ -1,4 +1,4 @@
-import { Database } from "./Database";
+import { Database } from "./Database/Database";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, AllMediaKinds, MovieMediaRecord, MediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from "./MediaRecord";
 import { IMediaRepository, IMovieMediaRepository, ITvShowMediaRepository, ITvSeasonMediaRepository, ITvEpisodeMediaRepository, MediaQuery, TvSeasonMediaQuery, TvEpisodeMediaQuery } from "./MediaRepositories/BaseRepository/IMediaRepository";

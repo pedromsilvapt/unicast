@@ -1,8 +1,7 @@
 import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord } from "./MediaRecord";
-import { Database, BaseTable, CollectionRecord, MediaTable, TvEpisodesMediaTable } from "./Database";
-import { MediaSourceDetails } from "./MediaProviders/MediaSource";
+import { Database, BaseTable, CollectionRecord, MediaTable } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
 import * as logger from 'restify-logger';

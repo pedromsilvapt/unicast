@@ -1,7 +1,7 @@
 import { UnicastServer } from "../UnicastServer";
 import { Router } from 'restify-router';
 import { Request, Response, Next } from "restify";
-import { Diagnostics, DiagnosticsService } from "../Diagnostics";
+import { DiagnosticsService } from "../Diagnostics";
 
 export type RoutesDeclarations = [ string[], string, string, RouteTransform, boolean ][];
 

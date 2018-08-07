@@ -4,10 +4,9 @@ import { MediaRecord, PlayableMediaRecord, MediaKind, TvEpisodeMediaRecord } fro
 import { MediaManager } from "../../UnicastServer";
 import { CancelToken } from 'data-cancel-token';
 import { EventEmitter } from "events";
-import { HistoryRecord } from "../../Database";
+import { HistoryRecord } from "../../Database/Database";
 import { Optional } from 'data-optional';
 import * as sortBy from 'sort-by';
-import { TranscodingBackgroundTask } from "../../Transcoding/TranscodingDriver";
 import { Synchronized } from "data-semaphore";
 
 export class MediaSessionsManager {

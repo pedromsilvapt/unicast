@@ -1,5 +1,5 @@
 import { MediaStream } from "../MediaProviders/MediaStreams/MediaStream";
-import { HistoryRecord } from "../Database";
+import { HistoryRecord } from "../Database/Database";
 import { MediaRecord } from "../MediaRecord";
 import { CancelToken } from 'data-cancel-token';
 import { TranscodingBackgroundTask } from "./TranscodingDriver";

@@ -1,5 +1,5 @@
 import { TvEpisodeMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";

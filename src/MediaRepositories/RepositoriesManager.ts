@@ -3,7 +3,7 @@ import { MediaKind } from "../MediaRecord";
 import { UnicastServer } from "../UnicastServer";
 import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { PersistentQueue, JobResult, IntervalJobScheduler, JobOrder } from "../PersistentQueue";
-import { JobRecord } from "../Database";
+import { JobRecord } from "../Database/Database";
 import * as itt from 'itt';
 
 export class RepositoriesManager {

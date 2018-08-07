@@ -1,5 +1,5 @@
 import { MovieMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
@@ -21,16 +21,20 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
                 ) ) ) );
     }
 
-    async transform ( req : Request, res : Response, movie : MovieMediaRecord ) : Promise<any> {
+    async transformAll ( req : Request, res : Response, items : MovieMediaRecord[] ) : Promise<any[]> {
+        items = await super.transformAll( req, res, items );
+
         const url = await this.server.getMatchingUrl( req );
         
-        ( movie as any ).cachedArtwork = this.server.artwork.getCachedObject( url, movie.kind, movie.id, movie.art );
-
-        if ( req.query.collections === 'true' ) {
-            ( movie as any ).collections = await this.server.media.getCollections( movie.kind, movie.id );
+        for ( let movie of items ) {
+            ( movie as any ).cachedArtwork = this.server.artwork.getCachedObject( url, movie.kind, movie.id, movie.art );
         }
 
-        return movie;
+        if ( req.query.collections === 'true' ) {
+            await this.server.database.tables.movies.relations.collections.applyAll( items );
+        }
+        
+        return items;
     }
 
     @Route( 'get', '/genres' )

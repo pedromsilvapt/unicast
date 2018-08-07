@@ -1,5 +1,5 @@
 import { ResourceNotFoundError, InvalidArgumentError } from "restify-errors";
-import { PlaylistRecord, BaseTable } from "../../Database";
+import { PlaylistRecord, BaseTable } from "../../Database/Database";
 import { BaseTableController } from "../BaseTableController";
 import { Request, Response } from "restify";
 import { Route } from "../BaseController";
@@ -37,24 +37,54 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
         return playlist;
     }
 
-    async getPlaylistItems ( req : Request, playlist : PlaylistRecord ) : Promise<MediaRecord[]> {
-        const url = await this.server.getMatchingUrl( req );      
+    async applyPlaylistsItems ( req : Request, playlists : PlaylistRecord[] ) : Promise<void> {
+        await this.server.database.tables.playlists.relations.items.applyAll( playlists );
 
-        const items = await Promise.all( ( playlist.references || [] ).map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
+        const member = this.server.database.tables.playlists.relations.items.member;
+        
+        const url = await this.server.getMatchingUrl( req );
 
-        for ( let item of items ) {
-            ( item as any ).cachedArtwork = this.server.artwork.getCachedObject( url, item.kind, item.id, item.art );            
+        let inconsistent = false;
+        
+        for ( let playlist of playlists ) {
+            inconsistent = false;
+
+            for ( let item of playlist[ member ] ) {
+                // Sometimes the playlist data might be invalid (for some reason, one of it's items is missing or something)
+                // And so trying to get the properties (kind, id, art, etc...) for an undefined value would throw an error
+                // And in turn would prevent the requests from being successful because of that one missing item
+                // So we just skip them
+                if ( !item ) {
+                    inconsistent = true;
+
+                    continue;
+                }
+
+                ( item as any ).cachedArtwork = this.server.artwork.getCachedObject( url, item.kind, item.id, item.art );            
+            }
+
+            // And as a courtesy to the frontend, we also omit the undefined values from the items list if there are any
+            // The if guards against creating arrays when filtering for every single playlist, when 99% of them are probably consistent anyway
+            if ( inconsistent ) {
+                playlist[ member ] = playlist[ member ].filter( item => !!item );                
+            }
         }
-
-        return items.filter( item => !!item );
     }
 
-    async transform ( req : Request, res : Response, playlist : PlaylistRecord ) : Promise<any> {
-        if ( req.query.items === 'true' ) {
-            ( playlist as any ).items = await this.getPlaylistItems( req, playlist );
+    async getPlaylistItems ( req : Request, playlist : PlaylistRecord ) : Promise<MediaRecord[]> {
+        await this.applyPlaylistsItems( req, [ playlist ] );
+
+        const member = this.server.database.tables.playlists.relations.items.member;
+
+        return playlist[ member ];
+    }
+
+    async transformAll ( req : Request, res : Response, playlists : PlaylistRecord[] ) {
+        if ( req.query.items ) {
+            await this.server.database.tables.playlists.relations.items.applyAll( playlists );
         }
 
-        return playlist;
+        return playlists;
     }
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
@@ -115,7 +145,7 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
 
                 references[ index ] = { kind: record.kind, id: record.id };
             } else {
-                if ( typeof item !== 'object' || typeof item.kind !== 'string' || typeof item.id !== 'string' ) {
+                if ( typeof item !== 'object' || typeof item.kind !== 'string' || typeof item.id !== 'string' || !item.kind || !item.id ) {
                     throw new InvalidArgumentError( `Array's elements must be objects with the string properties "kind" and "id".` );
                 }
             }

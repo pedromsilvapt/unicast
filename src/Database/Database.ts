@@ -1,12 +1,18 @@
 import * as r from 'rethinkdb';
-import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "./MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "../MediaRecord";
 import { Semaphore, StateSemaphore } from 'data-semaphore';
-import { Config } from "./Config";
-import { IDatabaseLocalSubtitle } from './Subtitles/SubtitlesRepository';
+import { Config } from "../Config";
+import { IDatabaseLocalSubtitle } from '../Subtitles/SubtitlesRepository';
 import * as itt from 'itt';
-import { UnicastServer } from './UnicastServer';
+import { UnicastServer } from '../UnicastServer';
 import { ChildProcess, spawn } from 'child_process';
 import { Future } from '@pedromsilva/data-future';
+import { ManyToManyPolyRelation } from './Relations/ManyToManyPolyRelation';
+import { PolyRelationMap } from './Relations/PolyRelation';
+import { ManyToManyRelation } from './Relations/ManyToManyRelation';
+import { HasManyRelation } from './Relations/OneToManyRelation';
+import { BelongsToOneRelation } from './Relations/OneToOneRelation';
+import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -318,6 +324,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     indexesSchema : IndexSchema[] = [];
 
+    relations : any = {};
+
     get database () : Database {
         return this.pool.database;
     }
@@ -365,9 +373,15 @@ export abstract class BaseTable<R extends { id ?: string }> {
             }
     
             await ( this.query() as any ).indexWait().run( conn );
+
+            this.relations = this.installRelations( this.database.tables );
         } finally {
             await this.pool.release( conn );
         }
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        return {};
     }
 
     async get ( id : string ) : Promise<R> {
@@ -390,7 +404,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         return ( await this.get( id ) ) != null;
     }
 
-    async findAll ( keys : any[], opts : { index ?: string } = {} ) : Promise<R[]> {
+    async findAll ( keys : any[], opts : { index ?: string, query ?: ( query : r.Sequence ) => r.Sequence } = {} ) : Promise<R[]> {
         if ( keys.length === 0 ) {
             return [];
         }
@@ -398,11 +412,15 @@ export abstract class BaseTable<R extends { id ?: string }> {
         const connection = await this.pool.acquire();
 
         try {
-            const table = 
+            let table = 
             // opts.index ? 
             //     this.query().getAll( ...keys, opts ) :
-                this.query().getAll( ...keys );
+                this.query().getAll( ( r as any ).args( keys ) );
     
+            if ( opts.query ) {
+                table = opts.query( table );
+            }
+
             const cursor = await table.run( connection );
             
             const items = await cursor.toArray();
@@ -548,6 +566,17 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
+
+    relations : {
+        
+        collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>
+    };
+    
+    installRelations ( tables : DatabaseTables ) {
+        return {
+            collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', 'movie' )
+        };
+    }
 }
 
 export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
@@ -563,6 +592,18 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
+    
+    relations : {
+        collections: ManyToManyRelation<TvShowMediaRecord, CollectionRecord>,
+        seasons: HasManyRelation<TvShowMediaRecord, TvSeasonMediaRecord>
+    };
+    
+    installRelations ( tables : DatabaseTables ) {
+        return {
+            collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', 'show' ),
+            seasons: new HasManyRelation( 'seasons', tables.seasons, 'tvShowId' ).where( query => query.orderBy( { index: 'number' } ) )
+        };
+    }
 
     async updateEpisodesCount ( id : string ) : Promise<TvShowMediaRecord> {
         const seasons = await this.database.tables.seasons.find( query => query.filter( {
@@ -591,6 +632,18 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         { name: 'number' },
         { name: 'tvShowId' }
     ];
+    
+    relations : {
+        show: BelongsToOneRelation<TvSeasonMediaRecord, TvShowMediaRecord>,
+        episodes: HasManyRelation<TvSeasonMediaRecord, TvEpisodeMediaRecord>
+    };
+    
+    installRelations ( tables : DatabaseTables ) {
+        return {
+            show: new BelongsToOneRelation( 'tvShow', tables.shows, 'tvShowId' ),
+            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' )
+        };
+    }
 
     async updateEpisodesCount ( id : string ) : Promise<TvSeasonMediaRecord> {
         const season = await this.database.tables.seasons.get( id );
@@ -617,6 +670,17 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         { name: 'lastPlayed' },
         { name: 'addedAt' }
     ];
+
+    
+    relations : {
+        season: BelongsToOneRelation<TvEpisodeMediaRecord, TvSeasonMediaRecord>
+    };
+    
+    installRelations ( tables : DatabaseTables ) {
+        return {
+            season: new BelongsToOneRelation( 'tvSeason', tables.seasons, 'tvSeasonId' ),
+        };
+    }
 }
 
 export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
@@ -630,6 +694,18 @@ export class PlaylistsTable extends BaseTable<PlaylistRecord> {
         { name: 'createdAt' },
         { name: 'updatedAt' }
     ];
+
+    relations: {
+        items: ManyToManyPolyRelation<PlaylistRecord, MediaRecord>;
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            items: new ManyToManyPolyRelation( 'items', map, 'references', null, 'kind', 'id' )
+        };
+    }
 }
 
 export class HistoryTable extends BaseTable<HistoryRecord> {
@@ -638,6 +714,18 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
     indexesSchema : IndexSchema[] = [ 
         { name: 'createdAt' }
     ];
+    
+    relations: {
+        record: BelongsToOnePolyRelation<HistoryRecord, MediaRecord>;
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            record: new BelongsToOnePolyRelation( 'record', map, 'reference.kind', 'reference.id' )
+        };
+    }
 }
 
 export class CollectionsTable extends BaseTable<CollectionRecord> {
@@ -646,6 +734,18 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
     indexesSchema : IndexSchema[] = [ 
         { name: 'title' }
     ];
+    
+    relations: {
+        records: ManyToManyPolyRelation<CollectionRecord, MediaRecord>;
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            records: new ManyToManyPolyRelation( 'records', map, tables.collectionsMedia, 'collectionIn', 'mediaKind', 'mediaId' )
+        };
+    }
 }
 
 export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
@@ -663,6 +763,18 @@ export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {
     indexesSchema : IndexSchema[] = [ 
         { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];
+
+    relations: {
+        record: BelongsToOnePolyRelation<SubtitleMediaRecord, MediaRecord>;
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            record: new BelongsToOnePolyRelation( 'record', map, 'reference.kind', 'reference.id' )
+        };
+    }
 }
 
 export class PersistentQueueTable<R extends JobRecord> extends BaseTable<R> {
@@ -798,3 +910,13 @@ export interface JobRecord<P = any> {
 }
 
 export interface SubtitleMediaRecord extends IDatabaseLocalSubtitle { }
+
+export function createMediaRecordPolyMap ( tables : DatabaseTables ) : PolyRelationMap<MediaRecord> {
+    return {
+        'movie': tables.movies,
+        'show': tables.shows,
+        'season': tables.seasons,
+        'episode': tables.episodes,
+        'custom': tables.custom
+    };
+}

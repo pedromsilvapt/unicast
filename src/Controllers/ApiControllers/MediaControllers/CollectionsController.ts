@@ -1,5 +1,5 @@
 import { BaseTableController } from "../../BaseTableController";
-import { CollectionRecord, BaseTable } from "../../../Database";
+import { CollectionRecord, BaseTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { Route } from "../../BaseController";
@@ -15,12 +15,14 @@ export class CollectionsController extends BaseTableController<CollectionRecord>
         return query;
     }
 
-    async transform ( req : Request, res : Response, collection : CollectionRecord ) : Promise<any> {
+    async transformAll ( req : Request, res : Response, collections : CollectionRecord[] ) : Promise<any> {
+        collections = await super.transformAll( req, res, collections );
+
         if ( req.query.items === 'true' ) {
-            ( collection as any ).items = await this.server.media.getCollectionItems( collection.id );
+            await this.server.database.tables.collections.relations.records.applyAll( collections );
         }
 
-        return collection;
+        return collections;
     }
     
     get table () : BaseTable<CollectionRecord> {

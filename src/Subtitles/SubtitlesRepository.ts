@@ -2,7 +2,7 @@ import { ILocalSubtitle } from "./SubtitlesManager";
 import { UnicastServer } from "../UnicastServer";
 import { MediaRecord } from "../MediaRecord";
 import { ISubtitle } from "./Providers/ISubtitlesProvider";
-import { SubtitlesTable } from "../Database";
+import { SubtitlesTable } from "../Database/Database";
 import * as path from 'path';
 import * as fs from 'mz/fs';
 

@@ -4,7 +4,7 @@ import * as r from 'rethinkdb';
 import { MediaRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
-import { MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database/Database";
 
 export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
     getTransientQuery ( req : Request, query : r.Sequence ) : r.Sequence {

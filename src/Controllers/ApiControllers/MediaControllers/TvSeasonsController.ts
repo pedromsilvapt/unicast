@@ -1,5 +1,5 @@
 import { TvSeasonMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
@@ -23,21 +23,23 @@ export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecor
         return this.getTransientQuery( req, query );
     }
 
-    async transform ( req : Request, res : Response, season : TvSeasonMediaRecord ) : Promise<any> {
-        const url = await this.server.getMatchingUrl( req );
-        
-        ( season as any ).cachedArtwork = this.server.artwork.getCachedObject( url, season.kind, season.id, season.art );
-        
+    async transformAll ( req : Request, res : Response, seasons : TvSeasonMediaRecord[] ) : Promise<any> {
         if ( req.query.episodes === 'true' ) {
-            ( season as any ).episodes = await this.server.database.tables.episodes.find( query => {
-                return query.filter( { tvSeasonId: season.id } );
-            } );
+            await this.server.database.tables.seasons.relations.episodes.applyAll( seasons );
+        }
 
-            for ( let episode of ( season as any).episodes ) {
-                episode.cachedArtwork = this.server.artwork.getCachedObject( url, episode.kind, episode.id, episode.art );        
+        for ( let season of seasons ) {
+            const url = await this.server.getMatchingUrl( req );
+            
+            ( season as any ).cachedArtwork = this.server.artwork.getCachedObject( url, season.kind, season.id, season.art );
+
+            if ( req.query.episodes === 'true' ) {
+                for ( let episode of ( season as any).episodes ) {
+                    episode.cachedArtwork = this.server.artwork.getCachedObject( url, episode.kind, episode.id, episode.art );        
+                }
             }
         }
 
-        return season;
+        return seasons;
     }
 }

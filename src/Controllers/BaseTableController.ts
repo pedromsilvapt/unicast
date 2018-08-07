@@ -1,5 +1,5 @@
 import { BaseController, Route } from "./BaseController";
-import { BaseTable } from "../Database";
+import { BaseTable } from "../Database/Database";
 import { Response, Request } from "restify";
 import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from "restify-errors";
 import * as regexEscape from 'regex-escape';
@@ -84,12 +84,28 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
 
     async transformQuery ( req : Request ) : Promise<void> {};
 
+    async transformAll ( req : Request, res : Response, items : R[] ) : Promise<any[]> {
+        return items;
+    }
+
     async transform ( req : Request, res : Response, item : R ) : Promise<any> {
         return item;
     }
 
     async transformDocument ( req : Request, res : Response, item : any, isNew : boolean ) : Promise<any> {
         return item;
+    }
+
+    runTransforms ( req : Request, res : Response, item : R ) : Promise<R>;
+    runTransforms ( req : Request, res : Response, item : R[] ) : Promise<R[]>;
+    async runTransforms ( req : Request, res : Response, item : R | R[] ) : Promise<R | R[]> {
+        if ( !( item instanceof Array ) ) {
+            return ( await this.runTransforms( req, res, [ item ] ) )[ 0 ];
+        }
+
+        item = await this.transformAll( req, res, item );
+
+        return Promise.all( item.map( each => this.transform( req, res, each ) ) );
     }
 
     @Route( 'get', '/' )
@@ -102,7 +118,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
 
         const list = await this.table.find( query => this.getPagination( req, res, this.getQuery( req, res, query ) ) );
 
-        return Promise.all( list.map( item => this.transform( req, res, item ) ) );
+        return this.runTransforms( req, res, list );
     }
 
     @Route( 'get', '/:id', null, true )
@@ -117,7 +133,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        return this.transform( req, res, item );
+        return this.runTransforms( req, res, item );
     }
 
     @Route( 'post', '/' )
@@ -134,7 +150,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             throw new ResourceNotFoundError( `Could not find resource with id "${req.params.id}".` );
         }
 
-        return this.transform( req, res, item );
+        return this.runTransforms( req, res, item );
     }
 
     @Route( 'post', '/:id', null, true )
@@ -151,7 +167,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        return this.transform( req, res, item );
+        return this.runTransforms( req, res, item );
     }
 
     @Route( 'del', '/:id', null, true )

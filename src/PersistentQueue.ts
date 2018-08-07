@@ -1,9 +1,7 @@
-import { MediaKind } from "./MediaRecord";
-import { BaseTable, JobRecord, PersistentQueueTable } from "./Database";
+import { JobRecord, PersistentQueueTable } from "./Database/Database";
 import { UnicastServer } from "./UnicastServer";
 import { Sequence } from 'rethinkdb';
 import { AsyncInterval, setAsyncInterval, clearAsyncInterval } from "./ES2017/AsyncInterval";
-// import { Semaphore } from "await-semaphore";
 import { Semaphore } from "data-semaphore";
 import * as r from 'rethinkdb';
 import { addMilliseconds, isBefore } from 'date-fns';

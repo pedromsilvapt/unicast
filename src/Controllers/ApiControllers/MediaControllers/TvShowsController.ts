@@ -1,5 +1,5 @@
 import { TvShowMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database";
+import { MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import { MediaTableController } from "./MediaController";
 import * as r from 'rethinkdb';
@@ -20,25 +20,29 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
                 ) ) ) );
     }
 
-    async transform ( req : Request, res : Response, show : TvShowMediaRecord ) : Promise<any> {
+    async transformAll ( req : Request, res : Response, shows : TvShowMediaRecord[] ) : Promise<any> {
+        shows = await super.transformAll( req, res, shows );
+
         const url = await this.server.getMatchingUrl( req );
         
-        ( show as any ).cachedArtwork = this.server.artwork.getCachedObject( url, show.kind, show.id, show.art );
-        
         if ( req.query.seasons === 'true' ) {
-            ( show as any ).seasons = await this.server.database.tables.seasons.find( query => {
-                return query.orderBy( { index: 'number' } ).filter( { tvShowId: show.id } );
-            } );
+            await this.server.database.tables.shows.relations.seasons.applyAll( shows );
+        }
+            
+        if ( req.query.collections === 'true' ) {
+            await this.server.database.tables.shows.relations.collections.applyAll( shows );
+        }
 
-            for ( let season of ( show as any).seasons ) {
-                season.cachedArtwork = this.server.artwork.getCachedObject( url, season.kind, season.id, season.art );        
+        for ( let show of shows ) {
+            ( show as any ).cachedArtwork = this.server.artwork.getCachedObject( url, show.kind, show.id, show.art );
+         
+            if ( req.query.seasons === 'true' ) {
+                for ( let season of ( show as any).seasons ) {
+                    season.cachedArtwork = this.server.artwork.getCachedObject( url, season.kind, season.id, season.art );        
+                }
             }
         }
 
-        if ( req.query.collections === 'true' ) {
-            ( show as any ).collections = await this.server.media.getCollections( show.kind, show.id );
-        }
-
-        return show;
+        return shows;
     }
 }

@@ -6,7 +6,7 @@ import { Transcoder } from "../../../Transcoding/Transcoder";
 import { FFmpegHlsDriver, FFmpegHlsFlag, FFmpegHlsPlaylistType } from "../../../Transcoding/FFmpegHlsDriver/FFmpegHlsDriver";
 import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
 import { MediaRecord } from "../../../MediaRecord";
-import { HistoryRecord } from "../../../Database";
+import { HistoryRecord } from "../../../Database/Database";
 import { CancelToken } from 'data-cancel-token';
 import { MediaTrigger } from "../../../TriggerDb";
 
