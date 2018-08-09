@@ -5,15 +5,19 @@ import { IMediaRepository, IMovieMediaRepository, ITvShowMediaRepository, ITvSea
 import * as deepEqual from 'deep-equal';
 import { BackgroundTask } from "./BackgroundTask";
 import * as itt from 'itt';
+import { DiagnosticsService, Diagnostics } from "./Diagnostics";
 
 export class MediaSync {
     database : Database;
 
     repositories : RepositoriesManager;
 
-    constructor ( db : Database, repositories : RepositoriesManager ) {
+    diagnostics : DiagnosticsService;
+
+    constructor ( db : Database, repositories : RepositoriesManager, diagnostics : Diagnostics ) {
         this.database = db;
         this.repositories = repositories;
+        this.diagnostics = diagnostics.service( 'media/sync' );
     }
 
     async clean ( task : BackgroundTask = null, kinds : MediaKind[] = null ) : Promise<void> {
@@ -23,11 +27,15 @@ export class MediaSync {
             kinds = AllMediaKinds;
         }
 
+        task.addTotal( kinds.length );
+
         for ( let kind of kinds ) {
             await task.do( this.cleanKind( kind, task ) );
         }
 
         task.setStateFinish();
+
+        this.diagnostics.info( 'Finished clean' );
     }
 
     async sync ( task : BackgroundTask = null, kinds : MediaKind[] = null ) : Promise<void> {
@@ -36,12 +44,16 @@ export class MediaSync {
         if ( !kinds ) {
             kinds = AllMediaKinds;
         }
+        
+        task.addTotal( kinds.length );
 
         for ( let kind of kinds ) {
             await task.do( this.syncKind( kind, task ) );
         }
 
         task.setStateFinish();
+
+        this.diagnostics.info( 'Finished sync' );
     }
 
     protected async syncKind ( kind : MediaKind, task : BackgroundTask = null ) : Promise<void> {
@@ -52,7 +64,7 @@ export class MediaSync {
             const remote = this.getKindRemote( repository, kind );
 
             if ( remote ) {
-                remote.run( task, null );
+                await remote.run( task, null );
             }
         }
     }
@@ -65,7 +77,7 @@ export class MediaSync {
             const remote = this.getKindRemote( repository, kind );
 
             if ( remote ) {
-                remote.clean( task, null );
+                await remote.clean( task, null );
             }
         }
     }
@@ -88,6 +100,10 @@ export abstract class MediaSyncKind<M extends MediaRecord = MediaRecord, R exten
     constructor ( engine : MediaSync, repository : R ) {
         this.engine = engine;
         this.repository = repository;
+    }
+
+    logResourceAction ( action : string, kind : string, title : string, id : string, diffs : object = {} ) {
+        this.engine.diagnostics.info( `${ action } media record ${ kind } ${ title } (${ id })` );
     }
 
     abstract loadAllIndexed () : Promise<M[]>;
@@ -263,10 +279,16 @@ export class MediaSyncMovie extends MediaSyncKind<MovieMediaRecord, IMovieMediaR
 
     async delete ( record : MovieMediaRecord ) : Promise<void> {
         await this.engine.database.tables.movies.delete( record.id );
+        
+        this.logResourceAction( 'DELETED', record.kind, record.title, record.id );
     }
 
     async create ( record : MovieMediaRecord ) : Promise<MovieMediaRecord> {
-        return this.engine.database.tables.movies.create( { ...record } );
+        record = await this.engine.database.tables.movies.create( { ...record } );
+
+        this.logResourceAction( 'CREATED', record.kind, record.title, record.id );
+
+        return record;
     }
 
     async update ( existing : MovieMediaRecord, record : MovieMediaRecord ) {
@@ -279,7 +301,11 @@ export class MediaSyncMovie extends MediaSyncKind<MovieMediaRecord, IMovieMediaR
                 playCount: existing.playCount
             }
 
-            return this.engine.database.tables.movies.update( existing.id, record );
+            await this.engine.database.tables.movies.update( existing.id, record );
+
+            this.logResourceAction( 'UPDATED', record.kind, record.title, record.id );
+
+            return record;
         }
 
         return existing;
@@ -302,6 +328,8 @@ export class MediaSyncTvShow extends MediaSyncKind<TvShowMediaRecord, ITvShowMed
     
     async delete ( record : TvShowMediaRecord ) : Promise<void> {
         await this.engine.database.tables.shows.delete( record.id );
+
+        this.logResourceAction( 'DELETED', record.kind, record.title, record.id );
     }
 
     async create ( record : TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
@@ -312,7 +340,11 @@ export class MediaSyncTvShow extends MediaSyncKind<TvShowMediaRecord, ITvShowMed
 
         delete record.id;
 
-        return this.engine.database.tables.shows.create( record );
+        record = await this.engine.database.tables.shows.create( record );
+
+        this.logResourceAction( 'CREATED', record.kind, record.title, record.id );
+
+        return record;
     }
 
     async update ( existing : TvShowMediaRecord, record : TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
@@ -325,6 +357,8 @@ export class MediaSyncTvShow extends MediaSyncKind<TvShowMediaRecord, ITvShowMed
             };
 
             await this.engine.database.tables.shows.update( existing.id, record );
+            
+            this.logResourceAction( 'UPDATED', record.kind, record.title, record.id );
 
             return record;
         }
@@ -394,6 +428,8 @@ export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSea
 
     async delete ( record : TvSeasonMediaRecord ) : Promise<void> {
         await this.engine.database.tables.seasons.delete( record.id );
+
+        this.logResourceAction( 'DELETED', record.kind, record.title, record.id );
     }
 
     async create ( record : TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
@@ -405,7 +441,11 @@ export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSea
 
         delete record.id;
 
-        return this.engine.database.tables.seasons.create( record );
+        record = await this.engine.database.tables.seasons.create( record );
+        
+        this.logResourceAction( 'CREATED', record.kind, record.title, record.id );
+
+        return record;
     }
 
     async update ( existing : TvSeasonMediaRecord, record : TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
@@ -420,6 +460,8 @@ export class MediaSyncTvSeason extends MediaSyncKind<TvSeasonMediaRecord, ITvSea
             };
 
             await this.engine.database.tables.seasons.update( existing.id, record );
+
+            this.logResourceAction( 'UPDATED', record.kind, record.title, record.id );
 
             return record;
         }
@@ -488,6 +530,8 @@ export class MediaSyncTvEpisode extends MediaSyncKind<TvEpisodeMediaRecord, ITvE
     
     async delete ( record : TvEpisodeMediaRecord ) : Promise<void> {
         await this.engine.database.tables.episodes.delete( record.id );
+
+        this.logResourceAction( 'DELETED', record.kind, record.title, record.id );
     }
 
     async create ( record : TvEpisodeMediaRecord ) : Promise<TvEpisodeMediaRecord> {
@@ -499,7 +543,11 @@ export class MediaSyncTvEpisode extends MediaSyncKind<TvEpisodeMediaRecord, ITvE
 
         delete record.id;
 
-        return this.engine.database.tables.episodes.create( record );
+        record = await this.engine.database.tables.episodes.create( record );
+
+        this.logResourceAction( 'CREATED', record.kind, record.title, record.id );
+
+        return record;
     }
 
     async update ( existing : TvEpisodeMediaRecord, record : TvEpisodeMediaRecord ) : Promise<TvEpisodeMediaRecord> {
@@ -512,6 +560,8 @@ export class MediaSyncTvEpisode extends MediaSyncKind<TvEpisodeMediaRecord, ITvE
             };
 
             await this.engine.database.tables.episodes.update( existing.id, record );
+            
+            this.logResourceAction( 'UPDATED', record.kind, record.title, record.id );
 
             return record;
         }

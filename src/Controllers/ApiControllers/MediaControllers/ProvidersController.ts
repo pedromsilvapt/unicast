@@ -11,7 +11,7 @@ export class ProvidersController extends BaseController {
         
         const database = this.server.database;
         
-        const sync = new MediaSync( database, this.server.providers.repositories );
+        const sync = new MediaSync( database, this.server.providers.repositories, this.server.diagnostics );
 
         const [ task, done ] = BackgroundTask.fromPromise( task => sync.sync( task, kinds ) );
         
@@ -37,7 +37,7 @@ export class ProvidersController extends BaseController {
         
         const database = this.server.database;
         
-        const sync = new MediaSync( database, this.server.providers.repositories );
+        const sync = new MediaSync( database, this.server.providers.repositories, this.server.diagnostics );
 
         const [ task, done ] = BackgroundTask.fromPromise( task => sync.clean( task, kinds ) );
 
