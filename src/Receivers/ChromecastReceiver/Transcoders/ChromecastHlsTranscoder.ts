@@ -1,7 +1,7 @@
 import { ChromecastReceiver } from "../ChromecastReceiver";
 import { MediaStream, MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { VideoMediaStream } from "../../../MediaProviders/MediaStreams/VideoStream";
-import { FFmpegDriver, FFmpegPreset } from "../../../Transcoding/FFmpegDriver/FFmpegDriver";
+import { FFmpegPreset } from "../../../Transcoding/FFmpegDriver/FFmpegDriver";
 import { Transcoder } from "../../../Transcoding/Transcoder";
 import { FFmpegHlsDriver, FFmpegHlsFlag, FFmpegHlsPlaylistType } from "../../../Transcoding/FFmpegHlsDriver/FFmpegHlsDriver";
 import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
@@ -9,6 +9,8 @@ import { MediaRecord } from "../../../MediaRecord";
 import { HistoryRecord } from "../../../Database/Database";
 import { CancelToken } from 'data-cancel-token';
 import { MediaTrigger } from "../../../TriggerDb";
+import { TrackMediaMetadata, FileMediaMetadata } from "../../../MediaTools";
+import * as chalk from 'chalk';
 
 export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOptions> {
     receiver : ChromecastReceiver;
@@ -22,7 +24,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
 
         this.options = {
             segmentSize: 3,
-            maxBitrate: 9000000,
+            maxBitrate: 12000000,
             constantRateFactor: 22,
             maxResolution: { width: 1920, height : 1080 },
             supportedVideoCodecs: [ 'h264' ],
@@ -37,6 +39,28 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         };
     }
 
+    printDiagnosticsLine ( ...segments : ( string | number )[] ) {
+        console.log( ...segments );
+    }
+
+    printDiagnosticsTranscodingReport ( file : FileMediaMetadata, video : TrackMediaMetadata, audio : TrackMediaMetadata, conditionVideo : boolean, conditionAudio : boolean, options : ChromecastTranscoderOptions, triggers : any[] ) {
+        const ltrue = chalk.green( 'true' );
+        const lfalse = chalk.red( 'false' );
+        const lbool = ( flag : boolean ) => flag ? ltrue : lfalse;
+        const lname = ( name : string ) => chalk.grey( name );
+        const lvalue = ( value : any ) => chalk.yellow( value );
+
+        this.printDiagnosticsLine( 'TRANSCODING ENABLED:', lbool( conditionVideo || conditionAudio ) );
+        this.printDiagnosticsLine( lname( '# bitrate:' ), lbool( ( file.format.bitrate || video.bitrate ) > options.maxBitrate ), lvalue( ( file.format.bitrate || video.bitrate ) ), '>', lvalue( options.maxBitrate ) );
+        this.printDiagnosticsLine( lname( '# video codec:' ), lbool( options.supportedVideoCodecs.every( c => c !== video.codec ) ), lvalue( video.codec ), `(allowed ${ options.supportedVideoCodecs.join( ', ' ) })` );
+        this.printDiagnosticsLine( lname( '# audio codec:' ), lbool( options.supportedAudioCodecs.every( c => c !== audio.codec ) ), lvalue( audio.codec ), `(allowed ${ options.supportedAudioCodecs.join( ', ' ) })` );
+        this.printDiagnosticsLine( lname( '# resolution width:' ), lbool( video.width > options.maxResolution.width ), lvalue( video.width ), '>', lvalue( options.maxResolution.width ) );
+        this.printDiagnosticsLine( lname( '# resolution height:' ), lbool( video.height > options.maxResolution.height ), lvalue( video.height ), '>', lvalue( options.maxResolution.height ) );
+        this.printDiagnosticsLine( lname( '# forced video transcoding:' ), lbool( options.forceVideoTranscoding ) );
+        this.printDiagnosticsLine( lname( '# force audio transcoding:' ), lbool( options.forceAudioTranscoding ) );
+        this.printDiagnosticsLine( lname( '# triggers:' ), triggers.length > 0 ? ltrue : lfalse, `(${ lvalue( triggers.length ) })` );
+    }
+
     async transcodeVideo ( session : HistoryRecord, media : MediaRecord, stream : VideoMediaStream, customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<VideoMediaStream> {
         const triggers : MediaTrigger[] = await this.receiver.server.triggerdb.queryMediaRecord( media );
 
@@ -45,7 +69,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         const video = stream.metadata.tracks.find( track => track.type === 'video' );
         const audio = stream.metadata.tracks.find( track => track.type === 'audio' );
 
-        const conditionBitrate : boolean = ( video.bitrate || stream.metadata.files[ 0 ].format.bitrate ) > options.maxBitrate;
+        const conditionBitrate : boolean = ( stream.metadata.files[ 0 ].format.bitrate || video.bitrate ) > options.maxBitrate;
         const conditionVideoCodec : boolean = options.supportedVideoCodecs.every( c => c !== video.codec );
         const conditionAudioCodec : boolean = options.supportedAudioCodecs.every( c => c !== audio.codec );
         const conditionResolution : boolean = video.width > options.maxResolution.width || video.height > options.maxResolution.height;
@@ -54,6 +78,8 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         const conditionAudio : boolean = conditionAudioCodec || options.forceAudioTranscoding;
 
         const driver = this.receiver.server.transcoding.getDriverFor<FFmpegHlsDriver>( 'video', 'ffmpeg-hls' );
+
+        this.printDiagnosticsTranscodingReport( stream.metadata.files[ 0 ], video, audio, conditionVideo, conditionAudio, options, triggers );
 
         if ( conditionVideo || conditionAudio ) {
             driver.setVideoCodec( options.defaultVideoCodec );

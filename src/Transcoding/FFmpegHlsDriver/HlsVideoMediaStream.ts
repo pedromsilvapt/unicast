@@ -6,7 +6,7 @@ import { FFmpegHlsDriver } from "./FFmpegHlsDriver";
 import * as fs from 'mz/fs';
 import * as path from 'path';
 import * as mime from 'mime';
-import { HistoryRecord } from "../../Database";
+import { HistoryRecord } from "../../Database/Database";
 import { HlsVirtualPlaylist } from "./HlsVirtualPlaylist";
 import { Readable } from "stream";
 
