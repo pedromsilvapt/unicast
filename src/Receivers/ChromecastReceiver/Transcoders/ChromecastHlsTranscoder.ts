@@ -62,6 +62,10 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
     }
 
     async transcodeVideo ( session : HistoryRecord, media : MediaRecord, stream : VideoMediaStream, customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<VideoMediaStream> {
+        if ( !stream.metadata ) {
+            return stream;
+        }
+
         const triggers : MediaTrigger[] = await this.receiver.server.triggerdb.queryMediaRecord( media );
 
         const options = { ...this.options, customOptions };

@@ -100,5 +100,7 @@ export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
 }
 
 export interface CustomMediaRecord extends PlayableMediaRecord {
-    kind: MediaKind.Custom
+    kind: MediaKind.Custom;
+    subtitle: string;
+    plot: string;
 }

@@ -11,8 +11,10 @@ export abstract class BaseMediaProvider implements IMediaProvider {
 
     readonly name : string;
 
-    constructor ( name : string ) {
-        this.name = name;
+    constructor ( name ?: string ) {
+        if ( name ) {
+            this.name = name;
+        }
     }
 
     cacheKey ( source : MediaSourceDetails ) : string {
