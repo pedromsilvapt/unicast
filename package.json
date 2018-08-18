@@ -81,7 +81,7 @@
     "restify-router": "^0.4.2",
     "rethinkdb": "^2.3.3",
     "sha1": "^1.1.1",
-    "sharp": "^0.18.4",
+    "sharp": "^0.20.0",
     "shorthash": "0.0.2",
     "sort-by": "^1.2.0",
     "srt-to-vtt": "^1.1.1",

@@ -55,7 +55,7 @@ export class HlsVirtualPlaylist {
 
         lines.push( '#EXT-X-ENDLIST' );
 
-        return new Buffer( lines.join( '\n' ) );
+        return Buffer.from( lines.join( '\n' ) );
     }
 
     toBuffer () : Buffer {

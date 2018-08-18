@@ -743,7 +743,7 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
     
         return {
-            records: new ManyToManyPolyRelation( 'records', map, tables.collectionsMedia, 'collectionIn', 'mediaKind', 'mediaId' )
+            records: new ManyToManyPolyRelation( 'records', map, tables.collectionsMedia, 'collectionId', 'mediaKind', 'mediaId' )
         };
     }
 }

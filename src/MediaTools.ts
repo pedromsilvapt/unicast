@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { spawn } from 'child_process'
 import { Config } from "./Config";
+import * as os from 'os';
 
 export class MediaTools {
     protected static probeNormalizeTracks ( tracks : any[] ) : TrackMediaMetadata[] {
@@ -107,6 +108,14 @@ export interface MediaMetadata {
     tracks : TrackMediaMetadata[];
 }
 
+export function binaryExecutableName ( name : string ) : string {
+    if ( os.platform() == 'win32' ) {
+        return name + '.exe';
+    } else {
+        return name;
+    }
+}
+
 export class FFProbe {
     file : string;
 
@@ -118,11 +127,11 @@ export class FFProbe {
         this.file = file;
 
         if ( Config.has( 'ffmpeg.path' ) ) {
-            this.commandPath = path.join( Config.get( 'ffmpeg.path' ), 'ffprobe' );
+            this.commandPath = path.join( Config.get( 'ffmpeg.path' ), binaryExecutableName( 'ffprobe' ) );
         } else {
-            this.commandPath = 'ffprobe';
+            this.commandPath = binaryExecutableName( 'ffprobe' );
         }
-
+        
         this.args  = [ '-show_format', '-show_streams', '-loglevel', 'warning', '-print_format', 'json' ];
 
         if ( typeof file === 'string' ) {
@@ -130,19 +139,6 @@ export class FFProbe {
         } else {
             this.args.push( '-i', 'pipe:0' );
         }
-
-        // options = extend( {
-        //     showStreams: true,
-        //     showFormat: true,
-        //     logLevel: 'warning',
-        //     format: 'json'
-        // }, options );
-
-        // this.setOptionMeta( [ 'show_format', 'show_streams' ], { toggle: true } );
-        // this.setOptionMeta( 'format', { rename: 'of' } );
-        // this.setOptionMeta( 'log_level', { rename: 'loglevel' } );
-
-        // this.setManyOptions( options );
     }
 
     transformResult ( result ) {
