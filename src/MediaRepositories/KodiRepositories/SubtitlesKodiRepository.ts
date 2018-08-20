@@ -1,10 +1,7 @@
 import { ISubtitlesRepository } from "../../Subtitles/SubtitlesRepository";
 import { MediaRecord, PlayableMediaRecord } from "../../MediaRecord";
 import { ILocalSubtitle } from "../../Subtitles/SubtitlesManager";
-import { MediaStreamType } from "../../MediaProviders/MediaStreams/MediaStream";
-import { FileSystemVideoMediaStream } from "../../MediaProviders/FileSystemMediaProvider/MediaStreams/FileSystemVideoStream";
 import * as path from 'path';
-import { FileSystemMediaProvider } from "../../MediaProviders/FileSystemMediaProvider/FileSystemMediaProvider";
 import { UnicastServer } from "../../UnicastServer";
 import * as isVideo from 'is-video';
 import * as isSubtitle from 'is-subtitle';

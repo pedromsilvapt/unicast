@@ -1,5 +1,4 @@
 import { MediaRecord, MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MediaKind } from "../../MediaRecord";
-import { IMediaProvider } from "../../MediaProviders/BaseMediaProvider/IMediaProvider";
 import { ISubtitlesRepository } from "../../Subtitles/SubtitlesRepository";
 
 export interface MediaQuery {
@@ -24,8 +23,6 @@ export interface IMediaRepository<R extends MediaRecord = MediaRecord, Q extends
     readonly kind : MediaKind;
 
     readonly name : string;
-
-    readonly provider : IMediaProvider;
 
     readonly indexable : boolean;
 

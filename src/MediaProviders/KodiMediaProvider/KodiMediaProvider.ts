@@ -8,7 +8,7 @@ import { TvShowKodiRepository } from "../../MediaRepositories/KodiRepositories/T
 import { KodiApi } from "../../MediaRepositories/KodiRepositories/KodiApi";
 import { TvSeasonKodiRepository } from "../../MediaRepositories/KodiRepositories/TvSeasonKodiRepository";
 import { TvEpisodeKodiRepository } from "../../MediaRepositories/KodiRepositories/TvEpisodeKodiRepository";
-import { SubtitlesKodiRepository, ILocalKodiSubtitle } from "../../MediaRepositories/KodiRepositories/SubtitlesKodiRepository";
+import { SubtitlesKodiRepository } from "../../MediaRepositories/KodiRepositories/SubtitlesKodiRepository";
 
 export class KodiMediaProvider extends BaseMediaProvider {
     readonly type : string = 'kodi';
@@ -34,10 +34,10 @@ export class KodiMediaProvider extends BaseMediaProvider {
     onEntityInit () {
         this.subtitlesRepository = new SubtitlesKodiRepository( this.server );
 
-        this.moviesRepository = new MovieKodiRepository( this, this.api, this.subtitlesRepository );
-        this.tvShowsKodiRepository = new TvShowKodiRepository( this, this.api );
-        this.tvSeasonsKodiRepository = new TvSeasonKodiRepository( this, this.api );
-        this.tvEpisodesKodiRepository = new TvEpisodeKodiRepository( this, this.api, this.subtitlesRepository );
+        this.moviesRepository = new MovieKodiRepository( this.name, this.api, this.subtitlesRepository );
+        this.tvShowsKodiRepository = new TvShowKodiRepository( this.name, this.api );
+        this.tvSeasonsKodiRepository = new TvSeasonKodiRepository( this.name, this.api );
+        this.tvEpisodesKodiRepository = new TvEpisodeKodiRepository( this.name, this.api, this.subtitlesRepository );
     }
 
     getMediaRepositories () : IMediaRepository[] {
@@ -57,14 +57,3 @@ export class KodiMediaProvider extends BaseMediaProvider {
         return new KodiMediaSource( manager, this, source );
     }
 }
-
-// ( async function main () {
-//     const api = new KodiApi();
-
-//     const movies = await api.getMovies( {} );
-
-//     // console.log( movies.length, Object.keys( movies[ 0 ] ) );
-//     movies.filter( movie => movie.file.startsWith( 'L:' ) && movie.playcount === 0 ).forEach( movie => console.log( movie.file ) );
-
-//     console.log( movies.filter( movie => movie.file.startsWith( 'L:' ) && movie.playcount === 0 ).length );
-// } )().catch( err => console.error( err ) );

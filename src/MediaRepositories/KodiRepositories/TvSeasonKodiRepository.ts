@@ -2,7 +2,6 @@ import { BaseKodiRepository, KodiRecordTransformer, RecordTransformer, RecordTra
 import { ITvSeasonMediaRepository, MediaQuery, TvSeasonMediaQuery } from "../BaseRepository/IMediaRepository";
 import { TvSeasonMediaRecord, MediaKind } from "../../MediaRecord";
 import { KodiApi } from "./KodiApi";
-import { IMediaProvider } from "../../MediaProviders/BaseMediaProvider/IMediaProvider";
 
 export class TvSeasonKodiRepository extends BaseKodiRepository<TvSeasonMediaRecord> implements ITvSeasonMediaRepository {
     internalKind = 'season';
@@ -11,8 +10,8 @@ export class TvSeasonKodiRepository extends BaseKodiRepository<TvSeasonMediaReco
 
     transformer : TvSeasonRecordTransformer;
     
-    constructor ( provider : IMediaProvider, kodi : KodiApi ) {
-        super( provider, kodi );
+    constructor ( name : string, kodi : KodiApi ) {
+        super( name, kodi );
 
         this.transformer = new TvSeasonRecordTransformer( this.name );
     }
