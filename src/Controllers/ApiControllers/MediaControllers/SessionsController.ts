@@ -12,7 +12,7 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
 
     searchFields : string[] = [];
 
-    allowedActions : string[] = [ 'list', 'get' ];
+    allowedActions : string[] = [ 'list', 'get', 'delete' ];
 
     async transformAll ( req : Request, res : Response, history : HistoryRecord[] ) : Promise<any[]> {
         history = await super.transformAll( req, res, history );

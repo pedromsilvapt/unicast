@@ -1,9 +1,8 @@
 import DefaultMediaRemote from './Remotes/DefaultMedia';
-import { GeneralRemote } from './Remotes/General';
 import { Diagnostics } from '../../Diagnostics';
 import { Client } from 'node-ssdp';
 import * as mdns from 'multicast-dns';
-import { emits, shared, SharedIterable } from 'data-async-iterators';
+import { subject, shared, SharedIterable } from 'data-async-iterators';
 
 export interface ChromecastReceiverIdentification {
     name : string;
@@ -47,7 +46,7 @@ export abstract class ChromecastReceiverScanner {
 
         this.timeout = timeout;
 
-        const emitter = emits<ChromecastReceiverIdentification>();
+        const emitter = subject<ChromecastReceiverIdentification>();
 
         this.pushDevice = emitter.value.bind( emitter );
 
@@ -98,6 +97,10 @@ export abstract class ChromecastReceiverScanner {
         this.scan();
 
         if ( typeof this.timeout === 'number' ) {
+            if ( this.timeoutToken ) {
+                clearTimeout( this.timeoutToken );
+            }
+
             this.timeoutToken = setTimeout( () => {
                 this.timedOut = true;
 

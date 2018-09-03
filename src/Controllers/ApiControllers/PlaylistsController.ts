@@ -80,7 +80,7 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
     }
 
     async transformAll ( req : Request, res : Response, playlists : PlaylistRecord[] ) {
-        if ( req.query.items ) {
+        if ( req.query.items === 'true' ) {
             await this.server.database.tables.playlists.relations.items.applyAll( playlists );
         }
 

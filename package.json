@@ -39,7 +39,7 @@
     "chalk": "^2.1.0",
     "composable": "^0.2.4",
     "config": "^1.26.2",
-    "data-async-iterators": "^0.5.6",
+    "data-async-iterators": "^0.7.1",
     "data-cancel-token": "^0.5.3",
     "data-optional": "0.0.2",
     "data-semaphore": "^0.3.2",

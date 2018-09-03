@@ -220,10 +220,10 @@ export class UnicastServer {
 
         await this.database.install();
 
-        await this.onListen.notify();
-
         await this.http.listen( [ port, sslPort ] );
 
+        await this.onListen.notify();
+        
         await this.storage.clean();
 
         this.diagnostics.info( this.name, this.name + ' listening on ' + this.getUrl() );
@@ -592,12 +592,6 @@ export class MediaWatchTracker {
                 tvSeasonId: r.expr( seasonIds )            
             }, watched, watchedAt );
             
-            // const episodesBySeason = itt( episodes ).groupBy( ep => ep.tvSeasonId );
-    
-            // const episodesCount = itt( episodesBySeason )
-            //     .map( ( [ season, episodes ] ) => itt( episodes ).keyBy( ep => ep.number ).size )
-            //     .toMap<string, number>();
-            
             for ( let season of seasons ) {
                 await this.mediaManager.database.tables.seasons.update( season.id, {
                     watchedEpisodesCount: watched ? season.episodesCount : 0
@@ -605,7 +599,8 @@ export class MediaWatchTracker {
             }
     
             await this.mediaManager.database.tables.shows.update( show.id, {
-                watchedEpisodesCount: watched ? itt( seasons ).map( season => season.episodesCount ).sum() : 0
+                watchedEpisodesCount: watched ? itt( seasons ).map( season => season.episodesCount ).sum() : 0,
+                watched: watched
             } );
         } catch ( err ) {
             throw err;
@@ -631,7 +626,8 @@ export class MediaWatchTracker {
             const show = await this.mediaManager.database.tables.shows.get( season.tvShowId );
     
             await this.mediaManager.database.tables.shows.update( season.tvShowId, {
-                watchedEpisodesCount: show.watchedEpisodesCount + difference 
+                watchedEpisodesCount: show.watchedEpisodesCount + difference,
+                watched: show.watchedEpisodesCount + difference >= show.episodesCount
             } );
         } catch ( err ) {
             throw err;
@@ -657,11 +653,6 @@ export class MediaWatchTracker {
 
             // MARK UNAWAITED            
             this.mediaManager.server.repositories.watch( episode, watched );
-            // const repository = this.mediaManager.server.providers.repositories.get( episode.repository, MediaKind.TvEpisode );
-
-            // if ( repository && repository.watch ) {
-            //     await repository.watch( episode.internalId, watched );
-            // }
 
             const similarEpisodes = await this.mediaManager.database.tables.episodes.find( query => query.filter( {
                 watched: true,
@@ -670,14 +661,15 @@ export class MediaWatchTracker {
             } ) );
 
             if ( ( watched && similarEpisodes.length === 1 ) || ( !watched && similarEpisodes.length === 0 ) ) {
-                await this.mediaManager.database.tables.seasons.update( episode.id, {
+                await this.mediaManager.database.tables.seasons.update( episode.tvSeasonId, {
                     watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 )
                 } );
         
                 const season = await this.mediaManager.database.tables.seasons.get( episode.tvSeasonId );
         
                 await this.mediaManager.database.tables.shows.update( season.tvShowId, {
-                    watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 )
+                    watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 ),
+                    watched: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 ).eq( r.row( 'episodesCount' ) ),
                 } );
             }
         } catch ( err ) {
@@ -704,11 +696,6 @@ export class MediaWatchTracker {
 
             // MARK UNAWAITED
             this.mediaManager.server.repositories.watch( movie, watched );
-            // const repository = this.mediaManager.server.providers.repositories.get( movie.repository, MediaKind.Movie );
-    
-            // if ( repository && repository.watch ) {
-            //     await repository.watch( movie.internalId, watched );
-            // }
         } catch ( err ) {
             throw err;
         } finally {

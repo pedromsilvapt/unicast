@@ -13,6 +13,7 @@ import { ManyToManyRelation } from './Relations/ManyToManyRelation';
 import { HasManyRelation } from './Relations/OneToManyRelation';
 import { BelongsToOneRelation } from './Relations/OneToOneRelation';
 import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
+import { Hook } from '../Hookable';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -52,7 +53,11 @@ export class Database {
 
     installed : Promise<void> = this.installedFuture.promise;
 
+    onInstall : Hook<void>;
+
     constructor ( server : UnicastServer ) {
+        this.onInstall = server.hooks.create<void>( 'database/install' );
+
         this.config = server.config;
 
         this.connections = new ConnectionPool( this );
@@ -88,6 +93,8 @@ export class Database {
                 await ( r.db( databaseName ) as any ).wait().run( conn );
 
                 await this.tables.install();
+
+                await this.onInstall.notify();
 
                 await ( r.db( databaseName ) as any ).wait().run( conn );
             } finally {
@@ -489,6 +496,14 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
+    protected async updateIfChanged ( baseRecord : object, changes : object ) : Promise<R> {
+        if ( Object.keys( changes ).some( key => baseRecord[ key ] !== changes[ key ] ) ) {
+            return this.update( baseRecord[ "id" ], changes );
+        }
+
+        return baseRecord as R;
+    }
+
     async updateMany ( predicate : RethinkPredicate, update : any, limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
 
@@ -548,6 +563,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
             this.pool.release( connection );
         }
     }
+
+    async repair ( ids : string[] = null ) { }
 }
 
 export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
@@ -568,7 +585,6 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
     ];
 
     relations : {
-        
         collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>
     };
     
@@ -605,12 +621,12 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         };
     }
 
-    async updateEpisodesCount ( id : string ) : Promise<TvShowMediaRecord> {
-        const seasons = await this.database.tables.seasons.find( query => query.filter( {
-            tvShowId: id
-        } ) );
+    async updateEpisodesCount ( show : string | TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
+        if ( typeof show === 'string' ) {
+            show = await this.get( show );
+        }
 
-        const show : TvShowMediaRecord = null;
+        const seasons = await this.relations.seasons.load( show );
 
         const seasonsCount = seasons.length;
 
@@ -618,10 +634,26 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
 
         const watchedEpisodesCount = itt( seasons ).map( season => season.watchedEpisodesCount ).sum();
 
-        return this.update( id, {
+        return this.updateIfChanged( show, {
             watched: episodesCount == watchedEpisodesCount,
             seasonsCount, episodesCount, watchedEpisodesCount
         } );
+    }
+
+    async repair ( shows : string[] = null ) {
+        if ( !shows ) {
+            shows = ( await this.find() ).map( show => show.id );
+        }
+        
+        for ( let showId of shows ) {
+            const show = await this.get( showId );
+
+            const seasons = await this.relations.seasons.load( show );
+            
+            await this.database.tables.seasons.repair( seasons.map( season => season.id ) )
+
+            await this.updateEpisodesCount( show );
+        }
     }
 }
 
@@ -645,19 +677,38 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         };
     }
 
-    async updateEpisodesCount ( id : string ) : Promise<TvSeasonMediaRecord> {
-        const season = await this.database.tables.seasons.get( id );
+    async updateEpisodesCount ( season : string | TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
+        if ( typeof season === 'string' ) {
+            season = await this.get( season );
+        }
 
-        const episodes = await this.database.tables.episodes.find( query => query.filter( { tvSeasonId: id } ) );
+        // const episodes = await this.database.tables.episodes.find( query => query.filter( { tvSeasonId: id } ) );
+        const episodes = await this.relations.episodes.load( season );
 
         const episodesCount : number = itt( episodes ).keyBy( episode => episode.number ).size;
 
         const watchedEpisodesCount : number = itt( episodes ).filter( episode => episode.watched ).keyBy( episode => episode.number ).size;
 
-        return this.update( id, {
+        return this.updateIfChanged( season, {
             episodesCount,
             watchedEpisodesCount
         } );
+    }
+
+    async repair ( seasons : string[] = null ) {
+        if ( !seasons ) {
+            seasons = ( await this.find() ).map( season => season.id );
+        }
+        
+        for ( let seasonId of seasons ) {
+            const season = await this.get( seasonId );
+
+            const episodes = await this.relations.episodes.load( season );
+            
+            await this.database.tables.episodes.repair( episodes.map( episode => episode.id ) )
+
+            await this.updateEpisodesCount( season );
+        }
     }
 }
 
