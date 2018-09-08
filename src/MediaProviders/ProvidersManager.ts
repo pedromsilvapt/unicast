@@ -37,7 +37,6 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
         return this;
     }
 
-    
     delete ( entity : IMediaProvider ) : this {
         super.delete( entity );
 

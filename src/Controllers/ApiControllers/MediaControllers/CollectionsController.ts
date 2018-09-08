@@ -59,4 +59,26 @@ export class CollectionsController extends BaseTableController<CollectionRecord>
             } );
         }
     }
+
+    @Route( 'del', '/:id/:kind' )
+    async removeKind ( req : Request, res : Response ) : Promise<void> {
+        const { id, kind } = req.params;
+
+        const collection = await this.table.get( id );
+
+        collection.kinds = collection.kinds.filter( eachKind => eachKind != kind );
+
+        if ( collection.kinds.length === 0 ) {
+            await this.server.database.tables.collectionsMedia.deleteMany( { collectionId: id } );
+
+            await this.table.delete( id );
+        } else {
+            await this.server.database.tables.collectionsMedia.deleteMany( {
+                collectionId: id,
+                mediaKind: kind,
+            } );
+
+            await this.table.update( id, collection );
+        }
+    }
 }

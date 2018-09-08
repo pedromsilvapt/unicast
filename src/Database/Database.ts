@@ -1,6 +1,6 @@
 import * as r from 'rethinkdb';
 import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "../MediaRecord";
-import { Semaphore, StateSemaphore } from 'data-semaphore';
+import { Semaphore } from 'data-semaphore';
 import { Config } from "../Config";
 import { IDatabaseLocalSubtitle } from '../Subtitles/SubtitlesRepository';
 import * as itt from 'itt';
@@ -704,7 +704,7 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
             const season = await this.get( seasonId );
 
             const episodes = await this.relations.episodes.load( season );
-            
+
             await this.database.tables.episodes.repair( episodes.map( episode => episode.id ) )
 
             await this.updateEpisodesCount( season );

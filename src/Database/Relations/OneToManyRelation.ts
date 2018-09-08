@@ -28,6 +28,6 @@ export class HasManyRelation<M extends Record, R extends Record> extends OneToMa
     }
 
     findRelated ( item : M, related : Map<string, R[]> ) : R[] {
-        return related.get( item.id );
+        return related.get( item.id ) || [];
     }
 }
