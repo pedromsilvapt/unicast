@@ -14,6 +14,8 @@ export class Keyboard {
     static isSetup : boolean = false;    
 
     static close () {
+        process.stdin.removeAllListeners( 'keypress' );
+
         if ( ( process.stdin as any ).setRawMode ) {
             ( process.stdin as any ).setRawMode( false );
             

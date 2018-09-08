@@ -27,6 +27,7 @@ import * as itt from 'itt';
 import { Semaphore } from "data-semaphore";
 import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
 import { serveMedia } from "./ES2017/HttpServeMedia";
+import { exec } from "mz/child_process";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -65,6 +66,8 @@ export class UnicastServer {
 
     readonly diagnostics : Diagnostics;
 
+    readonly commands : CommandsManager;
+
     readonly http : MultiServer;
 
     get repositories () : RepositoriesManager { return this.providers.repositories; }
@@ -101,6 +104,8 @@ export class UnicastServer {
         this.http = new MultiServer( [ restify.createServer() ] );
 
         this.streams = new HttpRawMediaServer( this );  
+
+        this.commands = new CommandsManager( this );
 
         if ( Config.get<boolean>( 'server.ssl.enabled' ) && fs.existsSync( './server.key' ) ) {
             const keyFile = Config.get<string>( 'server.ssl.key' );
@@ -538,38 +543,29 @@ export class MediaWatchTracker {
         this.mediaManager = mediaManager;
     }
 
-    protected async watchTvEpisodesBatch ( query : any, watched : boolean, watchedAt : Date ) : Promise<TvEpisodeMediaRecord[]> {
-        const episodes = await this.mediaManager.database.tables.episodes.find( query => query.filter( {
-            ...query,
-            watched: !watched
-        } ) );
+    protected async watchTvEpisodesBatch ( customQuery : any, watched : boolean, watchedAt : Date ) : Promise<TvEpisodeMediaRecord[]> {
+        const episodes = await this.mediaManager.database.tables.episodes.find( query => 
+            query.filter( doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ) )    
+        );
 
         if ( watched ) {
             // When watched, only increment the play count of episodes whose play count equals zero
-            await this.mediaManager.database.tables.episodes.updateMany( {
-                ...query,
-                watched: false
-            }, row => r.branch(
+            await this.mediaManager.database.tables.episodes.updateMany(
+                doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( false ) ) )
+            , row => r.branch(
                 row( 'playCount' ).eq( 0 ),
                 { watched: true, lastPlayedAt: watchedAt, playCount: row( 'playCount' ).add( 1 ) } as any,
                 { watched: true } as any
             ) );
         } else {
-            await this.mediaManager.database.tables.episodes.updateMany( {
-                ...query,
-                watched: true
-            }, { watched: false } );
+            await this.mediaManager.database.tables.episodes.updateMany(
+                doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( true ) ) )
+            , { watched: false } );
         }
 
         for ( let episode of episodes ) {
             // MARK UNAWAITED            
             this.mediaManager.server.repositories.watch( episode, watched );
-            // const repository = this.mediaManager.server.providers.repositories.get( episode.repository, MediaKind.TvEpisode );
-    
-            // if ( repository && repository.watch ) {
-                
-            //     await repository.watch( episode.internalId, watched );
-            // }
         }
 
         return episodes;
@@ -588,9 +584,7 @@ export class MediaWatchTracker {
             const seasonIds = seasons.map( season => season.id );
     
             // And get all episodes that belong to those seasons and are or are not watched, depending on what change we are making
-            const episodes = await this.watchTvEpisodesBatch( {
-                tvSeasonId: r.expr( seasonIds )            
-            }, watched, watchedAt );
+            const episodes = await this.watchTvEpisodesBatch( doc => r.expr( seasonIds ).contains( doc( 'tvSeasonId' ) ), watched, watchedAt );
             
             for ( let season of seasons ) {
                 await this.mediaManager.database.tables.seasons.update( season.id, {
@@ -613,9 +607,7 @@ export class MediaWatchTracker {
         const release = await this.semaphore.acquire();
 
         try {
-            const episodes = await this.watchTvEpisodesBatch( {
-                tvSeasonId: season.id
-            }, watched, watchedAt );
+            const episodes = await this.watchTvEpisodesBatch( doc => doc( 'tvSeasonId' ).eq( r.expr( season.id ) ), watched, watchedAt );
     
             const difference = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
     
@@ -905,5 +897,38 @@ export class MultiServer extends EventEmitter {
 
     get log () {
         return this.servers[ 0 ].log;
+    }
+}
+
+export class CommandsManager {
+    server : UnicastServer;
+    
+    events : {
+        [ key : string ]: string
+    } = {};
+
+    constructor ( server : UnicastServer ) {
+        this.server = server;
+
+        this.events = this.server.config.get<any>( 'execute', {} );
+
+        this.server.onStart.subscribe( this.onStart.bind( this ) );
+        this.server.onClose.subscribe( this.onClose.bind( this ) );
+
+        console.log( this.events.onStart, this.events.onClose );
+    }
+
+    runHooks ( binding : string ) {
+        if ( binding in this.events && this.events[ binding ] ) {
+            exec( this.events[ binding ] );
+        }
+    }
+    
+    onStart () {
+        return this.runHooks( 'onStart' );
+    }
+
+    onClose () {
+        return this.runHooks( 'onClose' );
     }
 }
