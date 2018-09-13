@@ -16,8 +16,30 @@ export var AllMediaKinds : MediaKind[] = [
     MediaKind.Custom
 ];
 
-export type ExternalReferences = { [ key : string ] : string };
+export type ExternalReferences = { 
+    imdb ?: string;
+    tvdb ?: string;
+    [ key : string ] : string
+};
 
+export enum ArtRecordKind {
+    Poster = "poster",
+    Background = "background",
+    Banner = "banner",
+    Thumbnail = "thumbnail"
+}
+
+// This object represents one single piece of art, that might not even be associated with any MediaRecord
+export interface ArtRecord { 
+    kind: ArtRecordKind;
+    width: number;
+    height: number;
+    url : string;
+    season ?: number;
+    score ?: number;
+}
+
+// This is the object that is stored in the art property of each MediaRecord
 export interface MediaRecordArt {
     thumbnail : string;
     poster : string;
@@ -37,9 +59,9 @@ export interface PlayableQualityRecord {
 }
 
 export interface MediaRecord {
-    id : string;
+    id ?: string;
     internalId : string;
-    repository : string;
+    repository ?: string;
     kind : MediaKind;
     title : string;
     art : MediaRecordArt;
@@ -92,11 +114,14 @@ export interface TvSeasonMediaRecord extends MediaRecord {
 }
 
 export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
+    art: TvSeasonMediaRecordArt,
     kind : MediaKind.TvEpisode;
     number : number;
     seasonNumber : number;   
     tvSeasonId : string;
     rating : number;
+    plot : string;
+    airedAt : Date;
 }
 
 export interface CustomMediaRecord extends PlayableMediaRecord {

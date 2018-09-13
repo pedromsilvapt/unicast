@@ -1,52 +1,43 @@
 import { BaseMediaProvider } from "../BaseMediaProvider/BaseProvider";
-import { IMediaRepository } from "../../MediaRepositories/BaseRepository/IMediaRepository";
 import { ProvidersManager } from "../ProvidersManager";
 import { MediaSourceDetails } from "../MediaSource";
 import { KodiMediaSource } from "./KodiMediaSource";
-import { MovieKodiRepository } from "../../MediaRepositories/KodiRepositories/MovieKodiRepository";
-import { TvShowKodiRepository } from "../../MediaRepositories/KodiRepositories/TvShowsKodiRepository";
-import { KodiApi } from "../../MediaRepositories/KodiRepositories/KodiApi";
-import { TvSeasonKodiRepository } from "../../MediaRepositories/KodiRepositories/TvSeasonKodiRepository";
-import { TvEpisodeKodiRepository } from "../../MediaRepositories/KodiRepositories/TvEpisodeKodiRepository";
-import { SubtitlesKodiRepository } from "../../MediaRepositories/KodiRepositories/SubtitlesKodiRepository";
+// TODO delete this and update the kodi repository for the new repositories API
+// import { MovieKodiRepository } from "../../MediaRepositoriesLegacy/KodiRepositories/MovieKodiRepository";
+// import { TvShowKodiRepository } from "../../MediaRepositoriesLegacy/KodiRepositories/TvShowsKodiRepository";
+// import { KodiApi } from "../../MediaRepositoriesLegacy/KodiRepositories/KodiApi";
+// import { TvSeasonKodiRepository } from "../../MediaRepositoriesLegacy/KodiRepositories/TvSeasonKodiRepository";
+// import { TvEpisodeKodiRepository } from "../../MediaRepositoriesLegacy/KodiRepositories/TvEpisodeKodiRepository";
+// import { SubtitlesKodiRepository } from "../../MediaRepositoriesLegacy/KodiRepositories/SubtitlesKodiRepository";
 
 export class KodiMediaProvider extends BaseMediaProvider {
     readonly type : string = 'kodi';
 
-    api : KodiApi;
+    // api : KodiApi;
 
-    moviesRepository : MovieKodiRepository;
+    // moviesRepository : MovieKodiRepository;
 
-    tvShowsKodiRepository : TvShowKodiRepository;
+    // tvShowsKodiRepository : TvShowKodiRepository;
 
-    tvSeasonsKodiRepository : TvSeasonKodiRepository;
+    // tvSeasonsKodiRepository : TvSeasonKodiRepository;
 
-    tvEpisodesKodiRepository : TvEpisodeKodiRepository;
+    // tvEpisodesKodiRepository : TvEpisodeKodiRepository;
 
-    subtitlesRepository : SubtitlesKodiRepository;
+    // subtitlesRepository : SubtitlesKodiRepository;
 
     constructor ( name : string, address : string, port : number ) {
         super( name );
 
-        this.api = new KodiApi( address, port );
+        // this.api = new KodiApi( address, port );
     }
 
     onEntityInit () {
-        this.subtitlesRepository = new SubtitlesKodiRepository( this.server );
+        // this.subtitlesRepository = new SubtitlesKodiRepository( this.server );
 
-        this.moviesRepository = new MovieKodiRepository( this.name, this.api, this.subtitlesRepository );
-        this.tvShowsKodiRepository = new TvShowKodiRepository( this.name, this.api );
-        this.tvSeasonsKodiRepository = new TvSeasonKodiRepository( this.name, this.api );
-        this.tvEpisodesKodiRepository = new TvEpisodeKodiRepository( this.name, this.api, this.subtitlesRepository );
-    }
-
-    getMediaRepositories () : IMediaRepository[] {
-        return [
-            this.moviesRepository,
-            this.tvShowsKodiRepository,
-            this.tvSeasonsKodiRepository,
-            this.tvEpisodesKodiRepository
-        ];
+        // this.moviesRepository = new MovieKodiRepository( this.name, this.api, this.subtitlesRepository );
+        // this.tvShowsKodiRepository = new TvShowKodiRepository( this.name, this.api );
+        // this.tvSeasonsKodiRepository = new TvSeasonKodiRepository( this.name, this.api );
+        // this.tvEpisodesKodiRepository = new TvEpisodeKodiRepository( this.name, this.api, this.subtitlesRepository );
     }
 
     match ( source : string ) : boolean {

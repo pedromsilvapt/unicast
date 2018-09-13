@@ -14,6 +14,7 @@ import { HasManyRelation } from './Relations/OneToManyRelation';
 import { BelongsToOneRelation } from './Relations/OneToOneRelation';
 import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
 import { Hook } from '../Hookable';
+import * as equals from 'fast-deep-equal';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -420,8 +421,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
         try {
             let table = 
-            // opts.index ? 
-            //     this.query().getAll( ...keys, opts ) :
+            opts.index ? 
+                this.query().getAll( ( r as any ).args( keys ), { index: opts.index } ) :
                 this.query().getAll( ( r as any ).args( keys ) );
     
             if ( opts.query ) {
@@ -464,6 +465,12 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
+    async findOne<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : Promise<T> {
+        const results = await this.find<T>( subQuery => query ? query( subQuery ).limit( 1 ) : subQuery.limit( 1 ) );
+
+        return results[ 0 ];
+    }
+
     async create ( record : R ) : Promise<R> {
         const connection = await this.pool.acquire();
 
@@ -496,8 +503,12 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    protected async updateIfChanged ( baseRecord : object, changes : object ) : Promise<R> {
-        if ( Object.keys( changes ).some( key => baseRecord[ key ] !== changes[ key ] ) ) {
+    async updateIfChanged ( baseRecord : object, changes : object ) : Promise<R> {
+        if ( Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) ) ) {
+            const changed = Object.keys( changes ).filter( key => !equals( baseRecord[ key ], changes[ key ] ) );
+
+            console.log( changed.map( key => `${key}(${typeof baseRecord[key]} ${baseRecord[key]}, ${ typeof changes[key] } ${changes[key]})` ) );
+            
             return this.update( baseRecord[ "id" ], changes );
         }
 
@@ -567,14 +578,21 @@ export abstract class BaseTable<R extends { id ?: string }> {
     async repair ( ids : string[] = null ) { }
 }
 
+export interface MediaTableForeignKeys {
+    [ kind : string ]: MediaKind;
+}
+
 export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
-    
+    baseline : Partial<R> = {};
+
+    foreignMediaKeys : MediaTableForeignKeys = {};
 }
 
 export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
     readonly tableName : string = 'media_movies';
 
     indexesSchema : IndexSchema[] = [ 
+        { name: 'internalId' },
         { name: 'title' },
         { name: 'rating' },
         { name: 'parentalRating' },
@@ -593,12 +611,28 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
             collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', 'movie' )
         };
     }
+
+    baseline : Partial<MovieMediaRecord> = {
+        watched: false,
+        lastPlayed: null,
+        playCount: 0,
+        transient: false
+    }
 }
 
 export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     readonly tableName : string = 'media_tvshows';
 
-    indexesSchema : IndexSchema[] = [ 
+    baseline : Partial<TvShowMediaRecord> = {
+        watched: false,
+        watchedEpisodesCount: 0,
+        episodesCount: 0,
+        seasonsCount: 0,
+        transient: false
+    };
+
+    indexesSchema : IndexSchema[] = [
+        { name: 'internalId' },
         { name: 'title' },
         { name: 'seasonsCount' },
         { name: 'rating' },
@@ -660,7 +694,18 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
 export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
     readonly tableName : string = 'media_tvseasons';
 
+    baseline : Partial<TvSeasonMediaRecord> = {
+        watchedEpisodesCount: 0,
+        episodesCount: 0,
+        transient: false
+    };
+    
+    foreignMediaKeys : MediaTableForeignKeys = {
+        tvShowId: MediaKind.TvShow
+    }
+
     indexesSchema : IndexSchema[] = [ 
+        { name: 'internalId' },
         { name: 'number' },
         { name: 'tvShowId' }
     ];
@@ -715,13 +760,24 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
 export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     readonly tableName : string = 'media_tvepisodes';
     
+    baseline : Partial<TvEpisodeMediaRecord> = {
+        watched: false,
+        lastPlayed: null,
+        playCount: 0,
+        transient: false
+    };
+
     indexesSchema : IndexSchema[] = [ 
+        { name: 'internalId' },
         { name: 'number' },
         { name: 'tvSeasonId' },
         { name: 'lastPlayed' },
         { name: 'addedAt' }
     ];
 
+    foreignMediaKeys : MediaTableForeignKeys = {
+        tvSeasonId: MediaKind.TvSeason
+    }
     
     relations : {
         season: BelongsToOneRelation<TvEpisodeMediaRecord, TvSeasonMediaRecord>
@@ -736,6 +792,10 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
 
 export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
     readonly tableName : string = 'media_custom';
+
+    indexesSchema : IndexSchema[] = [
+        { name: 'internalId' }
+    ];
 }
 
 export class PlaylistsTable extends BaseTable<PlaylistRecord> {

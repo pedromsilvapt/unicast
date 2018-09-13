@@ -29,11 +29,11 @@ export class KodiMediaSource extends MediaSource {
     info () : Promise<MediaRecord> {
         let [ kind, id ] = [ this.sourceKind, this.sourceId ];
 
-        if ( kind === 'movie' ) {
-            return this.provider.moviesRepository.fetch( id );
-        } else if ( kind === 'episode' ) {
-            return this.provider.tvEpisodesKodiRepository.fetch( id );
-        }
+        // if ( kind === 'movie' ) {
+        //     return this.provider.moviesRepository.fetch( id );
+        // } else if ( kind === 'episode' ) {
+        //     return this.provider.tvEpisodesKodiRepository.fetch( id );
+        // }
 
         return Promise.resolve( null );
     }

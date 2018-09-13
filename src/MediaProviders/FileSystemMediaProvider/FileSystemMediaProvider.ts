@@ -1,5 +1,4 @@
 import { BaseMediaProvider } from "../BaseMediaProvider/BaseProvider";
-import { IMediaRepository } from "../../MediaRepositories/BaseRepository/IMediaRepository";
 import { ProvidersManager } from "../ProvidersManager";
 import { MediaSourceDetails } from "../MediaSource";
 import { FileSystemMediaSource } from "./FileSystemMediaSource";
@@ -15,10 +14,6 @@ export class FileSystemMediaProvider extends BaseMediaProvider {
 
     cacheKey () {
         return null;
-    }
-
-    getMediaRepositories () : IMediaRepository[] {
-        return [];
     }
 
     match ( source : string ) : boolean {

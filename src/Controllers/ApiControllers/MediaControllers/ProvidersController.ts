@@ -11,9 +11,9 @@ export class ProvidersController extends BaseController {
         
         const database = this.server.database;
         
-        const sync = new MediaSync( database, this.server.providers.repositories, this.server.diagnostics );
+        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
 
-        const [ task, done ] = BackgroundTask.fromPromise( task => sync.sync( task, kinds ) );
+        const [ task, done ] = BackgroundTask.fromPromise( task => sync.run( task, { kinds, cleanMissing: false, dryRun: req.query.dryRun === 'true' } ) );
         
         this.server.tasks.register( task );
 
@@ -37,10 +37,10 @@ export class ProvidersController extends BaseController {
         
         const database = this.server.database;
         
-        const sync = new MediaSync( database, this.server.providers.repositories, this.server.diagnostics );
+        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
 
-        const [ task, done ] = BackgroundTask.fromPromise( task => sync.clean( task, kinds ) );
-
+        const [ task, done ] = BackgroundTask.fromPromise( task => sync.run( task, { kinds, cleanMissing: true, dryRun: req.query.dryRun === 'true' } ) );
+        
         this.server.tasks.register( task );
 
         if ( req.query.wait === 'true' ) {

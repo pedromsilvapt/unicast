@@ -1,7 +1,6 @@
 import { IMediaProvider } from "./IMediaProvider";
 import { MediaSource, MediaSourceDetails } from "../MediaSource";
 import { ProvidersManager } from "../ProvidersManager";
-import { IMediaRepository } from "../../MediaRepositories/BaseRepository/IMediaRepository";
 import { UnicastServer } from "../../UnicastServer";
 
 export abstract class BaseMediaProvider implements IMediaProvider {
@@ -20,8 +19,6 @@ export abstract class BaseMediaProvider implements IMediaProvider {
     cacheKey ( source : MediaSourceDetails ) : string {
         return source.id;
     }
-
-    abstract getMediaRepositories () : IMediaRepository[];
 
     abstract match ( source : string ) : boolean;
 

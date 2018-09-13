@@ -9,11 +9,11 @@ import * as fs from 'mz/fs';
 import { ISubtitle } from "../../Subtitles/Providers/ISubtitlesProvider";
 import * as shorthash from 'shorthash';
 
-export interface ILocalKodiSubtitle extends ILocalSubtitle {
+export interface ILocalFileSystemSubtitle extends ILocalSubtitle {
     file : string;
 }
 
-export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiSubtitle> {
+export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILocalFileSystemSubtitle> {
     canWrite : boolean = true;
 
     server : UnicastServer;
@@ -43,13 +43,13 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         return ( await this.get( media, id ) ) != null;
     }
 
-    async get ( media : MediaRecord, id : string ) : Promise<ILocalKodiSubtitle> {
+    async get ( media : MediaRecord, id : string ) : Promise<ILocalFileSystemSubtitle> {
         const list = await this.list( media );
 
         return list.find( sub => sub.id === id );
     }
 
-    async list ( media : MediaRecord ) : Promise<ILocalKodiSubtitle[]> {
+    async list ( media : MediaRecord ) : Promise<ILocalFileSystemSubtitle[]> {
         const file = this.getMediaFile( media );
 
         const folder = path.dirname( file );
@@ -57,12 +57,12 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         const filePrefix = path.basename( file, path.extname( file ) );
 
         const otherFiles = await fs.readdir( folder );
-
+        
         const matchingFiles = otherFiles
             .filter( file => file.startsWith( filePrefix ) )
             .filter( file => isSubtitle( file ) );
-
-        const subtitles : ILocalKodiSubtitle[] = [];
+        
+        const subtitles : ILocalFileSystemSubtitle[] = [];
         
         for ( let subFile of matchingFiles ) {
             subtitles.push( {
@@ -77,7 +77,7 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         return subtitles;
     }
 
-    read ( media : MediaRecord, subtitle : ILocalKodiSubtitle ) : Promise<NodeJS.ReadableStream> {
+    read ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle ) : Promise<NodeJS.ReadableStream> {
         const folder = path.dirname( this.getMediaFile( media ) );
         
         const file = path.join( folder, subtitle.releaseName + subtitle.format );
@@ -85,7 +85,7 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         return Promise.resolve( fs.createReadStream( file ) );
     }
 
-    async store ( media : MediaRecord, subtitle : ISubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalKodiSubtitle> {
+    async store ( media : MediaRecord, subtitle : ISubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalFileSystemSubtitle> {
         const extension = '.' + ( subtitle.format || 'srt' ).toLowerCase();
 
         const video = this.getMediaFile( media );
@@ -117,7 +117,7 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         };
     }
 
-    async update ( media : MediaRecord, subtitle : ILocalKodiSubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalKodiSubtitle> {
+    async update ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalFileSystemSubtitle> {
         const file = subtitle.file;
 
         if ( Buffer.isBuffer( data ) ) {
@@ -131,7 +131,7 @@ export class SubtitlesKodiRepository implements ISubtitlesRepository<ILocalKodiS
         return subtitle;
     }
 
-    async delete ( media : MediaRecord, subtitle : ILocalKodiSubtitle ) : Promise<void> {
+    async delete ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle ) : Promise<void> {
         const folder = path.dirname( this.getMediaFile( media ) );
 
         const file = path.join( folder, subtitle.file );

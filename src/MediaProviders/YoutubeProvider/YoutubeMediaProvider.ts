@@ -1,5 +1,4 @@
 import { BaseMediaProvider } from "../BaseMediaProvider/BaseProvider";
-import { IMediaRepository } from "../../MediaRepositories/BaseRepository/IMediaRepository";
 import { ProvidersManager } from "../ProvidersManager";
 import { MediaSourceDetails } from "../MediaSource";
 import { YoutubeMediaSource } from "./YoutubeMediaSource";
@@ -11,10 +10,6 @@ export class YoutubeMediaProvider extends BaseMediaProvider {
 
     cacheKey () {
         return null;
-    }
-
-    getMediaRepositories () : IMediaRepository[] {
-        return [];
     }
 
     match ( source : string ) : boolean {

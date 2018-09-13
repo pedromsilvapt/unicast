@@ -3,7 +3,6 @@ import { EntityManager, EntityFactoryManager } from "../EntityManager";
 import { IMediaProvider } from "./BaseMediaProvider/IMediaProvider";
 import { MediaStream } from "./MediaStreams/MediaStream";
 import { MediaRecord } from "../MediaRecord";
-import { RepositoriesManager } from "../MediaRepositories/RepositoriesManager";
 import { ProviderFactory } from "./BaseMediaProvider/ProviderFactory";
 import { UnicastServer } from "../UnicastServer";
 
@@ -19,12 +18,8 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
 
     readonly factories : ProviderFactoriesManager;
 
-    repositories : RepositoriesManager;
-
     constructor ( server : UnicastServer ) {
         super( server );
-
-        this.repositories = new RepositoriesManager( this.server );
 
         this.factories = new ProviderFactoriesManager( this, server );        
     }
@@ -32,16 +27,12 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
     add ( entity : IMediaProvider ) : this {
         super.add( entity );
 
-        this.repositories.addMany( entity.getMediaRepositories() );
-
         return this;
     }
 
     delete ( entity : IMediaProvider ) : this {
         super.delete( entity );
 
-        this.repositories.deleteMany( entity.getMediaRepositories() );
-        
         return this;
     }
 

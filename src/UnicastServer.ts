@@ -27,6 +27,7 @@ import * as itt from 'itt';
 import { Semaphore } from "data-semaphore";
 import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
 import { serveMedia } from "./ES2017/HttpServeMedia";
+import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
 import { exec } from "mz/child_process";
 
 export class UnicastServer {
@@ -43,6 +44,8 @@ export class UnicastServer {
     readonly config : Config;
 
     readonly database : Database;
+
+    readonly scrapers : ScrapersManager;
 
     readonly receivers : ReceiversManager;
 
@@ -70,7 +73,7 @@ export class UnicastServer {
 
     readonly http : MultiServer;
 
-    get repositories () : RepositoriesManager { return this.providers.repositories; }
+    readonly repositories : RepositoriesManager;
 
     protected cachedIpV4 : string;
 
@@ -87,9 +90,13 @@ export class UnicastServer {
 
         this.tasks = new BackgroundTasksManager();
 
+        this.scrapers = new ScrapersManager( this );
+
         this.receivers = new ReceiversManager( this );
 
         this.providers = new ProvidersManager( this );
+
+        this.repositories = new RepositoriesManager( this );
 
         this.media = new MediaManager( this );        
    
@@ -103,7 +110,7 @@ export class UnicastServer {
 
         this.http = new MultiServer( [ restify.createServer() ] );
 
-        this.streams = new HttpRawMediaServer( this );  
+        this.streams = new HttpRawMediaServer( this );
 
         this.commands = new CommandsManager( this );
 
@@ -226,7 +233,7 @@ export class UnicastServer {
         await this.database.install();
 
         await this.http.listen( [ port, sslPort ] );
-
+        
         await this.onListen.notify();
         
         await this.storage.clean();
@@ -366,7 +373,7 @@ export class MediaManager {
     get ( kind : MediaKind.Custom, id : string ) : Promise<CustomMediaRecord>;
     get<R extends MediaRecord = MediaRecord> ( kind : MediaKind, id : string ) : Promise<R>;
     get<R extends MediaRecord = MediaRecord> ( kind : MediaKind, id : string ) : Promise<R> {
-        let table : BaseTable<R> = this.getTable( kind ) as BaseTable<R>;
+        let table : BaseTable<R> = this.getTable( kind ) as MediaTable<R>;
 
         return table.get( id );
     }
@@ -564,7 +571,7 @@ export class MediaWatchTracker {
         }
 
         for ( let episode of episodes ) {
-            // MARK UNAWAITED            
+            // MARK UNAWAITED
             this.mediaManager.server.repositories.watch( episode, watched );
         }
 
@@ -585,7 +592,7 @@ export class MediaWatchTracker {
     
             // And get all episodes that belong to those seasons and are or are not watched, depending on what change we are making
             const episodes = await this.watchTvEpisodesBatch( doc => r.expr( seasonIds ).contains( doc( 'tvSeasonId' ) ), watched, watchedAt );
-            
+                        
             for ( let season of seasons ) {
                 await this.mediaManager.database.tables.seasons.update( season.id, {
                     watchedEpisodesCount: watched ? season.episodesCount : 0
@@ -914,8 +921,6 @@ export class CommandsManager {
 
         this.server.onStart.subscribe( this.onStart.bind( this ) );
         this.server.onClose.subscribe( this.onClose.bind( this ) );
-
-        console.log( this.events.onStart, this.events.onClose );
     }
 
     runHooks ( binding : string ) {

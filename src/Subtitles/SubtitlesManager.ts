@@ -32,7 +32,7 @@ export class SubtitlesManager {
     }
 
     async get ( media : MediaRecord, id : string ) : Promise<ILocalSubtitle> {
-        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
+        const mediaRepository = this.server.repositories.get( media.repository );
 
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.get( media, id );
@@ -49,8 +49,8 @@ export class SubtitlesManager {
     }
 
     async list ( media : MediaRecord ) : Promise<ILocalSubtitle[]> {
-        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
-
+        const mediaRepository = this.server.repositories.get( media.repository );
+        
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.list( media );
         } else if ( mediaRepository.subtitles.canWrite ) {
@@ -88,7 +88,7 @@ export class SubtitlesManager {
             body = await this.providers.download( subtitle );
         }
         
-        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
+        const mediaRepository = this.server.repositories.get( media.repository );
 
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.store( media, subtitle, body );
@@ -106,7 +106,7 @@ export class SubtitlesManager {
     }
 
     async update ( media : MediaRecord, subtitle : ILocalSubtitle, data : Buffer | NodeJS.ReadableStream ) : Promise<ILocalSubtitle> {
-        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
+        const mediaRepository = this.server.repositories.get( media.repository );
 
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.update( media, subtitle as IDatabaseLocalSubtitle, data );
@@ -118,7 +118,7 @@ export class SubtitlesManager {
     }
 
     async delete ( media : MediaRecord, subtitle : ILocalSubtitle ) : Promise<void> {
-        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
+        const mediaRepository = this.server.repositories.get( media.repository );
 
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.delete( media, subtitle as IDatabaseLocalSubtitle );
@@ -130,7 +130,7 @@ export class SubtitlesManager {
     }
 
     async read ( media : MediaRecord, subtitle : ILocalSubtitle ) : Promise<NodeJS.ReadableStream> {
-        const mediaRepository = this.server.repositories.get( media.repository, media.kind );
+        const mediaRepository = this.server.repositories.get( media.repository );
 
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.read( media, subtitle as IDatabaseLocalSubtitle );
