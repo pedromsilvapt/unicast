@@ -11,6 +11,7 @@ import { TasksController } from "./TasksController";
 import { SubtitlesController } from "./MediaControllers/SubtitlesController";
 import { SessionsController } from "./MediaControllers/SessionsController";
 import * as sortBy from 'sort-by';
+import { ScrapersController } from "./MediaControllers/ScrapersController";
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -45,6 +46,9 @@ export class ApiController extends BaseController {
 
     @Controller( SessionsController, '/media/sessions' )
     sessions : SessionsController;
+
+    @Controller( ScrapersController, '/media/scrapers' )
+    scrapers : ScrapersController;
 
     @Route( 'get', '/close' )
     async close () {

@@ -22,7 +22,7 @@ server.providers.add( new FileSystemMediaProvider( 'filesystem' ) );
 server.providers.add( new YoutubeMediaProvider( 'youtube' ) );
 
 server.scrapers.add( new TheTVDB( 'B2038B70F41A5365' ) );
-server.scrapers.add( new TheMovieDB( '45ab4cebe57ae11c2ee50c87005ddfe8' ) );
+server.scrapers.add( new TheMovieDB( 'f090bb54758cabf231fb605d3e3e0468' ) );
 
 server.transcoding.registerDriver( new FFmpegDriverFactory() );
 server.transcoding.registerDriver( new FFmpegHlsDriverFactory() );

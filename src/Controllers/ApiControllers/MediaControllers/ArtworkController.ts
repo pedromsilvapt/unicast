@@ -15,8 +15,34 @@ export class ArtworkController extends BaseController {
         }
     }
 
+    @Route( 'get', '/scrapers/:scraper/:kind/:id/:property', BinaryResponse )
+    async getForScrapedMedia ( req : Request, res : Response ) : Promise<FileInfo> {
+        const scraperName = req.params.scraper;
+        const kind = req.params.kind;
+        const id = req.params.id;
+        const property = req.params.property;
+        
+        const record = await this.server.scrapers.getMedia( scraperName, kind, id );
+
+        const address : string = objectPath.get( record.art, property );
+
+        if ( address ) {
+            const cachePath : string = await this.server.artwork.get( address, { width: req.query.width ? +req.query.width : null } );
+
+            const stats : fs.Stats = await fs.stat( cachePath );
+            
+            return {
+                mime: mime.lookup( cachePath ),
+                length: stats.size,
+                data: fs.createReadStream( cachePath )
+            };
+        } else {
+            throw new NotFoundError( `Could not find image "${ address }".` );
+        }
+    }
+
     @Route( 'get', '/:kind/:id/:property', BinaryResponse )
-    async list ( req : Request, res : Response ) : Promise<FileInfo> {
+    async getForStoredMedia ( req : Request, res : Response ) : Promise<FileInfo> {
         const kind = req.params.kind;
         const id = req.params.id;
         const property = req.params.property;

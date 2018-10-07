@@ -59,6 +59,22 @@ export class ArtworkCache {
 
         return cached;
     }
+    
+    getCachedScraperObject (  url : string, scraper : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
+        const cached : any = {};
+
+        for ( let key of Object.keys( art ) ) {
+            if ( typeof art[ key ] === 'string' ) {
+                cached[ key ] = `${url}/api/media/artwork/scrapers/${ scraper }/${ kind }/${ id }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
+            } else if ( art[ key ] && typeof art[ key ] === 'object' ) {
+                cached[ key ] = this.getCachedScraperObject( url, scraper, kind, id, art[ key ], [ ...( prefix || [] ), key ] );
+            } else {
+                cached[ key ] = art[ key ];
+            }
+        }
+
+        return cached;
+    }
 
     areOptionsEqual ( a : ArtworkCacheOptions, b : ArtworkCacheOptions ) : boolean {
         return a.width == b.width;

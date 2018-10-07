@@ -1,4 +1,4 @@
-import { TvEpisodeMediaRecord, TvShowMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, ArtRecord, MediaRecord, ArtRecordKind } from "../MediaRecord";
+import { TvEpisodeMediaRecord, TvShowMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, ArtRecord, MediaRecord, ArtRecordKind, ExternalReferences } from "../MediaRecord";
 import { AsyncCache, CacheOptions } from "./ScraperCache";
 import { UnicastServer } from "../UnicastServer";
 
@@ -11,8 +11,12 @@ export interface IScraper {
     cache : AsyncCache<any>;
     
     getMovie ( id : string, cache ?: CacheOptions ) : Promise<MovieMediaRecord>;
+    
+    getMovieExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord>;
 
     getTvShow ( id : string, cache ?: CacheOptions ) : Promise<TvShowMediaRecord>;
+    
+    getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord>;
 
     getTvShowSeasons ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]>;
 
@@ -24,9 +28,13 @@ export interface IScraper {
 
     getTvSeason ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
 
+    getTvSeasonExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
+
     getTvSeasonEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]>;
 
     getTvEpisode ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
+
+    getTvEpisodeExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
 
 
     getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]>;

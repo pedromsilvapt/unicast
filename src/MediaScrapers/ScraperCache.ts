@@ -118,6 +118,7 @@ export class Cache<T> {
 
             this.data[ key ] = block;
         } else {
+            block.value = value;
             block.ttl = ttl;
             block.createdAt = now;
             block.touchedAt = now;
@@ -137,9 +138,9 @@ export class Cache<T> {
     protected dataChanged ( key : string, block : CacheBlock<T> ) : void {
         if ( this.autoSaveDelay > 0 && this.autoSaveTimeout == null ) {
             this.autoSaveTimeout = setTimeout( async () => {
-                await this.save();
-                
                 this.autoSaveTimeout = null;
+
+                await this.save();
             }, this.autoSaveDelay );
         }
     }

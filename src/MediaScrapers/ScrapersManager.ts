@@ -2,10 +2,65 @@ import { EntityManager, EntityFactoryManager } from "../EntityManager";
 import { IScraper } from "./IScraper";
 import { UnicastServer } from "../UnicastServer";
 import { ScraperFactory } from "./ScraperFactory";
+import { MediaKind, ExternalReferences, ArtRecord } from "../MediaRecord";
+import { CacheOptions } from "../MediaProviders/ProvidersManager";
+import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 
 export class ScrapersManager extends EntityManager<IScraper, string> {
     protected getEntityKey( scraper : IScraper ): string {
         return scraper.name;
+    }
+
+    getMedia ( scraperName : string, kind : MediaKind, id : string, cache ?: CacheOptions ) : Promise<MediaRecord> {
+        const scraper = this.get( scraperName );
+
+        if ( kind == MediaKind.Movie ) {
+            return scraper.getMovie( id, cache );
+        } else if ( kind == MediaKind.TvShow ) {
+            return scraper.getTvShow( id, cache );
+        } else if ( kind === MediaKind.TvSeason ) {
+            return scraper.getTvSeason( id, cache );
+        } else if ( kind === MediaKind.TvEpisode ) {
+            return scraper.getTvEpisode( id, cache );
+        } else {
+            return null;
+        }
+    }
+
+    getMediaExternal ( scraperName : string, kind : MediaKind, external : ExternalReferences, cache ?: CacheOptions ) : Promise<MediaRecord> {
+        const scraper = this.get( scraperName );
+
+        if ( kind == MediaKind.Movie ) {
+            return scraper.getMovieExternal( external, cache );
+        } else if ( kind == MediaKind.TvShow ) {
+            return scraper.getTvShowExternal( external, cache );
+        } else if ( kind === MediaKind.TvSeason ) {
+            return scraper.getTvSeasonExternal( external, cache );
+        } else if ( kind === MediaKind.TvEpisode ) {
+            return scraper.getTvEpisodeExternal( external, cache );
+        } else {
+            return null;
+        }
+    }
+
+    async getMediaArtwork ( scraperName : string, kind : MediaKind, id : string, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+        const scraper = this.get( scraperName );
+
+        const record = await this.getMedia( scraperName, kind, id );
+
+        return scraper.getMediaArt( record, null, cache );
+    }
+
+    async search ( scraperName, kind : MediaKind, query : string, limit ?: number, cache ?: CacheOptions ) : Promise<MediaRecord[]> {
+        const scraper = this.get( scraperName );
+
+        if ( kind === MediaKind.Movie ) {
+            return scraper.searchMovie( query, limit, cache );
+        } else if ( kind === MediaKind.TvShow ) {
+            return scraper.searchTvShow( query, limit, cache );
+        } else {
+            return [];
+        }
     }
 }
 

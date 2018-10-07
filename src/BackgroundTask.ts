@@ -2,12 +2,6 @@ import * as uid from 'uid';
 import { CancelToken } from 'data-cancel-token'
 import { EventEmitter } from 'events';
 
-export function getMillisecondsProcessTime ( previous ?: [ number, number ] ) : number {
-    const [ seconds, nano ] = process.hrtime( previous );
-
-    return ( seconds * 1000 ) + ( nano / 1000000 );
-}
-
 export function getTimeStatistics ( elapsed : number, done : number, total : number ) : number {
     if ( done === 0 || total === 0 || total === Infinity || elapsed === 0 ) {
         return Infinity;

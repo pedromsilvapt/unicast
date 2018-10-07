@@ -1,6 +1,6 @@
 import { IScraper } from "../IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../ScraperCache";
-import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind } from "../../MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds } from "../../MediaRecord";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaRecordFactory } from "./MediaRecordFactory";
 import { DiagnosticsService } from "../../Diagnostics";
@@ -39,11 +39,11 @@ export class TheMovieDB implements IScraper {
         this.server.onStart.subscribe( () => this.cache.load() );
     }
 
-    getCacheKey ( method : string, id : string ) : string {
+    protected getCacheKey ( method : string, id : string ) : string {
         return `${ method }|${ id }`;
     }
 
-    runCachedTask<T extends any> ( method : string, id : string, runner : () => Promise<T>, options : CacheOptions = {} ) {
+    protected runCachedTask<T extends any> ( method : string, id : string, runner : () => Promise<T>, options : CacheOptions = {} ) {
         const key = this.getCacheKey( method, id );
 
         const cached = this.cache.get<T>( key, options );
@@ -55,8 +55,54 @@ export class TheMovieDB implements IScraper {
         return this.cache.set<T>( key, runner(), options );
     }
 
+    protected getExternalCacheKey ( external : ExternalReferences ) : string {
+        return Object.keys( external ).sort().map( key => '' + key + '=' + external[ key ]  ).join( ',' );
+    }
+
+    protected async getExternal ( external : ExternalReferences, kinds : MediaKind[] = null, cache ?: CacheOptions ) : Promise<MediaRecord> {
+        const externalString = this.getExternalCacheKey( external );
+
+        const keysMapper = { 'imdb': 'imdb_id' };
+
+        const kindsMapper = {
+            [ MediaKind.Movie ]: 'movie_results',
+            [ MediaKind.TvShow ]: 'tv_results',
+            [ MediaKind.TvSeason ]: 'tv_season_results',
+            [ MediaKind.TvEpisode ]: 'tv_episode_results'
+        };
+
+        const recordsMapper = {
+            [ MediaKind.Movie ]: this.getMovie.bind( this ),
+            [ MediaKind.TvShow ]: this.getTvShow.bind( this ),
+            [ MediaKind.TvSeason ]: this.getTvSeason.bind( this ),
+            [ MediaKind.TvEpisode ]: this.getTvEpisode.bind( this )
+        };
+
+        if ( !kinds ) kinds = AllMediaKinds;
+
+        return this.runCachedTask<MovieMediaRecord>( 'getMovieExternal', externalString, async () => {
+            for ( let source of Object.keys( external ) ) {
+                if ( source in keysMapper ) {
+                    const results = await this.moviedb.find( { id: external[ source ], external_source: keysMapper[ source ] } );
+        
+                    for ( let kind of kinds ) {
+                        const kindResult = results[ kindsMapper[ kind ] ];
+
+                        if ( kindResult && kindResult.length > 0 ) {
+                            return recordsMapper[ kind ]( kindResult[ 0 ].id, cache );
+                        }
+                    }
+                }
+            }
+        }, cache );
+    }
+
     getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         throw new Error("Method not implemented.");
+    }
+
+    getMovieExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
+        return this.getExternal( external, [ MediaKind.Movie ], cache ) as Promise<MovieMediaRecord>;
     }
 
     getMovie ( id : string, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
@@ -75,6 +121,10 @@ export class TheMovieDB implements IScraper {
 
     getTvShow ( id : string, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
         throw new Error("Method not implemented.");
+    }
+
+    getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
+        return this.getExternal( external, [ MediaKind.TvShow ], cache ) as Promise<TvShowMediaRecord>;
     }
 
     getTvShowSeasons ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]> {
@@ -97,12 +147,20 @@ export class TheMovieDB implements IScraper {
         throw new Error("Method not implemented.");
     }
 
+    getTvSeasonExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+        return this.getExternal( external, [ MediaKind.TvSeason ], cache ) as Promise<TvSeasonMediaRecord>;
+    }
+
     getTvSeasonEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
         throw new Error("Method not implemented.");
     }
 
     getTvEpisode ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
         throw new Error("Method not implemented.");
+    }
+
+    getTvEpisodeExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+        return this.getExternal( external, [ MediaKind.TvEpisode ], cache ) as Promise<TvEpisodeMediaRecord>;
     }
 
 
