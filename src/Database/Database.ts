@@ -15,6 +15,7 @@ import { BelongsToOneRelation } from './Relations/OneToOneRelation';
 import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
 import { Hook } from '../Hookable';
 import * as equals from 'fast-deep-equal';
+import { toArray } from 'data-async-iterators';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -442,6 +443,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
     }
 
     async find<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : Promise<T[]> {
+        return toArray( this.findStream<T>( query ) );
+    }
+
+    async * findStream<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : AsyncIterableIterator<T> {
         const connection = await this.pool.acquire();
 
         try {
@@ -452,14 +457,20 @@ export abstract class BaseTable<R extends { id ?: string }> {
             if ( query ) {
                 sequence = query( table );
             }
-    
+
             const cursor = await sequence.run( connection );
     
-            const items = await cursor.toArray();
-    
-            await cursor.close();
-                
-            return items;
+            try {
+                while ( true ) {
+                    yield await ( cursor.next as () => Promise<T> )();
+                }
+            } catch ( error ) {
+                if ( !( error.name === "ReqlDriverError" && error.message === "No more rows in the cursor." ) ) {
+                    throw error;   
+                }
+            } finally {
+                await cursor.close();
+            }
         } finally {
             await this.pool.release( connection );
         }
