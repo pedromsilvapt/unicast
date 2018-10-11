@@ -1,6 +1,6 @@
 import { MediaRepository } from "../MediaRepository";
 import { MediaRecord } from "../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
-import { MediaKind } from "../../MediaRecord";
+import { MediaKind, RecordsSet, createRecordsSet } from "../../MediaRecord";
 import { FileSystemScanner, FileSystemScannerConfig } from "./FileSystemScanner";
 import { filter, map } from "data-async-iterators";
 import { Settings } from "../../MediaScrapers/Settings";
@@ -37,8 +37,8 @@ export class FileSystemRepository extends MediaRepository {
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null ) : AsyncIterableIterator<T> {
-        let records = this.scanner.scan() as AsyncIterableIterator<T>;
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsSet = createRecordsSet() ) : AsyncIterableIterator<T> {
+        let records = this.scanner.scan( ignore ) as AsyncIterableIterator<T>;
 
         if ( filterKind ) {
             records = filter( records, record => filterKind.includes( record.kind ) );

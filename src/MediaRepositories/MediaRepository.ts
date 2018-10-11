@@ -1,7 +1,7 @@
 import { IEntity } from "../EntityFactory";
 import { UnicastServer } from "../UnicastServer";
 import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
-import { MediaKind } from "../MediaRecord";
+import { MediaKind, RecordsSet } from "../MediaRecord";
 import { ISubtitlesRepository } from "../Subtitles/SubtitlesRepository";
 
 // Why an Interface and an abstract class, I hear you asking?
@@ -20,7 +20,7 @@ export interface IMediaRepository {
 
     available () : Promise<boolean>;
 
-    scan<T extends MediaRecord> ( filterKind ?: MediaKind[] ) : AsyncIterableIterator<T>;
+    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsSet ) : AsyncIterableIterator<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
     

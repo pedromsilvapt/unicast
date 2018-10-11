@@ -129,3 +129,27 @@ export interface CustomMediaRecord extends PlayableMediaRecord {
     subtitle: string;
     plot: string;
 }
+
+
+
+// Utility types and functions
+export type RecordsMap<T> = Map<MediaKind, Map<string, T>>;
+
+export function createRecordsMap <T> () : RecordsMap<T> {
+    const map : Map<MediaKind, Map<string, T>> = new Map();
+
+    for ( let kind of AllMediaKinds ) map.set( kind, new Map() );
+
+    return map;
+}
+
+
+export type RecordsSet = Map<MediaKind, Set<string>>;
+
+export function createRecordsSet () : RecordsSet {
+    const set : Map<MediaKind, Set<string>> = new Map();
+
+    for ( let kind of AllMediaKinds ) set.set( kind, new Set() );
+
+    return set;
+}

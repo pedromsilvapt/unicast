@@ -1,4 +1,4 @@
-import { MovieMediaRecord, TvEpisodeMediaRecord, TvShowMediaRecord, MediaRecord, PlayableQualityRecord } from "../../MediaRecord";
+import { MovieMediaRecord, TvEpisodeMediaRecord, TvShowMediaRecord, MediaRecord, PlayableQualityRecord, RecordsSet, MediaKind } from "../../MediaRecord";
 import * as parseTorrentName from 'parse-torrent-name';
 import { FileWalker } from "../../ES2017/FileWalker";
 import * as path from 'path';
@@ -117,7 +117,7 @@ export class FileSystemScanner {
         }
     }
 
-    async * scanMovies () : AsyncIterableIterator<MovieMediaRecord> {
+    async * scanMovies ( ignore : RecordsSet ) : AsyncIterableIterator<MovieMediaRecord> {
         const walker = new VideosFileWalker( this.config.exclude || [] );
 
         const scraper = this.server.scrapers.get( this.config.scrapper );
@@ -131,6 +131,11 @@ export class FileSystemScanner {
                 const details = parseTorrentName( dirname );
 
                 const id = shorthash.unique( videoFile );
+
+                if ( ignore.get( MediaKind.Movie ).has( id ) ) {
+                    // ignore this record, already have it
+                    continue;
+                }
 
                 const movie = await this.findMovieFor( scraper, id, details );
 
@@ -164,7 +169,15 @@ export class FileSystemScanner {
         }
     }
 
-    async * scanEpisodeVideoFile ( scraper : IScraper, folder : string, videoFile : string, stats : fs.Stats, showsByName : Map<string, TvShowMediaRecord>, seasonsFound : Set<string>, episodesFound : Set<string> ) : AsyncIterableIterator<MediaRecord> {
+    async * scanEpisodeVideoFile ( ignore : RecordsSet, scraper : IScraper, folder : string, videoFile : string, stats : fs.Stats, showsByName : Map<string, TvShowMediaRecord>, seasonsFound : Set<string>, episodesFound : Set<string> ) : AsyncIterableIterator<MediaRecord> {
+        const fullVideoFile = path.join( folder, videoFile );
+
+        const episodeId = shorthash.unique( fullVideoFile );
+        
+        if ( ignore.get( MediaKind.TvEpisode ).has( episodeId ) ) {
+            return;
+        }
+
         const showName = pathRootName( videoFile );
 
         let show : TvShowMediaRecord = showsByName.get( showName );
@@ -174,7 +187,6 @@ export class FileSystemScanner {
 
             showsByName.set( showName, show = clone( await this.findTvShowFor( scraper, showName ) ) );
 
-            
             if ( show != null ) {
                 const showStats = await fs.stat( path.join( folder, showName ) );
 
@@ -182,7 +194,9 @@ export class FileSystemScanner {
                 show.id = id;
                 show.addedAt = showStats.mtime;
 
-                yield show;
+                if ( !ignore.get( MediaKind.TvShow ).has( id ) ) {
+                    yield show;
+                }
             } else {
                 this.logScanError( videoFile, 'Cannot find show ' + id + ' ' + showName );
             }
@@ -213,7 +227,9 @@ export class FileSystemScanner {
         if ( !seasonsFound.has( season.id ) ) {
             seasonsFound.add( season.id );
 
-            yield season;
+            if ( !ignore.get( MediaKind.TvSeason ).has( season.id ) ) {
+                yield season;
+            }
         }
 
         const episode = clone( await scraper.getTvShowEpisode( show.internalId, details.season, details.episode ).catch<TvEpisodeMediaRecord>( () => null ) );
@@ -224,11 +240,9 @@ export class FileSystemScanner {
         
         this.logScanInfo( 'Found', episode.id, show.title, details.season, details.episode );
 
-        const fullVideoFile = path.join( folder, videoFile );
-
         yield {
             ...episode,
-            id: shorthash.unique( fullVideoFile ),
+            id: episodeId,
             internalId: episode.id,
             tvSeasonId: season.id,
             sources: [ { "id": fullVideoFile } ],
@@ -237,15 +251,7 @@ export class FileSystemScanner {
         } as TvEpisodeMediaRecord;
     }
 
-    async * scanShows () : AsyncIterableIterator<MediaRecord> {
-        this.settings.set( [ 'associations', 'tvshow', 'The 100' ], '268592' );
-        this.settings.set( [ 'associations', 'tvshow', 'Underground' ], '300929' );
-        this.settings.set( [ 'associations', 'tvshow', 'Terra Nova' ], '164091' );
-        this.settings.set( [ 'associations', 'tvshow', 'Revolution' ], '258823' );
-        this.settings.set( [ 'associations', 'tvshow', 'Colony' ], '284210' );
-        this.settings.set( [ 'associations', 'tvshow', 'Anne' ], '322971' );
-        this.settings.set( [ 'associations', 'tvshow', 'VICE' ], '264739' );
-
+    async * scanShows ( ignore : RecordsSet ) : AsyncIterableIterator<MediaRecord> {
         const walker = new VideosFileWalker( this.config.exclude || [] );
 
         const scraper = this.server.scrapers.get( this.config.scrapper );
@@ -261,7 +267,7 @@ export class FileSystemScanner {
         for ( let folder of this.config.folders ) {
             for await ( let [ videoFile, stats ] of walker.run( folder ) ) {
                 try {
-                    yield * this.scanEpisodeVideoFile( scraper, folder, videoFile, stats, showsByName, seasonsFound, episodesFound );
+                    yield * this.scanEpisodeVideoFile( ignore, scraper, folder, videoFile, stats, showsByName, seasonsFound, episodesFound );
                 } catch ( error ) {
                     this.logScanError( videoFile, error );
                 }
@@ -269,11 +275,11 @@ export class FileSystemScanner {
         }
     }
 
-    scan () : AsyncIterableIterator<MediaRecord> {
+    scan ( ignore : RecordsSet ) : AsyncIterableIterator<MediaRecord> {
         if ( this.config.content === MediaScanContent.Movies ) {
-            return this.scanMovies();
+            return this.scanMovies( ignore );
         } else if ( this.config.content === MediaScanContent.TvShows ) {
-            return this.scanShows();
+            return this.scanShows( ignore );
         } else {
             throw new Error( `Invalid file system scanning type ${ this.config.content }` );
         }
