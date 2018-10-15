@@ -7,6 +7,12 @@ import { YoutubeMediaProvider } from "./MediaProviders/YoutubeProvider/YoutubeMe
 import { TheTVDB } from "./MediaScrapers/TheTVDB/TheTVDB";
 import { TheMovieDB } from "./MediaScrapers/TheMovieDB/TheMovieDB";
 import { FileSystemRepositoryFactory } from "./MediaRepositories/FileSystemRepository/FileSystemRepositoryFactory";
+import { ToolFactory } from "./Tools/ToolsManager";
+import { UpdatePathsTool } from "./Tools/UpdatePaths";
+import { SetArtworkTool } from "./Tools/SetArtwork";
+import { LoadArtworkTool } from "./Tools/LoadArtwork";
+import { ExportDatabaseTool } from "./Tools/ExportDatabase";
+import { TestTool } from "./Tools/Tool";
 
 if ( !Symbol.asyncIterator ) {
     (Symbol as any).asyncIterator = Symbol( "Symbol.asyncIterator" );
@@ -27,6 +33,14 @@ server.scrapers.add( new TheMovieDB( 'f090bb54758cabf231fb605d3e3e0468' ) );
 server.transcoding.registerDriver( new FFmpegDriverFactory() );
 server.transcoding.registerDriver( new FFmpegHlsDriverFactory() );
 
+server.tools.add( new ToolFactory( UpdatePathsTool ) );
+server.tools.add( new ToolFactory( SetArtworkTool ) );
+server.tools.add( new ToolFactory( LoadArtworkTool ) );
+server.tools.add( new ToolFactory( ExportDatabaseTool ) );
+server.tools.add( new ToolFactory( TestTool ) );
+
+server.run().catch( err => console.error( err.message, err.stack ) );
+    
 
 process.on( 'unhandledRejection', ( error : any ) => {
     console.error( error.message, error.stack );

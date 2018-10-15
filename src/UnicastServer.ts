@@ -29,6 +29,7 @@ import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
 import { serveMedia } from "./ES2017/HttpServeMedia";
 import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
 import { exec } from "mz/child_process";
+import { ToolsManager } from "./Tools/ToolsManager";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -75,6 +76,8 @@ export class UnicastServer {
 
     readonly repositories : RepositoriesManager;
 
+    readonly tools : ToolsManager;
+
     protected cachedIpV4 : string;
 
     isHttpsEnabled : boolean = false;
@@ -113,6 +116,8 @@ export class UnicastServer {
         this.streams = new HttpRawMediaServer( this );
 
         this.commands = new CommandsManager( this );
+
+        this.tools = new ToolsManager( this );
 
         if ( Config.get<boolean>( 'server.ssl.enabled' ) && fs.existsSync( './server.key' ) ) {
             const keyFile = Config.get<string>( 'server.ssl.key' );
@@ -242,6 +247,24 @@ export class UnicastServer {
         
         if ( this.isHttpsEnabled ) {
             this.diagnostics.info( this.name, this.name + ' listening on ' + this.getSecureUrl() );
+        }
+    }
+
+    async run ( args ?: string[] ) : Promise<void> {
+        const toolsToRun = this.tools.parse( args );
+
+        if ( toolsToRun.length > 0 ) {
+            for( let [ tool, options ] of toolsToRun ) {
+                try {
+                    await this.tools.run( tool, options );
+                } catch ( error ) {
+                    console.error( error.message, error.stack );
+                }
+            }
+
+            await this.close();
+        } else {
+            await this.listen();
         }
     }
 
