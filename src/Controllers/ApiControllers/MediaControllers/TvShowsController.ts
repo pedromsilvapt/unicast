@@ -31,6 +31,12 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
             
         if ( req.query.collections === 'true' ) {
             await this.server.database.tables.shows.relations.collections.applyAll( shows );
+
+            for ( let item of shows ) {
+                if ( ( item as any ).collections.some( c => !c ) ) {
+                    ( item as any ).collections = ( item as any ).collections.filter( c => !!c );
+                }
+            }
         }
 
         for ( let show of shows ) {

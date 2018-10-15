@@ -32,8 +32,14 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
 
         if ( req.query.collections === 'true' ) {
             await this.server.database.tables.movies.relations.collections.applyAll( items );
+
+            for ( let item of items ) {
+                if ( ( item as any ).collections.some( c => !c ) ) {
+                    ( item as any ).collections = ( item as any ).collections.filter( c => !!c );
+                }
+            }
         }
-        
+
         return items;
     }
 
