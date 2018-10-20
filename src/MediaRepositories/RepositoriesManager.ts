@@ -18,12 +18,12 @@ export class RepositoriesManager extends EntityManager<IMediaRepository, string>
 
         this.factories = new RepositoryFactoriesManager( this, server );
 
-        // this.jobQueue = new MediaRepositoryPersistentQueue( server, 'repositories', new IntervalJobScheduler( {
-        //     interval: 5000, 
-        //     retryInterval: 1000 * 60, 
-        //     order: JobOrder.LIFO,
-        //     maxConcurrent: 5
-        // } ) );
+        this.jobQueue = new MediaRepositoryPersistentQueue( server, 'repositories', new IntervalJobScheduler( {
+            interval: 5000, 
+            retryInterval: 1000 * 60, 
+            order: JobOrder.LIFO,
+            maxConcurrent: 5
+        } ) );
     }
 
     protected getEntityKey ( entity : IMediaRepository ) : string {
@@ -56,10 +56,6 @@ export interface MediaRepositoryItemUpdate {
 export class MediaRepositoryPersistentQueue extends PersistentQueue<MediaRepositoryItemUpdate> {
     maxTries : number = 4;
 
-    // TODO Remove once the new repositories replaces the old one
-    // and replace all this.repositories with this.server.repositories
-    repositories : RepositoriesManager;
-
     async findReplaced ( job : JobRecord<MediaRepositoryItemUpdate> ) : Promise<JobRecord<MediaRepositoryItemUpdate>[]> {
         return this.find( query => query.filter( {
             payload: {
@@ -74,9 +70,9 @@ export class MediaRepositoryPersistentQueue extends PersistentQueue<MediaReposit
         const repositories = itt( jobs ).groupBy( job => job.payload.repository );
 
         for ( let name of repositories.keys() ) {
-            const repository = this.repositories.get( name );
+            const repository = this.server.repositories.get( name );
 
-            if ( !repository.watch ) {
+            if ( repository && !repository.watch ) {
                 return true;
             }
 
@@ -89,7 +85,7 @@ export class MediaRepositoryPersistentQueue extends PersistentQueue<MediaReposit
     }
 
     protected async tryRun ( job : JobRecord<MediaRepositoryItemUpdate> ) : Promise<JobResult> {
-        const repository = this.repositories.get( job.payload.repository );
+        const repository = this.server.repositories.get( job.payload.repository );
 
         if ( repository && repository.watch ) {
             if ( !await repository.available() ) {

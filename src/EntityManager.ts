@@ -78,6 +78,8 @@ export abstract class EntityFactoryManager<E extends IEntity, M extends EntityMa
         super( server );
 
         this.entitiesManager = entities;
+
+        this.server.onClose.subscribe( () => this.destroy() );
     }
 
     protected async scanFactory ( factory : F ) {
@@ -116,5 +118,11 @@ export abstract class EntityFactoryManager<E extends IEntity, M extends EntityMa
         }
 
         return this;
+    }
+
+    destroy () {
+        for( let cancel of this.cancellations.values() ) {
+            cancel.cancel();
+        }
     }
 }

@@ -512,7 +512,11 @@ export class MediaManager {
     store ( record : MediaRecord ) : Promise<MediaRecord> {
         let table : BaseTable<MediaRecord> = this.getTable( record.kind );
 
-        return table.create( record );
+        if ( record.id ) {
+            return table.update( record.id, record );
+        } else {
+            return table.create( record );
+        }
     }
 
     async createFromSources ( sources : MediaSourceLike ) : Promise<MediaRecord> {

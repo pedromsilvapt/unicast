@@ -14,11 +14,18 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
     }
 
     async transformQuery ( req : Request ) : Promise<void> {
-        if ( req.query.show && req.query.seasonNumber ) {
-            const season = await this.server.database.tables.seasons.find( query => query.filter( { tvShowId: req.query.show, number: +req.query.seasonNumber } ) );
+        if ( req.query.show ) {
 
-            if ( season.length ) {
-                req.query.season = season[ 0 ].id;
+            if ( req.query.seasonNumber ) {
+                const season = await this.server.database.tables.seasons.find( query => query.filter( { tvShowId: req.query.show, number: +req.query.seasonNumber } ) );
+
+                if ( season.length ) {
+                    req.query.season = season[ 0 ].id;
+                }
+            } else {
+                const seasons = await this.server.database.tables.seasons.find( query => query.filter( { tvShowId: req.query.show } ) );
+
+                req.query.seasons = seasons.map( s => s.id );
             }
         }
     }
@@ -28,6 +35,8 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
 
         if ( req.query.season ) {
             query = query.filter( { tvSeasonId: req.query.season } );
+        } else if ( req.query.seasons ) {
+            query = query.filter( doc => r.expr( req.query.seasons ).contains( ( doc as any )( 'tvSeasonId' ) ) );
         }
 
         return this.getTransientQuery( req, this.getWatchedQuery( req, query ) );

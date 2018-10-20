@@ -23,7 +23,23 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
         } else if ( kind === MediaKind.TvEpisode ) {
             return scraper.getTvEpisode( id, cache );
         } else {
-            return null;
+            return Promise.resolve( null );
+        }
+    }
+
+    getMediaRelation ( scraperName : string, kind : MediaKind, relation : MediaKind, id : string, cache ?: CacheOptions ) : Promise<MediaRecord[]> {
+        const scraper = this.get( scraperName );
+
+        if ( kind === MediaKind.TvShow ) {
+            if ( relation === MediaKind.TvSeason ) {
+                return scraper.getTvShowSeasons( id, cache );
+            } else if ( relation === MediaKind.TvEpisode ) {
+                return scraper.getTvShowEpisodes( id, cache );
+            }
+        } else if ( kind === MediaKind.TvSeason && relation === MediaKind.TvEpisode ) {
+            return scraper.getTvSeasonEpisodes( id, cache );
+        } else {
+            return Promise.resolve( [] );
         }
     }
 
@@ -51,7 +67,7 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
         return scraper.getMediaArt( record, null, cache );
     }
 
-    async search ( scraperName, kind : MediaKind, query : string, limit ?: number, cache ?: CacheOptions ) : Promise<MediaRecord[]> {
+    async search ( scraperName : string, kind : MediaKind, query : string, limit ?: number, cache ?: CacheOptions ) : Promise<MediaRecord[]> {
         const scraper = this.get( scraperName );
 
         if ( kind === MediaKind.Movie ) {
@@ -61,6 +77,10 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
         } else {
             return [];
         }
+    }
+
+    async parse ( scraperName : string, name : string ) : Promise<MediaRecord> {
+        
     }
 }
 
