@@ -1,6 +1,6 @@
 import { IScraper } from "../IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../ScraperCache";
-import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaRecord, MediaKind } from "../../MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaRecord, MediaKind, ExternalReferences } from "../../MediaRecord";
 import * as TVDB from 'node-tvdb';
 import { MediaRecordFactory } from "./MediaRecordFactory";
 import { UnicastServer } from "../../UnicastServer";
@@ -53,6 +53,9 @@ export class TheTVDB implements IScraper {
         return this.cache.set<T>( key, runner(), options );
     }
 
+    protected getExternalCacheKey ( external : ExternalReferences ) : string {
+        return Object.keys( external ).sort().map( key => '' + key + '=' + external[ key ]  ).join( ',' );
+    }
 
     /* Retrieve Records */
     getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
@@ -60,6 +63,10 @@ export class TheTVDB implements IScraper {
     }
 
     getMovie ( id : string, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
+        return Promise.resolve( null );
+    }
+
+    getMovieExternal( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
         return Promise.resolve( null );
     }
 
@@ -100,6 +107,40 @@ export class TheTVDB implements IScraper {
             const art = await this.getTvShowAllArt( id, cache );
 
             return this.factory.createTvShowMediaRecord( rawShow, summary, art );
+        }, cache );
+    }
+
+    getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
+        const externalString = this.getExternalCacheKey( external );
+
+        const keysMapper : { [ key : string ] : [boolean, Function] } = { 
+            'tvdb': [ false, this.getTvShow.bind( this ) ],
+            'imdb': [ true, this.tvdb.getSeriesByImdbId.bind( this.tvdb ) ],
+            'zap2it': [ true, this.tvdb.getSeriesByZap2ItId.bind( this.tvdb ) ],
+        };
+
+        return this.runCachedTask<TvShowMediaRecord>( 'getTvShowExternal', externalString, async () => {
+            for ( let source of Object.keys( external ) ) {
+                if ( source in keysMapper ) {
+                    const [ isNative, fetcher ] = keysMapper[ source ];
+
+                    if ( isNative )  {
+                        const result = await fetcher( external[ source ] );
+    
+                        if ( result ) {
+                            return this.getTvShow( result.id, cache );
+                        }
+                    } else {
+                        const result = await fetcher( external[ source ], cache );
+    
+                        if ( result ) {
+                            return result;
+                        }
+                    }
+                }
+            }
+
+            return null;
         }, cache );
     }
 
@@ -185,6 +226,14 @@ export class TheTVDB implements IScraper {
             return seasons.find( season => season.number == +seasonNumber );
         }, cache );
     }
+    
+    getTvSeasonExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+        if ( external.tvdb ) {
+            return this.getTvSeason( external.tvdb, cache );
+        }
+
+        return Promise.resolve( null );
+    }
 
     getTvSeasonEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
         return this.runCachedTask<TvEpisodeMediaRecord[]>( 'getTvSeasonEpisodes', id, async () => {
@@ -217,6 +266,15 @@ export class TheTVDB implements IScraper {
             return episode;
         } );
     }
+    
+    getTvEpisodeExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+        if ( external.tvdb ) {
+            return this.getTvEpisode( external.tvdb, cache );
+        }
+
+        return Promise.resolve( null );
+    }
+
 
     /* Get Media Art */
     getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {

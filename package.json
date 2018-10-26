@@ -4,7 +4,7 @@
   "description": "21st Century Media Center",
   "main": "index.js",
   "scripts": {
-    "start": "node lib/index.js",
+    "start": "node dist/app.js --env-NODE_ENV=release",
     "test": "tape \"lib/**/*.test.js\" | \"node_modules/.bin/tap-spec\""
   },
   "author": "Pedro M. Silva <pemiolsi@hotmail.com>",
