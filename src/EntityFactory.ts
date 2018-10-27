@@ -7,6 +7,8 @@ export class IEntity {
     server : UnicastServer;
 
     onEntityInit ? ();
+
+    onEntityDestroy ? ();
 }
 
 export abstract class EntityFactory<E extends IEntity> extends IEntity {

@@ -10,6 +10,8 @@ export abstract class EntityManager<E extends IEntity, K = E> extends EventEmitt
         super();
         
         this.server = server;
+
+        this.server.onClose.subscribe( this.destroy.bind( this ) );
     }
 
     protected entities : E[] = [];
@@ -36,6 +38,10 @@ export abstract class EntityManager<E extends IEntity, K = E> extends EventEmitt
         if ( index >= 0 ) {
             this.entities.splice( index, 1 );
 
+            if ( entity.onEntityDestroy ) {
+                entity.onEntityDestroy();
+            }
+
             this.emit( 'entity-removed', entity, this.getEntityKey( entity ) );
         }
 
@@ -52,6 +58,12 @@ export abstract class EntityManager<E extends IEntity, K = E> extends EventEmitt
 
     get ( entity : K ) : E {
         return this.entities.find( e => this.getEntityKey( e ) === entity );
+    }
+
+    destroy () {
+        for ( let entity of this ) {
+            this.delete( entity );
+        }
     }
 
     * keys () : IterableIterator<K> {

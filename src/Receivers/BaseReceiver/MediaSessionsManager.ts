@@ -32,18 +32,18 @@ export class MediaSessionsManager {
         this.zapping.set( 'tvshow', new TvShowZappingStrategy() );
 
         this.statusPoller = new PriorityPoller( async poller => {
-            const status = await this.receiver.status();
-
-            if ( status && ( status.state == ReceiverStatusState.Playing
-                || status.state == ReceiverStatusState.Buffering
-                || status.state == ReceiverStatusState.Paused ) ) {
-
-                poller.currentPriority = 0;
-            } else {
-                poller.currentPriority = 1;
-            }
-
             try {
+                const status = await this.receiver.status();
+                
+                if ( status && ( status.state == ReceiverStatusState.Playing
+                    || status.state == ReceiverStatusState.Buffering
+                    || status.state == ReceiverStatusState.Paused ) ) {
+                        
+                    poller.currentPriority = 0;
+                } else {
+                    poller.currentPriority = 1;
+                }
+                    
                 await this.updateStatus( status );
             } catch ( err ) {
                 this.mediaManager.server.onError.notify( err );
@@ -56,11 +56,11 @@ export class MediaSessionsManager {
         this.receiver.on( 'resume', () => this.statusPoller.currentPriority = 0 );
         this.receiver.on( 'play', () => this.statusPoller.currentPriority = 0 );
 
-        this.statusPoller.pause();
+        this.statusPoller.resume();
     }
 
     getSessionPercentage ( history : HistoryRecord, status : ReceiverStatus ) : number {
-        return history.positionHistory.map( seg => seg.end - seg.start ).reduce( ( a, b ) => a + b, 0 ) * status.media.time.duration / 100;
+        return history.positionHistory.map( seg => seg.end - seg.start ).reduce( ( a, b ) => a + b, 0 ) / status.media.time.duration * 100;
     }
 
     async updateStatus ( status : ReceiverStatus ) {
@@ -83,6 +83,7 @@ export class MediaSessionsManager {
                 }
 
                 console.log( history.watched, this.getSessionPercentage( history, status ) );
+
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
                     const media = await this.mediaManager.get( history.reference.kind, history.reference.id );
                     
@@ -177,7 +178,13 @@ export class MediaSessionsManager {
 
     async get ( id : string ) : Promise<[ MediaStream[], MediaRecord, MediaPlayOptions, CancelToken ]> {
         if ( !this.records.has( id ) ) {
-            this.records.set( id, this.getRaw( id ) );
+            this.records.set( id, this.getRaw( id ).catch( err => {
+                this.receiver.server.onError.notify( err );
+
+                this.records.delete( id );
+
+                return null;
+            } ) );
         }
 
         return await this.records.get( id );
@@ -200,6 +207,18 @@ export class MediaSessionsManager {
 
             this.records.delete( id );
         }
+    }
+
+    destroy () {
+        this.statusPoller.pause();
+
+        for( let record of this.records.values() ) {
+            record.then( ( [ _, __, ___, cancel ] ) => {
+                cancel.cancel();
+            } );
+        }
+
+        this.records.clear();
     }
 }
 
