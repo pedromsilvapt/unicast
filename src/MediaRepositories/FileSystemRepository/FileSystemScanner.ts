@@ -160,7 +160,7 @@ export class FileSystemScanner {
     }
 
     async findTvShowFor ( scraper : IScraper, name : string ) : Promise<TvShowMediaRecord> {
-        const showId = this.settings.get<string>( [ 'associations', 'tvshow', name ] );
+        const showId = this.settings.get<string>( [ 'associations', 'show', name ] );
 
         if ( !showId ) {
             return ( await scraper.searchTvShow( name, 1 ) )[ 0 ];
@@ -173,7 +173,7 @@ export class FileSystemScanner {
         const fullVideoFile = path.join( folder, videoFile );
 
         const episodeId = shorthash.unique( fullVideoFile );
-        
+
         if ( ignore.get( MediaKind.TvEpisode ).has( episodeId ) ) {
             return;
         }
@@ -194,9 +194,9 @@ export class FileSystemScanner {
                 show.id = id;
                 show.addedAt = showStats.mtime;
 
-                if ( !ignore.get( MediaKind.TvShow ).has( id ) ) {
+                // if ( !ignore.get( MediaKind.TvShow ).has( id ) ) {
                     yield show;
-                }
+                // }
             } else {
                 this.logScanError( videoFile, 'Cannot find show ' + id + ' ' + showName );
             }
@@ -227,9 +227,9 @@ export class FileSystemScanner {
         if ( !seasonsFound.has( season.id ) ) {
             seasonsFound.add( season.id );
 
-            if ( !ignore.get( MediaKind.TvSeason ).has( season.id ) ) {
+            // if ( !ignore.get( MediaKind.TvSeason ).has( season.id ) ) {
                 yield season;
-            }
+            // }
         }
 
         const episode = clone( await scraper.getTvShowEpisode( show.internalId, details.season, details.episode ).catch<TvEpisodeMediaRecord>( () => null ) );

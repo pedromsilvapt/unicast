@@ -71,4 +71,12 @@ export class FileSystemRepository extends MediaRepository {
     getPreferredMediaArt ( kind : MediaKind, id : string, key : string ) : string {
         return this.scanner.settings.get<string>( [ 'art', kind, id, key ], null );
     }
+
+    setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string ) {
+        this.settings.set( [ 'associations', kind, matchedId ], preferredId );
+    }
+    
+    getPreferredMedia ( kind : MediaKind, matchedId : string ) : string {
+        return this.settings.get<string>( [ 'associations', kind, matchedId ] );
+    }
 }

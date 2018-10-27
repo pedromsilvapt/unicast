@@ -26,6 +26,12 @@ export interface IMediaRepository {
     
     watch ? ( kind : MediaKind, id : string, watched ?: boolean ) : Promise<void>;
 
+    setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string );
+
+    getPreferredMedia ( kind : MediaKind, matchedId : string ) : string;
+
+    getPreferredMediaArt ( kind : MediaKind, id : string, key : string ) : string;
+
     setPreferredMediaArt ( kind : MediaKind, id : string, key : string, url : string );
 }
 
@@ -48,5 +54,12 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
 
     abstract search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
 
+    abstract getPreferredMediaArt ( kind : MediaKind, id : string, key : string ) : string;
+
     abstract setPreferredMediaArt ( kind : MediaKind, id : string, key : string, url : string ) : void;
+
+    abstract setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string );
+
+    abstract getPreferredMedia ( kind : MediaKind, matchedId : string ) : string;
+
 }

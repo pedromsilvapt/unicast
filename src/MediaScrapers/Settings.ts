@@ -6,6 +6,8 @@ export class Settings {
     constructor ( file : string ) {
         this.persistence = new Cache<any>();
 
+        this.persistence.defaultTtl = 0;
+
         this.persistence.storage = new CacheStorage( file );
 
         this.persistence.autoSaveDelay = 500;

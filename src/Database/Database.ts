@@ -516,9 +516,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     async updateIfChanged ( baseRecord : object, changes : object ) : Promise<R> {
         if ( Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) ) ) {
-            const changed = Object.keys( changes ).filter( key => !equals( baseRecord[ key ], changes[ key ] ) );
+            // @DEBUG
+            // const changed = Object.keys( changes ).filter( key => !equals( baseRecord[ key ], changes[ key ] ) );
 
-            console.log( changed.map( key => `${key}(${typeof baseRecord[key]} ${baseRecord[key]}, ${ typeof changes[key] } ${changes[key]})` ) );
+            // console.log( changed.map( key => `${key}(${typeof baseRecord[key]} ${baseRecord[key]}, ${ typeof changes[key] } ${changes[key]})` ) );
             
             return this.update( baseRecord[ "id" ], changes );
         }

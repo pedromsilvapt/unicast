@@ -63,7 +63,7 @@ export class Cache<T> {
 
         const requestedTtl = typeof options.readTtl === 'number' 
             ? Math.min( options.readTtl, block.ttl )
-            : block.ttl;
+            : ( block.ttl == 0 ? Infinity : block.ttl );
 
         if ( block.createdAt + requestedTtl < Date.now() ) {
             return null;
