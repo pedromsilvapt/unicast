@@ -41,7 +41,7 @@ export class HttpSender {
 
     async serve ( req : Request, res : Response, next : Next ) : Promise<void> {
         try {
-            const [ streams, record, options ] = await this.receiver.sessions.get( req.params.session );
+            const { streams } = await this.receiver.sessions.get( req.params.session );
     
             const stream = await this.getStream( streams, req.params.stream, req.query );
             

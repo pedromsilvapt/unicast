@@ -27,6 +27,10 @@ export abstract class BaseReceiver extends EventEmitter implements IMediaReceive
         this.sessions = new MediaSessionsManager( this, server.media );
     }
 
+    onEntityDestroy () {
+        this.sessions.destroy();
+    }
+
     abstract connect () : Promise<boolean>;
     
     abstract disconnect () : Promise<boolean>;

@@ -9,8 +9,15 @@ import { Optional } from 'data-optional';
 import * as sortBy from 'sort-by';
 import { Synchronized } from "data-semaphore";
 
+export interface ActiveMediaSession<O = any> {
+    streams : MediaStream[];
+    record : MediaRecord;
+    options : MediaPlayOptions;
+    cancel : CancelToken;
+}
+
 export class MediaSessionsManager {
-    protected records : Map<string, Promise<[MediaStream[], MediaRecord, MediaPlayOptions, CancelToken]>> = new Map;
+    protected records : Map<string, Promise<ActiveMediaSession>> = new Map;
 
     receiver : IMediaReceiver;
 
@@ -85,9 +92,7 @@ export class MediaSessionsManager {
                 console.log( history.watched, this.getSessionPercentage( history, status ) );
 
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
-                    const media = await this.mediaManager.get( history.reference.kind, history.reference.id );
-                    
-                    await this.mediaManager.watchTracker.watch( media );
+                    await this.watch( history );
                 }
                 
                 history.updatedAt = new Date();
@@ -113,6 +118,22 @@ export class MediaSessionsManager {
         return history.id;
     }
 
+    hasActive ( id : string ) : boolean {
+        return this.records.has( id );
+    }
+
+    async watch ( history : HistoryRecord ) : Promise<void> {
+        if ( !history.watched ) {
+            history.watched = true;
+
+            await this.mediaManager.database.tables.history.update( history.id, { watched: true } );
+
+            const media = await this.mediaManager.get( history.reference.kind, history.reference.id );
+                        
+            await this.mediaManager.watchTracker.watch( media );
+        }
+    }
+
     async has ( id : string ) : Promise<boolean> {
         return this.records.has( id ) || await this.mediaManager.database.tables.history.has( id );
     }
@@ -123,7 +144,7 @@ export class MediaSessionsManager {
         if ( history ) {
             const cancel = new CancelToken();
 
-            const media = await this.mediaManager.get( history.reference.kind, history.reference.id ) as PlayableMediaRecord;
+            const record = await this.mediaManager.get( history.reference.kind, history.reference.id ) as PlayableMediaRecord;
             
             const originalStreams = await this.mediaManager.providers.streams( media.sources );
             
@@ -138,11 +159,11 @@ export class MediaSessionsManager {
             const options : MediaPlayOptions = {
                 autostart: true,
                 startTime: history.position,
-                mediaId: media.id,
-                mediaKind: media.kind
+                mediaId: record.id,
+                mediaKind: record.kind
             };
 
-            return [ streams, media, options, cancel ];
+            return { streams, record, options, cancel };
         }
 
         return null;
@@ -176,9 +197,9 @@ export class MediaSessionsManager {
         return this.zapping.get( strategy ).previous( session, this );
     }
 
-    async get ( id : string ) : Promise<[ MediaStream[], MediaRecord, MediaPlayOptions, CancelToken ]> {
+    async get ( id : string ) : Promise<ActiveMediaSession> {
         if ( !this.records.has( id ) ) {
-            this.records.set( id, this.getRaw( id ).catch( err => {
+            this.records.set( id, this.create( id ).catch( err => {
                 this.receiver.server.onError.notify( err );
 
                 this.records.delete( id );
@@ -194,14 +215,14 @@ export class MediaSessionsManager {
         if ( this.records.has( id ) ) {
             const record = await this.records.get( id );
 
-            record[ 2 ] = options;
+            record.options = options;
         }
     }
 
     @Synchronized()
     async release ( id : string ) {
         if ( this.records.has( id ) ) {
-            const [ streams, record, options, cancel ] = await this.records.get( id );
+            const { cancel } = await this.records.get( id );
 
             cancel.cancel();
 
@@ -213,7 +234,7 @@ export class MediaSessionsManager {
         this.statusPoller.pause();
 
         for( let record of this.records.values() ) {
-            record.then( ( [ _, __, ___, cancel ] ) => {
+            record.then( ( { cancel } ) => {
                 cancel.cancel();
             } );
         }

@@ -129,7 +129,7 @@ export class ChromecastReceiver extends BaseReceiver {
 
     async play ( id : string, customOptions : Partial<MediaPlayOptions> = {} ) : Promise<ReceiverStatus> {
         // Get the session information
-        const [ streams, record, recordPlayOptions ] = await this.sessions.get( id );
+        const { streams, record, options: recordPlayOptions } = await this.sessions.get( id );
 
         // Find the video stream
         const video : VideoMediaStream = streams.find( stream => stream.type === MediaStreamType.Video ) as VideoMediaStream;
@@ -252,7 +252,7 @@ export class ChromecastReceiver extends BaseReceiver {
             }
         }
 
-        const [ streams, record, options ] = await this.sessions.get( status.media.metadata.session );
+        const { record } = await this.sessions.get( status.media.metadata.session );
 
         const normalized : ReceiverStatus = {
             timestamp: new Date(),
@@ -337,7 +337,7 @@ export class ChromecastReceiver extends BaseReceiver {
             return 0;
         }
         
-        const [ streams, record, options ] = await this.sessions.get( this.sessions.current );
+        const { options } = await this.sessions.get( this.sessions.current );
         
         return options.subtitlesOffset || 0;
     }
@@ -347,7 +347,7 @@ export class ChromecastReceiver extends BaseReceiver {
 
         const id = this.sessions.current;
         
-        const [ streams, record, options ] = await this.sessions.get( id );
+        const { options } = await this.sessions.get( id );
 
         const index = this.messagesFactory.getTrackIndexForOffset( 0, {
             ...options,
