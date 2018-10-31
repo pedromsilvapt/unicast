@@ -2,6 +2,10 @@ import { MediaStream, MediaStreamType } from './MediaStream';
 import { SubsPipeline, Pipeline, StreamReader, ParserPipeline, ContextManager, DecoderPipeline, LazyPipeline } from 'subbox';
 
 export abstract class SubtitlesMediaStream extends MediaStream {
+    static is ( stream : MediaStream ) : stream is SubtitlesMediaStream {
+        return stream.type == MediaStreamType.Subtitles;
+    }
+
     type : MediaStreamType = MediaStreamType.Subtitles;
 
     format : string;

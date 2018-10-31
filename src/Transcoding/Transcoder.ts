@@ -19,5 +19,13 @@ export class TranscodingSession<O = any> {
 }
 
 export abstract class Transcoder<O> {
-    abstract transcode ( session : HistoryRecord, media : MediaRecord, streams : MediaStream[], options ?: Partial<O>, cancel ?: CancelToken ) : Promise<MediaStream[]>;
+
+export interface TranscodedMediaStream {
+    isTranscoded : true;
+
+    task : BackgroundTask;
+}
+
+export function isTranscodedMediaStream<T> ( stream : T ) : stream is T & TranscodedMediaStream {
+    return stream && ( stream as any ).isTranscoded;
 }

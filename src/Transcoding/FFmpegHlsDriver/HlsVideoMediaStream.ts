@@ -1,5 +1,5 @@
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
-import { MediaRange } from "../../MediaProviders/MediaStreams/MediaStream";
+import { MediaRange, MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import { Storage } from "../../Storage";
 import { FFmpegHlsTranscodingTask } from "./FFmpegHlsTranscodingTask";
 import { FFmpegHlsDriver } from "./FFmpegHlsDriver";
@@ -9,12 +9,19 @@ import * as mime from 'mime';
 import { HistoryRecord } from "../../Database/Database";
 import { HlsVirtualPlaylist } from "./HlsVirtualPlaylist";
 import { Readable } from "stream";
+import { TranscodedMediaStream } from "../Transcoder";
 
 export function delay<T = void> ( time, value : T = null ) : Promise<T> {
     return new Promise<T>( resolve => setTimeout( resolve.bind( null, value ), time ) );
 }
 
-export class HlsVideoMediaStream extends VideoMediaStream {
+export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedMediaStream {
+    static is ( stream : MediaStream ) : stream is HlsVideoMediaStream {
+        return stream instanceof HlsVideoMediaStream;
+    }
+
+    readonly isTranscoded = true;
+
     session : HistoryRecord;
     
     inputStream : VideoMediaStream;
