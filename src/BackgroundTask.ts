@@ -304,9 +304,9 @@ export class BackgroundTasksManager {
 export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = BackgroundTask> extends EventEmitter {
     abstract name : string;
 
-    protected points : [ number, V ][] = [];
-
     protected stopwatch : Stopwatch = new Stopwatch;
+    
+    points : [ number, V ][] = [];
 
     minimum : number = null;
 
@@ -334,8 +334,28 @@ export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = Backgro
         this.freeMemory( time );
     }
 
+    isEmpty () : boolean {
+        return this.points.length == 0;
+    }
+
     getTime () : number {
         return this.stopwatch.readMilliseconds();
+    }
+
+    getPoint ( index : number ) : [ number, V ] {
+        if ( index < 0 ) {
+            index = this.points.length + index;
+        }
+
+        return this.points[ index ];
+    }
+
+    getNewestPoint () : [ number, V ] {
+        return this.getPoint( -1 );
+    }
+
+    getOldestPoint () {
+        return this.getPoint( 0 );
     }
 
     pause () {

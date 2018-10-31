@@ -12,6 +12,11 @@ import { Future } from '@pedromsilva/data-future';
 import { SegmentsScheduler, SegmentsSchedulerJob } from "./SegmentsScheduler";
 import { MediaRecord } from "../../MediaRecord";
 
+export interface TranscodingTaskProgressReport {
+    current : number;
+    speed : number;
+}
+
 export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     record : MediaRecord;
 
@@ -57,6 +62,14 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         const dur = 1000 * this.driver.getSegmentDuration();        
 
         return Math.min( index * Math.ceil( dur / framerate ) * framerate / 1000, this.input.duration );
+    }
+
+    getTimeSegment ( time : number ) : number {
+        const framerate = this.input.metadata.tracks.find( track => track.type == 'video' ).framerate;
+
+        const dur = 1000 * this.driver.getSegmentDuration();
+
+        return Math.floor( time / ( Math.ceil( dur / framerate ) * framerate / 1000 ) );
     }
 
     destroyProcess ( id : string ) {
@@ -109,6 +122,28 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         }
 
         this.scheduler.request( index );
+    }
+
+    getProgressReport ( time : number ) : TranscodingTaskProgressReport {
+        const segmentIndex = this.getTimeSegment( time );
+
+        for ( let encoder of this.encoders.values() ) {
+            if ( encoder.withinRange( segmentIndex ) ) {
+                if ( typeof encoder.doneSegment.end != 'number' ) {
+                    break;
+                }
+
+                if ( encoder.speedMetrics.isEmpty() ) {
+                    break;
+                }
+
+                const [ _, speed ] = encoder.speedMetrics.getNewestPoint();
+
+                return { current: this.getSegmentTime( encoder.doneSegment.end ), speed };
+            }
+        }
+
+        return { current: 0, speed: 0 };
     }
 
     protected async onStart () {

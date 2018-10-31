@@ -1,7 +1,7 @@
 import { BaseReceiver } from "../BaseReceiver/BaseReceiver";
 import { GeneralRemote, ChromecastPlayOptions } from "./Remotes/General";
 import DefaultMediaRemote from "./Remotes/DefaultMedia";
-import { MediaPlayOptions, ReceiverStatus, ReceiverStatusState } from "../BaseReceiver/IMediaReceiver";
+import { MediaPlayOptions, ReceiverStatus, ReceiverStatusState, ReceiverTranscodingStatus } from "../BaseReceiver/IMediaReceiver";
 import { MediaStream, MediaStreamType } from "../../MediaProviders/MediaStreams/MediaStream";
 import { UnicastServer } from "../../UnicastServer";
 import { MessagesFactory } from "./MessagesFactory";
@@ -9,6 +9,9 @@ import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream"
 import { ChromecastHttpSender } from "./ChromecastHttpSender";
 import { ChromecastHlsTranscoder } from "./Transcoders/ChromecastHlsTranscoder";
 import { InvalidArgumentError } from "restify-errors";
+import { TranscodingSession } from "../../Transcoding/Transcoder";
+import { MediaStreamSelectors } from "../../MediaProviders/MediaStreams/MediaStreamSelectors";
+import { HlsVideoMediaStream } from "../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
 
 export interface ChromecastSubtitlesConfig {
     lineFilters ?: (string | RegExp)[]
@@ -234,6 +237,22 @@ export class ChromecastReceiver extends BaseReceiver {
         return this.status();
     }
 
+    statusTranscoding ( status : any, transcoding : TranscodingSession ) : ReceiverTranscodingStatus {
+        if ( !transcoding ) {
+            return null;
+        }
+
+        const video = MediaStreamSelectors.firstVideo( transcoding.getMappedOutputs() );
+        
+        if ( HlsVideoMediaStream.is( video ) ) {
+            const report = video.task.getProgressReport( status.currentTime );
+
+            return { duration: status.media.duration, ...report, task: video.task.id };
+        }
+
+        return null;
+    }
+
     async status () : Promise<ReceiverStatus> {
         const status = await this.client.getStatus();
 
@@ -242,7 +261,8 @@ export class ChromecastReceiver extends BaseReceiver {
                 timestamp: new Date(),
                 state: ReceiverStatusState.Stopped,
                 media: {
-                    time: { duration: 0, current: 0 },
+                    time: { duration: 0, current: 0, speed: 0 },
+                    transcoding: null,
                     record: null,
                     session: null,
                     options: {}
@@ -252,13 +272,14 @@ export class ChromecastReceiver extends BaseReceiver {
             }
         }
 
-        const { record } = await this.sessions.get( status.media.metadata.session );
+        const { record, transcoding } = await this.sessions.get( status.media.metadata.session );
 
         const normalized : ReceiverStatus = {
             timestamp: new Date(),
             state: status.playerState,
             media: {
-                time: { duration: status.media.duration, current: status.currentTime },
+                time: { duration: status.media.duration, current: status.currentTime, speed: status.playerState == ReceiverStatusState.Playing ? 1 : 0 },
+                transcoding: transcoding ? this.statusTranscoding( status, transcoding ) : null,
                 record: record,
                 session: await this.server.database.tables.history.get( status.media.metadata.session ),
                 options: status.media.metadata.options

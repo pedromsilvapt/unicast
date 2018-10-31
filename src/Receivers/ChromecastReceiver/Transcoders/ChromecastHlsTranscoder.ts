@@ -2,7 +2,7 @@ import { ChromecastReceiver } from "../ChromecastReceiver";
 import { MediaStream, MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { VideoMediaStream } from "../../../MediaProviders/MediaStreams/VideoStream";
 import { FFmpegPreset } from "../../../Transcoding/FFmpegDriver/FFmpegDriver";
-import { Transcoder } from "../../../Transcoding/Transcoder";
+import { Transcoder, isTranscodedMediaStream, TranscodingSession } from "../../../Transcoding/Transcoder";
 import { FFmpegHlsDriver, FFmpegHlsFlag, FFmpegHlsPlaylistType } from "../../../Transcoding/FFmpegHlsDriver/FFmpegHlsDriver";
 import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
 import { MediaRecord } from "../../../MediaRecord";
@@ -61,7 +61,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         this.printDiagnosticsLine( lname( '# triggers:' ), triggers.length > 0 ? ltrue : lfalse, `(${ lvalue( triggers.length ) })` );
     }
 
-    async transcodeVideo ( session : HistoryRecord, media : MediaRecord, stream : VideoMediaStream, customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<VideoMediaStream> {
+    async transcodeVideo ( transcoding : TranscodingSession<ChromecastTranscoderOptions>, session : HistoryRecord, media : MediaRecord, stream : VideoMediaStream, customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<VideoMediaStream> {
         if ( !stream.metadata ) {
             return stream;
         }
@@ -137,20 +137,26 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             
             this.receiver.server.tasks.register( hls.task );
 
+            transcoding.addStreamsMapping( stream, hls, hls.task );
+
             return hls;
         }
-
-        return stream;
     }
 
-    async transcode ( session : HistoryRecord, media : MediaRecord, streams : MediaStream[], customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<MediaStream[]> {
-        return Promise.all( streams.map( stream => {
-            if ( stream.type === MediaStreamType.Video ) {
-                return this.transcodeVideo( session, media, stream as VideoMediaStream, customOptions, cancel );
-            }
+    async transcode ( session : HistoryRecord, media : MediaRecord, streams : MediaStream[], customOptions : Partial<ChromecastTranscoderOptions> = {}, cancel ?: CancelToken ) : Promise<TranscodingSession<ChromecastTranscoderOptions>> {
+        const transcoding = new TranscodingSession( null, customOptions, streams );
 
-            return Promise.resolve( stream );
+        await Promise.all( streams.map( async stream => {
+            if ( VideoMediaStream.is( stream ) ) {
+                await this.transcodeVideo( transcoding, session, media, stream, customOptions, cancel );
+            }
         } ) );
+
+        if ( transcoding.isPristine ) {
+            return null;
+        }
+
+        return transcoding;
     }
 }
 

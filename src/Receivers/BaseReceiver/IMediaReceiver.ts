@@ -17,6 +17,7 @@ export interface ReceiverStatus {
     state : ReceiverStatusState;
     media : {
         time : ReceiverTimeStatus;
+        transcoding ?: ReceiverTranscodingStatus;
         record : MediaRecord;
         session: HistoryRecord;
         options: any;
@@ -28,6 +29,11 @@ export interface ReceiverStatus {
 export interface ReceiverTimeStatus {
     current : number;
     duration : number;
+    speed : number;
+}
+
+export interface ReceiverTranscodingStatus extends ReceiverTimeStatus {
+    task : string;
 }
 
 export interface ReceiverVolumeStatus {

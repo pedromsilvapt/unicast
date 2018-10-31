@@ -8,12 +8,14 @@ import { HistoryRecord } from "../../Database/Database";
 import { Optional } from 'data-optional';
 import * as sortBy from 'sort-by';
 import { Synchronized } from "data-semaphore";
+import { TranscodingSession } from "../../Transcoding/Transcoder";
 
 export interface ActiveMediaSession<O = any> {
     streams : MediaStream[];
     record : MediaRecord;
     options : MediaPlayOptions;
     cancel : CancelToken;
+    transcoding ?: TranscodingSession<O>;
 }
 
 export class MediaSessionsManager {
@@ -135,10 +137,10 @@ export class MediaSessionsManager {
     }
 
     async has ( id : string ) : Promise<boolean> {
-        return this.records.has( id ) || await this.mediaManager.database.tables.history.has( id );
+        return this.hasActive( id ) || await this.mediaManager.database.tables.history.has( id );
     }
 
-    async getRaw ( id : string ) : Promise<[ MediaStream[], MediaRecord, MediaPlayOptions, CancelToken ]> {
+    async create ( id : string ) : Promise<ActiveMediaSession> {
         const history = await this.mediaManager.database.tables.history.get( id );
         
         if ( history ) {
@@ -146,9 +148,11 @@ export class MediaSessionsManager {
 
             const record = await this.mediaManager.get( history.reference.kind, history.reference.id ) as PlayableMediaRecord;
             
-            const originalStreams = await this.mediaManager.providers.streams( media.sources );
+            const originalStreams = await this.mediaManager.providers.streams( record.sources );
             
-            const streams = await this.receiver.transcoder.transcode( history, media, originalStreams, {}, cancel );
+            const transcoding = await this.receiver.transcoder.transcode( history, record, originalStreams, {}, cancel );
+
+            const streams = transcoding ? transcoding.outputs : originalStreams;
             
             cancel.cancellationPromise.then( () => {
                 for ( let stream of streams ) {
@@ -163,7 +167,7 @@ export class MediaSessionsManager {
                 mediaKind: record.kind
             };
 
-            return { streams, record, options, cancel };
+            return { streams, record, transcoding, options, cancel };
         }
 
         return null;
