@@ -1,7 +1,7 @@
 import { BaseController, Route } from "../../BaseController";
 import { Request, Response } from "restify";
 import { MediaSync } from "../../../MediaSync";
-import { BackgroundTask } from "../../../BackgroundTask";
+import { BackgroundTask, Stopwatch } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
 
 export class ProvidersController extends BaseController {
@@ -13,7 +13,25 @@ export class ProvidersController extends BaseController {
         
         const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
 
-        const [ task, done ] = BackgroundTask.fromPromise( task => sync.run( task, { kinds, cleanMissing: false, dryRun: req.query.dryRun === 'true' } ) );
+        const [ task, done ] = BackgroundTask.fromPromise( async task => {
+            const options = { kinds, cleanMissing: false, dryRun: req.query.dryRun === 'true' };
+
+            this.server.diagnostics.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );
+
+            const stopwatch = new Stopwatch().resume();
+
+            await sync.run( task, options );
+
+            stopwatch.mark( 'sync' );
+
+            await this.server.database.tables.shows.repair();
+
+            await this.server.database.tables.movies.repair();
+
+            stopwatch.pause().mark( 'repair', 'sync' );
+
+            this.server.diagnostics.info( 'repositories/sync', `completed in + ${ stopwatch.readHumanized() } (sync = ${ stopwatch.readHumanized( 'sync' ) }, repair = ${ stopwatch.readHumanized( 'repair' ) })` );
+        } );
         
         this.server.tasks.register( task );
 
