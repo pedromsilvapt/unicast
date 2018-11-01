@@ -140,7 +140,7 @@ export class TranscodingSession<O = any> {
             if ( mapping.input.length == 0 ) {
                 inputs = inputs.concat( mapping.output );
             } else if ( mapping.output.length == 0 ) {
-                inputs = inputs.filter( stream => !inputs.includes( stream ) );
+                inputs = inputs.filter( stream => !mapping.input.includes( stream ) );
             } else {
                 let firstIndex : number = -1;
 
@@ -159,7 +159,7 @@ export class TranscodingSession<O = any> {
                     inputs = [ 
                         ...inputs.slice( 0, firstIndex ), 
                         ...mapping.output, 
-                        ...inputs.slice( firstIndex + 1 ).filter( stream => !inputs.includes( stream ) ) 
+                        ...inputs.slice( firstIndex + 1 ).filter( stream => !mapping.input.includes( stream ) ) 
                     ];
                 }
             }
