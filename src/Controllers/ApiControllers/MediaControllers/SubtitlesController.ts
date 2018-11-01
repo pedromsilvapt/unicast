@@ -3,12 +3,13 @@ import { Request, Response } from "restify";
 import { ISubtitle } from "../../../Subtitles/Providers/ISubtitlesProvider";
 import { ILocalSubtitle } from "../../../Subtitles/SubtitlesManager";
 import { MpvController } from "../../../Subtitles/Validate/MPV/Controller";
-import { MediaKind, PlayableMediaRecord, TvEpisodeMediaRecord } from "../../../MediaRecord";
+import { MediaKind, PlayableMediaRecord, TvEpisodeMediaRecord, isPlayableRecord } from "../../../MediaRecord";
 import { MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { FileSystemVideoMediaStream } from "../../../MediaProviders/FileSystemMediaProvider/MediaStreams/FileSystemVideoStream";
 import { Semaphore } from "data-semaphore";
 import * as sortBy from 'sort-by';
 import { MpvSynchronizerController } from "../../../Subtitles/Validate/MPV/SynchronizerController";
+import { InvalidArgumentError } from "restify-errors";
 
 export class SubtitlesController extends BaseController {
     protected validateSemaphore : Semaphore = new Semaphore( 1 );
@@ -38,7 +39,13 @@ export class SubtitlesController extends BaseController {
     async listRemote ( req : Request, res : Response ) : Promise<ISubtitle[]> {
         const media = await this.server.media.get( req.params.kind, req.params.id );
 
-        const result = await this.server.diagnostics.measure( 'subtitles/search', () => this.server.subtitles.providers.search( media, [ 'por' ] ) );
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( `Invalid media type ${ media.kind }.` );
+        }
+
+        const result = await this.server.diagnostics.measure( 
+            'subtitles/search', () => this.server.subtitles.providers.search( media, [ 'por' ] ) 
+        );
         
         // When searching for subtitles for an episode, try to predict the next episode we might search
         // (right now just means the next episode number) and start searching so that the results get cached

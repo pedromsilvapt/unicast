@@ -153,3 +153,97 @@ export function createRecordsSet () : RecordsSet {
 
     return set;
 }
+
+export function isMovieRecord ( media : MediaRecord ) : media is MovieMediaRecord {
+    return media.kind === MediaKind.Movie;
+}
+
+export function isTvShowRecord ( media : MediaRecord ) : media is TvShowMediaRecord {
+    return media.kind === MediaKind.TvShow;
+}
+
+export function isTvSeasonRecord ( media : MediaRecord ) : media is TvSeasonMediaRecord {
+    return media.kind === MediaKind.TvSeason;
+}
+
+export function isTvEpisodeRecord ( media : MediaRecord ) : media is TvEpisodeMediaRecord {
+    return media.kind === MediaKind.TvEpisode;
+}
+
+export function isCustomRecord ( media : MediaRecord ) : media is CustomMediaRecord {
+    return media.kind === MediaKind.Custom;
+}
+
+export function isPlayableRecord ( media : MediaRecord ) : media is PlayableMediaRecord {
+    return isMovieRecord( media ) || isTvEpisodeRecord( media ) || isCustomRecord( media );
+}
+
+export class MediaSources {
+    static list : string[][] = [
+        [ 'BluRay', 'Blu-Ray', 'Blu Ray', 'BDR', 'BD5', 'BD9', 'BD25', 'BD50', 'BDRip', 'BRRip' ],
+        [ 'WEB-DL', 'WEB.DL', 'WEBDL', 'WEB DL', 'WEB' ],
+        [ 'WEBRIP', 'WEB-Rip', 'WEB Rip' ],
+        [ 'WEBCAP', 'WEBCAP', 'WEB Cap' ],
+        [ 'HDTV', 'PDTV', 'HDTVRip', 'TVRip', 'HDRip', 'DSR', 'DSRip', 'DTHRip', 'DVBRip' ],
+        [ 'DVDR', 'DVD-Full', 'Full-Rip', 'ISO Rip', 'DVD-5', 'DVD-9' ],
+        [ 'SCR', 'SCREENER', 'DVDSCR', 'DVDSCREENER', 'BDSCR' ],
+        [ 'CAMRip', 'CAM' ],
+        [ 'TS', 'TELESYNC', 'PDVD' ],
+        [ 'WP', 'WORKPRINT' ],
+        [ 'PPV', 'PPVRip' ],
+        [ 'VODRip', 'VODR' ],
+        [ 'DVDRip' ],
+        [ 'R5' ]
+    ];
+
+    static similarity ( a : string, b : string ) : number {
+        const [ na, nb ] = [ this.normalize( a ), this.normalize( b ) ];
+
+        console.log( a, na, b, nb );
+
+        if ( na == null || nb == null ) {
+            return 0;
+        }
+
+        const ia = this.list.findIndex( pool => pool[ 0 ] == na );
+        const ib = this.list.findIndex( pool => pool[ 0 ] == nb );
+
+        console.log( a, ia, b, ib );
+
+        return 1 - ( Math.abs( ia - ib ) / this.list.length );
+    }
+
+    static normalize ( source : string ) : string {
+        if ( !source ) {
+            return null;
+        }
+
+        source = source.toLowerCase();
+
+        const pool = this.list.find( pool => pool.some( each => each.toLowerCase() == source ) );
+
+        if ( pool ) {
+            return pool[ 0 ];
+        }
+
+        return null;
+    }
+
+    static findAny ( string : string ) : string {
+        if ( !string ) {
+            return null;
+        }
+
+        let source : string = null;
+
+        for ( let pool of MediaSources.list ) {
+            source = pool.find( each => string.toLowerCase().includes( each.toLowerCase() ) )
+
+            if ( source ) {
+                break;
+            }
+        }
+
+        return source;
+    }
+}

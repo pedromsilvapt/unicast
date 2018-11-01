@@ -1,8 +1,9 @@
 import { UnicastServer } from "../UnicastServer";
 import { ISubtitlesProvider, ISubtitle } from "./Providers/ISubtitlesProvider";
 import { EntityManager } from "../EntityManager";
-import { MediaRecord } from "../MediaRecord";
+import { PlayableMediaRecord } from "../MediaRecord";
 import { SubtitlesCache } from "./SubtitlesCache";
+import * as sortBy from 'sort-by';
 
 export function flatten<T> ( items : T[][] ) : T[] {
     return items.reduce( ( a, b ) => a.concat( b ), [] );
@@ -23,7 +24,7 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
         return entity.name;
     }
 
-    async search ( media : MediaRecord, langs : string[], providersNames : string[] = null ) : Promise<ISubtitle[]> {
+    async search ( media : PlayableMediaRecord, langs : string[], providersNames : string[] = null ) : Promise<ISubtitle[]> {
         if ( !providersNames ) {
             providersNames = this.entities.map( provider => provider.name );
         }
@@ -50,7 +51,7 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
                     return [];
                 } );
             } ) )
-        ) );
+        ) ).sort( sortBy( '-score' ) );
     }
 
     async download ( subtitle : ISubtitle ) : Promise<NodeJS.ReadableStream> {

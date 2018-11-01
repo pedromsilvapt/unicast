@@ -1,7 +1,7 @@
 import * as subtitler from 'subtitler';
 import * as OS from 'opensubtitles-api';
 import { ISubtitlesProvider, ISubtitle } from '../ISubtitlesProvider';
-import { MediaKind, TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from '../../../MediaRecord';
+import { MediaKind, TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, PlayableMediaRecord, isTvEpisodeRecord, isMovieRecord, MediaSources } from '../../../MediaRecord';
 import * as yauzl from 'yauzl';
 import * as iconv from 'iconv-lite';
 import * as path from 'path';
@@ -38,14 +38,14 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
         // } );
     }
 
-    protected async getQueryForMedia ( media : MediaRecord, lang : string ) {
-        if ( media.kind === MediaKind.Movie ) {
+    protected async getQueryForMedia ( media : PlayableMediaRecord, lang : string ) {
+        if ( isMovieRecord( media ) ) {
             if ( media.external.imdb ) {
                 return { imdbid: media.external.imdb.slice( 2 ) };
             } else {
                 return { query: media.title };
             }
-        } else if ( media.kind == MediaKind.TvEpisode ) {
+        } else if ( isTvEpisodeRecord( media ) ) {
             const season = await this.server.media.get( MediaKind.TvSeason, media.tvSeasonId );
 
             const show = await this.server.media.get( MediaKind.TvShow, season.tvShowId );
@@ -75,7 +75,7 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
         }, 29 * 60 * 1000 );
     }
 
-    async search ( media : MediaRecord, lang : string ) : Promise<IOpenSubtitlesResult[]> {
+    async search ( media : PlayableMediaRecord, lang : string ) : Promise<IOpenSubtitlesResult[]> {
         if ( !this.token ) {
             await this.getToken();
         }
@@ -85,6 +85,12 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
             
             let results : any[] = await this.api.search( this.token, lang, query );
     
+            const mediaSource = media.quality.source;
+
+            console.log( mediaSource, results.map( result => result.MovieReleaseName ) );
+            console.log( mediaSource, results.map( result => MediaSources.findAny( result.MovieReleaseName ) ) );
+            console.log( mediaSource, results.map( result => MediaSources.normalize( MediaSources.findAny( result.MovieReleaseName ) ) ) );
+
             return results.map<IOpenSubtitlesResult>( result => ( {
                 provider: this.name,
                 id : result.IDSubtitleFile,
@@ -98,7 +104,8 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
                     manual: result.SubtitlesLink,
                     zip: result.ZipDownloadLink,
                     direct: result.SubDownloadLink
-                }
+                },
+                score: MediaSources.similarity( MediaSources.normalize( MediaSources.findAny( result.MovieReleaseName ) ), mediaSource )
             } ) );
         } catch ( err ) {
             console.error( err );
