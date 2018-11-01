@@ -113,6 +113,7 @@ export class MediaSessionsManager {
             receiver: this.receiver.name,
             positionHistory: [ { start: options.startTime || 0, end: options.startTime || 0 } ],
             watched: false,
+            transcoding: options.transcoding,
             createdAt: new Date(),
             updatedAt: new Date()
         } );
@@ -150,7 +151,7 @@ export class MediaSessionsManager {
             
             const originalStreams = await this.mediaManager.providers.streams( record.sources );
             
-            const transcoding = await this.receiver.transcoder.transcode( history, record, originalStreams, {}, cancel );
+            const transcoding = await this.receiver.transcoder.transcode( history, record, originalStreams, history.transcoding || {}, cancel );
 
             const streams = transcoding ? transcoding.outputs : originalStreams;
             

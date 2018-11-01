@@ -996,6 +996,7 @@ export interface HistoryRecord {
     receiver : string;
     position : number;
     positionHistory : { start: number, end: number }[];
+    transcoding ?: any;
     watched: boolean;
     createdAt : Date;
     updatedAt : Date;

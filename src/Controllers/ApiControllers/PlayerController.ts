@@ -125,7 +125,7 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.get( kind, id );
     
-            const { playlistId, playlistPosition, startTime, autostart, subtitlesOffset } = req.body;
+            const { playlistId, playlistPosition, startTime, autostart, subtitlesOffset, transcoding } = req.body;
 
             const options : MediaPlayOptions = playlistId ? { playlistId, playlistPosition } : {};
 
@@ -139,6 +139,10 @@ export class PlayerController extends BaseController {
 
             if ( subtitlesOffset ) {
                 options.subtitlesOffset = +subtitlesOffset;
+            }
+
+            if ( transcoding ) {
+                options.transcoding = transcoding;
             }
 
             const session = await device.sessions.register( record, options );
