@@ -53,6 +53,7 @@ export interface MediaPlayOptions {
     mediaKind ?: string;
     mediaId ?: string;
     subtitlesOffset ?: number;
+    transcoding ?: any;
 }
 
 export interface IMediaReceiver extends EventEmitter {

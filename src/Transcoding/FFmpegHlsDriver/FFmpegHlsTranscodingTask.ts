@@ -13,8 +13,10 @@ import { SegmentsScheduler, SegmentsSchedulerJob } from "./SegmentsScheduler";
 import { MediaRecord } from "../../MediaRecord";
 
 export interface TranscodingTaskProgressReport {
+    duration : number;
     current : number;
     speed : number;
+    stable : boolean;
 }
 
 export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
@@ -124,26 +126,74 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         this.scheduler.request( index );
     }
 
-    getProgressReport ( time : number ) : TranscodingTaskProgressReport {
-        const segmentIndex = this.getTimeSegment( time );
+    getEncoderForTime ( time : number ) : FFmpegHlsTranscodingProcessTask {
+        return this.getEncoderFor( this.getTimeSegment( time ) );
+    }
 
+    getEncoderFor ( index : number ) : FFmpegHlsTranscodingProcessTask {
         for ( let encoder of this.encoders.values() ) {
-            if ( encoder.withinRange( segmentIndex ) ) {
-                if ( typeof encoder.doneSegment.end != 'number' ) {
-                    break;
-                }
-
-                if ( encoder.speedMetrics.isEmpty() ) {
-                    break;
-                }
-
-                const [ _, speed ] = encoder.speedMetrics.getNewestPoint();
-
-                return { current: this.getSegmentTime( encoder.doneSegment.end ), speed };
+            if ( encoder.withinRange( index ) ) {
+                return encoder;
             }
         }
 
-        return { current: 0, speed: 0 };
+        return null;
+    }
+
+    getNextEncoderForTime ( time : number ) : FFmpegHlsTranscodingProcessTask {
+        return this.getNextEncoderFor( this.getTimeSegment( time ) );
+    }
+    
+    getNextEncoderFor ( index : number ) : FFmpegHlsTranscodingProcessTask {
+        let nextEncoder : FFmpegHlsTranscodingProcessTask = null;
+
+        for ( let encoder of this.encoders.values() ) {
+            if ( encoder.segment.start <= index || encoder.segment.end < index ) {
+                continue;
+            }
+
+            if ( nextEncoder == null || encoder.segment.start < nextEncoder.segment.start ) {
+                nextEncoder = encoder;
+            }
+        }
+        
+        return nextEncoder;
+    }
+
+    getCurrentOrNextEncoderFor ( index : number ) : FFmpegHlsTranscodingProcessTask {
+        return this.getEncoderFor( index ) || this.getNextEncoderFor( index );
+    }
+
+    getCurrentOrNextEncoderForTime ( time : number ) : FFmpegHlsTranscodingProcessTask {
+        return this.getCurrentOrNextEncoderFor( this.getTimeSegment( time ) );
+    }
+
+    isStable () {
+        return Array.from( this.encoders.values() ).every( encoder => encoder.isStable() );
+    }
+
+    getProgressReport ( time : number ) : TranscodingTaskProgressReport {
+        const segmentIndex = this.getTimeSegment( time );
+
+        let encoder = this.getCurrentOrNextEncoderFor( segmentIndex );
+
+        if ( encoder ) {
+            if ( typeof encoder.doneSegment.end != 'number' ) {
+                return { current: this.getSegmentTime( encoder.segment.start ), duration: this.getSegmentTime( encoder.segment.end ), speed: 0, stable: false };
+            }
+
+            const speed = encoder.getCurrentSpeed();
+
+            const stable = encoder.isStable();
+
+            return { current: this.getSegmentTime( encoder.doneSegment.end ), duration: this.getSegmentTime( encoder.segment.end ), speed, stable };
+        }
+
+        const isAvailable = this.segments.has( segmentIndex );
+
+        const segment = this.segments.findNextEmpty( segmentIndex );
+
+        return { current: segment ? segment.start - 1 : 0, duration: this.getSegmentTime( this.segments.totalSize ), speed: 0, stable: isAvailable };
     }
 
     protected async onStart () {
@@ -157,6 +207,17 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
             this.encoders.delete( id );
         }
     }
+}
+
+// @UTIL
+export function windowed <T> ( array : T[], size : number ) : T[][] {
+    let results : T[][] = [];
+
+    for ( let i = 0; i <= array.length - size; i++ ) {
+        results.push( array.slice( i, i + size ) );
+    }
+
+    return results;
 }
 
 export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
@@ -204,6 +265,30 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
         this.mainTask = mainTask;
         this.driver = FFmpegHlsTranscodingProcessTask.cloneDriver( mainTask, driver, segment );
         this.total = segment.end - segment.start;
+    }
+
+    getCurrentSpeed () : number {
+        if ( this.speedMetrics.isEmpty() ) {
+            return 0;
+        }
+
+        const [ _, speed ] = this.speedMetrics.getNewestPoint();
+
+        return speed;
+    }
+
+    isStable () : boolean {
+        const windowSize = 50;
+
+        if ( this.speedMetrics.points.length < 10 ) {
+            return false;
+        }
+
+        const lastValues = this.speedMetrics.getNewerPointValues( windowSize );
+        
+        const diffs = windowed( lastValues, 2 ).map( ( [ a, b ] ) => Math.abs( a - b ) ).reduce( ( a, b ) => a + b, 0 );
+
+        return diffs <= 0.004 * windowSize;
     }
 
     withinRange ( index : number ) : boolean {

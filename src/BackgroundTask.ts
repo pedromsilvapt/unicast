@@ -316,7 +316,7 @@ export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = Backgro
 
     task : T;
 
-    memory : number = 10000;
+    memory : number = 1000;
     
     constructor ( task : T ) {
         super();
@@ -350,12 +350,46 @@ export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = Backgro
         return this.points[ index ];
     }
 
+    getPointValue ( index : number ) : V {
+        const point = this.getPoint( index );
+
+        if ( point ) {
+            return point[ 1 ];
+        }
+
+        return null;
+    }
+
     getNewestPoint () : [ number, V ] {
         return this.getPoint( -1 );
     }
 
-    getOldestPoint () {
+    getOldestPoint () : [ number, V ] {
         return this.getPoint( 0 );
+    }
+
+    getNewestPointValue () : V {
+        return this.getPointValue( -1 );
+    }
+
+    getOldestPointValue () : V {
+        return this.getPointValue( 0 );
+    }
+
+    getOlderPoints ( count : number ) : [ number, V ][] {
+        return this.points.slice( 0, count );
+    }
+
+    getNewerPoints ( count : number ) : [ number, V ][] {
+        return this.points.slice( - count );
+    }
+
+    getOlderPointValues ( count : number ) : V[] {
+        return this.getOlderPoints( count ).map( ( [ _, v ] ) => v );
+    }
+
+    getNewerPointValues ( count : number ) : V[] {
+        return this.getNewerPoints( count ).map( ( [ _, v ] ) => v );
     }
 
     pause () {
@@ -385,6 +419,8 @@ export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = Backgro
     abstract valueToString ( value : V ) : string;
 
     toJSON () {
+        const lastPoint = this.getOldestPoint();
+
         return {
             name: this.name,
             minimum: this.minimum,
@@ -392,6 +428,7 @@ export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = Backgro
             debounceTime: this.debounceTime,
             now: this.getTime(),
             memory: this.memory,
+            lastPoint: lastPoint ? [ lastPoint[ 0 ], this.valueToNumber( lastPoint[ 1 ] ), this.valueToString( lastPoint[ 1 ] ), lastPoint[ 1 ] ] : null as [ number, number, string, V ],
             points: this.points.map<[number, number, string, V]>( ( [ t, v ] ) => [ t, this.valueToNumber( v ), this.valueToString( v ), v ] )
         };
     }
