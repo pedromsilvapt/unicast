@@ -67,6 +67,7 @@ export class ManyToManyRelation<M extends Record, R extends Record> extends Rela
                     } ) ;
             } );
         } else {
+            // TODO Find the best way to use indexes here too
             return middleTable.find( query => {
                 query = query.filter( row => r.expr( keys ).contains( row( this.recordForeign ) as any ) ) 
 

@@ -663,7 +663,7 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     installRelations ( tables : DatabaseTables ) {
         return {
             collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', 'show' ),
-            seasons: new HasManyRelation( 'seasons', tables.seasons, 'tvShowId' ).where( query => query.orderBy( { index: 'number' } ) )
+            seasons: new HasManyRelation( 'seasons', tables.seasons, 'tvShowId' ).indexBy( 'tvShowId' ).orderBy( 'number' )
         };
     }
 
@@ -690,8 +690,8 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         if ( !shows ) {
             shows = ( await this.find() ).map( show => show.id );
         }
-        
-        for ( let showId of shows ) {
+
+        await Promise.all( shows.map( async showId => {
             const show = await this.get( showId );
 
             const seasons = await this.relations.seasons.load( show );
@@ -699,7 +699,7 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
             await this.database.tables.seasons.repair( seasons.map( season => season.id ) )
 
             await this.updateEpisodesCount( show );
-        }
+        } ) );
     }
 }
 
@@ -729,8 +729,8 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
     
     installRelations ( tables : DatabaseTables ) {
         return {
-            show: new BelongsToOneRelation( 'tvShow', tables.shows, 'tvShowId' ),
-            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' )
+            show: new BelongsToOneRelation( 'tvShow', tables.shows, 'tvShowId', 'tvShowId' ),
+            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' ).indexBy( 'tvSeasonId' ).orderBy( 'number' )
         };
     }
 
@@ -756,8 +756,8 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         if ( !seasons ) {
             seasons = ( await this.find() ).map( season => season.id );
         }
-        
-        for ( let seasonId of seasons ) {
+
+        await Promise.all( seasons.map( async seasonId => {
             const season = await this.get( seasonId );
 
             const episodes = await this.relations.episodes.load( season );
@@ -765,7 +765,7 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
             await this.database.tables.episodes.repair( episodes.map( episode => episode.id ) )
 
             await this.updateEpisodesCount( season );
-        }
+        } ) );
     }
 }
 

@@ -30,7 +30,6 @@ export class ManyToManyPolyRelation<M extends Record, R extends Record> extends 
     async loadRelatedLinks ( items : M[] ) : Promise<any[]> {
         const keys = items.map( item => item.id );
 
-        
         const middleTable = this.middleTable;
         
         if ( typeof middleTable === 'string' ) {

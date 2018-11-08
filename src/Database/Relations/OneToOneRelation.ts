@@ -8,11 +8,20 @@ export abstract class OneToOneRelation<M extends Record, R extends Record> exten
 
     public foreignKey : string;
 
-    constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string ) {
+    public indexName ?: string;
+
+    constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string, indexName ?: string ) {
         super( member );
         
         this.relatedTable = relatedTable;
         this.foreignKey = foreignKey;
+        this.indexName = indexName;
+    }
+
+    public indexBy ( indexName : string ) : this {
+        this.indexName = indexName;
+        
+        return this;
     }
 }
 
@@ -21,8 +30,8 @@ export class HasOneRelation<M extends Record, R extends Record> extends OneToOne
     async loadRelated ( items : M[] ) : Promise<Map<string, R>> {
         const keys = items.map( item => item.id );
 
-        const related = await this.relatedTable.find( query => this.runQuery( query.filter( row => r.expr( keys ).contains( row( this.foreignKey ) as any ) ) ) );
-
+        const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey, this.indexName );
+        
         return itt( related ).keyBy( rel => rel.id )
     }
 

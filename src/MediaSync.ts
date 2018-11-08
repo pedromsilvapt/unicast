@@ -60,7 +60,8 @@ export class MediaSync {
             future.resolve( match.id );
             // Update
             if ( !dryRun ) await table.updateIfChanged( match, media );
-            // console.log( 'update', match.id, this.print( media ) );
+            
+            this.diagnostics.info( 'UPDATE ' + match.id + ' ' + this.print( media ) );
         } else {
             // Create
             if ( !dryRun ) {
@@ -69,7 +70,7 @@ export class MediaSync {
                     ...media as any
                 } );
 
-                // console.log( 'create', this.print( media ) );
+                this.diagnostics.info( 'CREATE ' + this.print( media ) );
             } else {
                 match = media;
                 media.id = media.internalId;
@@ -88,7 +89,7 @@ export class MediaSync {
             await table.delete( record.id );
         }
 
-        // console.log( 'delete', this.print( record ) );
+        this.diagnostics.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
     }
 
     async findRepositoryRecordsSet ( repository : IMediaRepository ) : Promise<RecordsSet> {

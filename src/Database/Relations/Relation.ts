@@ -1,4 +1,5 @@
 import * as r from 'rethinkdb';
+import { BaseTable } from '../Database';
 
 export interface Record { id ?: string; }
 
@@ -47,6 +48,20 @@ export abstract class Relation<M extends Record, R> {
         }
 
         return query;
+    }
+
+    protected findAll<T> ( table : BaseTable<T>, keys : string[], customQuery : ( query : r.Sequence ) => r.Sequence, fieldName : string, indexName ?: string ) : Promise<T[]> {
+        return indexName
+            ? table.findAll( keys, { index: indexName, query: customQuery } )
+            : table.find( query => {
+                query = query.filter( row => r.expr( keys ).contains( row( fieldName ) as any ) );
+
+                if ( customQuery ) {
+                    query = customQuery( query );
+                }
+
+                return query;
+            } );
     }
 
     abstract loadRelated ( items : M[] ) : Promise<any>;

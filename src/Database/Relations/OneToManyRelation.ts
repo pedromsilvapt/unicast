@@ -1,7 +1,7 @@
 import { Record, Relation } from "./Relation";
 import { BaseTable } from "../Database";
 import * as itt from "itt";
-import * as r from 'rethinkdb';
+import * as sortBy from "sort-by";
 
 export abstract class OneToManyRelation<M extends Record, R extends Record> extends Relation<M, R[]> {
     public relatedTable : BaseTable<R>;
@@ -10,11 +10,33 @@ export abstract class OneToManyRelation<M extends Record, R extends Record> exte
 
     public foreignKey : string;
 
-    constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string ) {
+    public indexName : string = null;
+
+
+    protected orderByFields : string[] = null;
+
+    constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string, indexName ?: string ) {
         super( member );
 
         this.relatedTable = relatedTable;
         this.foreignKey = foreignKey;
+        this.indexName = indexName;
+    }
+
+    public indexBy ( indexName : string ) : this {
+        this.indexName = indexName;
+        
+        return this;
+    }
+
+    public orderBy ( orderByFields : string | string[] ) : this {
+        if ( typeof orderByFields === 'string' ) {
+            orderByFields = [ orderByFields ];
+        }
+
+        this.orderByFields = orderByFields;
+        
+        return this;
     }
 }
 
@@ -22,12 +44,18 @@ export class HasManyRelation<M extends Record, R extends Record> extends OneToMa
     async loadRelated ( items : M[] ) : Promise<Map<string, R[]>> {
         const keys = items.map( item => item.id );
 
-        const related = await this.relatedTable.find( query => this.runQuery( query ).filter( row => r.expr( keys ).contains( row( this.foreignKey ) as any ) ) );
-
+        const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey, this.indexName );
+        
         return itt( related ).groupBy( rel => rel[ this.foreignKey ] );
     }
 
     findRelated ( item : M, related : Map<string, R[]> ) : R[] {
-        return related.get( item.id ) || [];
+        let records = ( related.get( item.id ) || [] );
+
+        if ( this.orderByFields ) {
+            records = records.sort( sortBy( ...this.orderByFields ) );
+        }
+
+        return records;
     }
 }
