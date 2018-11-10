@@ -146,7 +146,7 @@ export class ChromecastReceiver extends BaseReceiver {
     
             const options : ChromecastPlayOptions = {
                 autoplay: typeof playOptions.autostart === 'boolean' ? playOptions.autostart : true,
-                currentTime: playOptions.startTime
+                currentTime: Math.max( playOptions.startTime, 0 )
             };
     
             let media = await this.messagesFactory.createMediaMessage( id, streams, record, playOptions );

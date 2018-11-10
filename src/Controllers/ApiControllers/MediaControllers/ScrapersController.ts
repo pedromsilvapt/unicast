@@ -3,8 +3,43 @@ import { Request, Response } from "restify";
 import { MediaKind, ExternalReferences, ArtRecord } from "../../../MediaRecord";
 import { InvalidArgumentError } from "restify-errors";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
+import { CacheOptions } from "../../../MediaScrapers/ScraperCache";
 
 export class ScrapersController extends BaseController {
+    protected parseCacheOptions ( input : any ) : CacheOptions {
+        if ( !input ) return {};
+
+        let options : CacheOptions = {};
+
+        if ( 'readTtl' in input ) {
+            options.readTtl = +input.readTtl;
+        }
+
+        if ( 'readCache' in input ) {
+            if ( typeof input.readCache === 'boolean' ) options.readCache = input.readCache;
+            else if ( typeof input.readCache === 'string' ) {
+                options.readCache = input.readCache.toLowerCase() == 'true' || input.readCache == '1';
+            } else if ( typeof input.readCache === 'number' ) {
+                options.readCache = !!input.readCache;
+            }
+        }
+
+        if ( 'writeTtl' in input ) {
+            options.readTtl = +input.readTtl;
+        }
+
+        if ( 'writeCache' in input ) {
+            if ( typeof input.writeCache === 'boolean' ) options.writeCache = input.writeCache;
+            else if ( typeof input.writeCache === 'string' ) {
+                options.writeCache = input.writeCache.toLowerCase() == 'true' || input.writeCache == '1';
+            } else if ( typeof input.writeCache === 'number' ) {
+                options.writeCache = !!input.writeCache;
+            }
+        }
+        
+        return options;
+    }
+
     /**
      * ROUTES:
      *  - /:scraper/:kind/external?external[:name]=:value
@@ -31,7 +66,9 @@ export class ScrapersController extends BaseController {
             throw new InvalidArgumentError( `Ìnvalid scraper name argument, no "${ name } scraper found."` );
         }
 
-        const record = await this.server.scrapers.getMediaExternal( name, kind, external );
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const record = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
 
         if ( record ) {
             const url = await this.server.getMatchingUrl( req );
@@ -57,7 +94,9 @@ export class ScrapersController extends BaseController {
             throw new InvalidArgumentError( `Invalid scraper name argument, no "${ name } scraper found."` );
         }
 
-        const record = await this.server.scrapers.getMediaExternal( name, kind, external );
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const record = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
 
         if ( !record ) {
             throw new InvalidArgumentError( `Could not find the requested resource.` );
@@ -84,13 +123,15 @@ export class ScrapersController extends BaseController {
             throw new InvalidArgumentError( `Invalid scraper name argument, no "${ name } scraper found."` );
         }
 
-        const parent = await this.server.scrapers.getMediaExternal( name, kind, external );
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const parent = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
 
         if ( !parent ) {
             throw new InvalidArgumentError( `Could not find the requested resource.` );
         }
 
-        const records = await this.server.scrapers.getMediaRelation( name, kind, relation, parent.id );
+        const records = await this.server.scrapers.getMediaRelation( name, kind, relation, parent.id, cache );
         
         const url = await this.server.getMatchingUrl( req );
 
@@ -115,7 +156,9 @@ export class ScrapersController extends BaseController {
             throw new InvalidArgumentError( `Invalid scraper name argument, no "${ name } scraper found."` );
         }
 
-        const record = await this.server.scrapers.getMedia( name, kind, id );
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const record = await this.server.scrapers.getMedia( name, kind, id, cache );
 
         if ( record ) {
             const url = await this.server.getMatchingUrl( req );
@@ -140,7 +183,9 @@ export class ScrapersController extends BaseController {
             throw new InvalidArgumentError( `Invalid scraper name argument, no "${ name } scraper found."` );
         }
 
-        return this.server.scrapers.getMediaArtwork( name, kind, id );
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        return this.server.scrapers.getMediaArtwork( name, kind, id, cache );
     }
 
     @Route( 'get', '/:scraper/:kind/internal/:id/:relation' )
@@ -157,8 +202,10 @@ export class ScrapersController extends BaseController {
         if ( !this.server.scrapers.hasKeyed( name ) ) {
             throw new InvalidArgumentError( `Invalid scraper name argument, no "${ name } scraper found."` );
         }
+        
+        const cache = this.parseCacheOptions( req.query.cache );
 
-        const records = await this.server.scrapers.getMediaRelation( name, kind, relation, id );
+        const records = await this.server.scrapers.getMediaRelation( name, kind, relation, id, cache );
         
         const url = await this.server.getMatchingUrl( req );
 
@@ -185,7 +232,9 @@ export class ScrapersController extends BaseController {
 
         const limit = +req.query.limit || 5;
 
-        const records = await this.server.scrapers.search( name, kind, query, limit );
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const records = await this.server.scrapers.search( name, kind, query, limit, cache );
 
         const url = await this.server.getMatchingUrl( req );
 
