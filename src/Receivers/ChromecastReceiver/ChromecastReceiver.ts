@@ -12,6 +12,7 @@ import { InvalidArgumentError } from "restify-errors";
 import { TranscodingSession } from "../../Transcoding/Transcoder";
 import { MediaStreamSelectors } from "../../MediaProviders/MediaStreams/MediaStreamSelectors";
 import { HlsVideoMediaStream } from "../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
+import { DiagnosticsService } from "../../Diagnostics";
 
 export interface ChromecastSubtitlesConfig {
     lineFilters ?: (string | RegExp)[]
@@ -43,6 +44,8 @@ export class ChromecastReceiver extends BaseReceiver {
 
     config : ChromecastConfig;
 
+    diagnostics : DiagnosticsService;
+
     constructor ( server : UnicastServer, name : string, address : string, config : ChromecastConfig = {} ) {
         super( server, name );
 
@@ -50,13 +53,15 @@ export class ChromecastReceiver extends BaseReceiver {
 
         this.config = config;
 
-        this.client = new DefaultMediaRemote( this.address );
+        this.client = this.createClient();
         
         this.sender = new ChromecastHttpSender( this );
 
         this.messagesFactory = new MessagesFactory( this.sender );
 
         this.transcoder = new ChromecastHlsTranscoder( this );
+
+        this.diagnostics = this.server.diagnostics.service( `Receivers/${ this.type }/${ this.name }` );
 
         this.subtitlesStyle = new ChromecastSubtitlesStyles( {
             ...this.getDefaultSubtitlesStyle(),
@@ -68,6 +73,10 @@ export class ChromecastReceiver extends BaseReceiver {
         }, {
             backgroundColor: '#000000AA',
         } ] );
+    }
+
+    protected createClient () : DefaultMediaRemote {
+        const client = new DefaultMediaRemote( this.address );
 
         const events : string[] = [ 
             'connected', 'playing', 'played', 'stopping', 'stopped',
@@ -76,10 +85,22 @@ export class ChromecastReceiver extends BaseReceiver {
         ];
 
         for ( let event of events ) {
-            this.client.on( event, ( ...args ) => this.emit( event, ...args ) );
+            client.on( event, ( ...args ) => this.emit( event, ...args ) );
         }
 
-        this.client.on( 'status', ( ...args ) => this.emit( 'inner-status', ...args ) );
+        client.on( 'status', ( ...args ) => this.emit( 'inner-status', ...args ) );
+
+        client.on( 'connected', () => this.diagnostics.info( 'Connected to device' ) );
+
+        client.on( 'disconnected', () => this.diagnostics.info( 'Disconnected from device' ) );
+
+        client.on( 'player-joined', () => this.diagnostics.info( 'Joined player session' ) );
+
+        client.on( 'player-launched', () => this.diagnostics.info( 'Launched playing session' ) );
+        
+        client.on( 'error', error => this.server.onError.notify( error ) );
+
+        return client;
     }
 
     get connected () : boolean {
@@ -100,7 +121,7 @@ export class ChromecastReceiver extends BaseReceiver {
         } catch ( err ) {
             this.server.diagnostics.error( 'Receivers/Chromecast', err.message, err );
 
-            this.client = new DefaultMediaRemote( this.address );
+            this.client = this.createClient();
         }
         
         return true;
@@ -120,7 +141,7 @@ export class ChromecastReceiver extends BaseReceiver {
         } catch ( err ) {
             this.server.diagnostics.error( 'Receivers/Chromecast', err.message, err );
 
-            this.client = new DefaultMediaRemote( this.address );
+            this.client = this.createClient();
         }
 
         if ( this.sessions.current ) {

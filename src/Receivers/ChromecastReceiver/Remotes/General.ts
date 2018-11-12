@@ -49,7 +49,7 @@ export class GeneralRemote extends EventEmitter {
             this.client = new Client( new NativeClient( this.address ) );
 
             this.client.native.on( 'error', error => {
-                console.error( 'error', error.message, error.stack );
+                this.emit( 'error', error );
             } ).on( 'status', status => {
                 if ( status && status.applications instanceof Array ) {
                     this.verify( status.applications.find( app => app.appId === this.application.APP_ID ) );
@@ -64,6 +64,8 @@ export class GeneralRemote extends EventEmitter {
         }
 
         await this.client.connect( this.address );
+
+        this.emit( 'connected' );
 
         this.isConnected = true;
 
@@ -103,7 +105,7 @@ export class GeneralRemote extends EventEmitter {
     }
 
     protected onPlayerError ( error ) {
-        console.log( 'player error', error );
+        this.emit( 'error', error );
     }
 
     protected onPlayerClose () {
@@ -124,6 +126,8 @@ export class GeneralRemote extends EventEmitter {
 
         this.player = await this.client.join( app, this.application );
 
+        this.emit( 'player-joined', this.player );
+
         this.currentSessionId = this.player.native.session.sessionId;
 
         this.player.native.on( 'error', this.onPlayerError.bind( this ) );
@@ -140,6 +144,8 @@ export class GeneralRemote extends EventEmitter {
         this.isLaunching = true;
         
         this.player = await this.client.launch( this.application );
+
+        this.emit( 'player-launched', this.player );
 
         this.isOpened = true;
 
