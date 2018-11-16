@@ -317,7 +317,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
 
             this.process = child;
 
-            child.on( 'error', error => console.error( error ) );
+            child.on( 'error', error => this.driver.server.onError.notify( error ) );
             
             let lastSegment : number = this.segment.start;
 
@@ -356,7 +356,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
                 this.addDone( status.frame - this.done );
             } );
         } catch ( error ) {
-            console.error( error );
+            this.driver.server.onError.notify( error );
         }
     }
 

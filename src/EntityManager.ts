@@ -106,7 +106,7 @@ export abstract class EntityFactoryManager<E extends IEntity, M extends EntityMa
                 }
             }
         } catch ( error ) {
-            console.error( error );
+            this.server.onError.notify( error );
         }
 
         this.cancellations.delete( this.getEntityKey( factory ) );
@@ -115,7 +115,7 @@ export abstract class EntityFactoryManager<E extends IEntity, M extends EntityMa
     add ( factory : F ) : this {
         super.add( factory );
         
-        this.scanFactory( factory ).catch( error => console.error( error ) );
+        this.scanFactory( factory ).catch( error => this.server.onError.notify( error ) );
 
         return this;
     }

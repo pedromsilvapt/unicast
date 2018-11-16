@@ -258,7 +258,7 @@ export class UnicastServer {
                 try {
                     await this.tools.run( tool, options );
                 } catch ( error ) {
-                    console.error( error.message, error.stack );
+                    this.onError.notify( error );
                 }
             }
 
@@ -285,7 +285,7 @@ export class UnicastServer {
         try {
             await this.close( timeout );
         } catch ( err ) {
-            console.error( err.message, err.stack );
+            this.onError.notify( err );
         } finally {
             if ( delay > 0 ) {
                 setTimeout( () => process.exit(), delay );
@@ -347,8 +347,8 @@ export class HttpRawMediaServer {
 
             next();
         } catch ( error ) {
-           console.error( error ) ;
-
+            this.server.onError.notify( error );
+           
            res.send( 500, { error: true } );
 
            next();

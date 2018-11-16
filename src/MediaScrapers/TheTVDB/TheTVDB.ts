@@ -309,7 +309,9 @@ export class TheTVDB implements IScraper {
             for ( let show of matches.slice( 0, limit ) ) {
                 try {
                     shows.push( await this.getTvShow( show.id ) );
-                } catch ( err ) { console.error( name, err ) }
+                } catch ( err ) { 
+                    this.server.onError.notify( err );
+                }
             }
 
             return shows;

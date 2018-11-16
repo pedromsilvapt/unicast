@@ -198,7 +198,10 @@ export class GeneralRemote extends EventEmitter {
         }
 
         return Promise.race( [
-            this.player.getStatus().catch( err => { console.error( err ); return null; } ),
+            this.player.getStatus().catch( err => {
+                this.emit( 'error', err );
+                return null; 
+            } ),
             new Promise( ( _, reject ) => setTimeout( reject.bind( null, new Error( 'Chromecast getStatus timeout.' ) ), 5000 ) )
         ] );
     }

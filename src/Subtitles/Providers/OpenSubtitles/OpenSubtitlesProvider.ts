@@ -87,10 +87,6 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
     
             const mediaSource = media.quality.source;
 
-            console.log( mediaSource, results.map( result => result.MovieReleaseName ) );
-            console.log( mediaSource, results.map( result => MediaSources.findAny( result.MovieReleaseName ) ) );
-            console.log( mediaSource, results.map( result => MediaSources.normalize( MediaSources.findAny( result.MovieReleaseName ) ) ) );
-
             return results.map<IOpenSubtitlesResult>( result => ( {
                 provider: this.name,
                 id : result.IDSubtitleFile,
@@ -108,7 +104,7 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
                 score: MediaSources.similarity( MediaSources.normalize( MediaSources.findAny( result.MovieReleaseName ) ), mediaSource )
             } ) );
         } catch ( err ) {
-            console.error( err );
+            this.server.onError.notify( err );
 
             return [];
         }
