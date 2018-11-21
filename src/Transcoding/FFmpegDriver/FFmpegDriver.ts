@@ -42,11 +42,15 @@ export class FFmpegDriver implements TranscodingDriver {
 
     protected threads : number = 0;
 
-    protected videoCodecs : Map<string, string> = new Map;
+    protected videoCodecs : Map<string, FFMpegVideoEncoder> = new Map;
     
-    protected audioCodecs : Map<string, string> = new Map;
+    protected audioCodecs : Map<string, FFMpegAudioEncoder> = new Map;
 
     protected constantRateFactor : number = null;
+
+    protected maximumCompression : number = null;
+
+    protected minimumCompression : number = null;
 
     protected videoBitrates : Map<string, string> = new Map;
 
@@ -96,7 +100,7 @@ export class FFmpegDriver implements TranscodingDriver {
         return this.framerate;
     }
 
-    setVideoCodec ( codec : string, stream : string = null ) : this {
+    setVideoCodec ( codec : FFMpegVideoEncoder, stream : string = null ) : this {
         this.videoCodecs.set( stream, codec );
 
         return this;
@@ -108,7 +112,19 @@ export class FFmpegDriver implements TranscodingDriver {
         return this;
     }
 
-    setAudioCodec ( codec : string, stream : string = null ) : this {
+    setMaximumCompression ( value : number ) : this {
+        this.maximumCompression = value;
+
+        return this;
+    }
+
+    setMinimumCompression ( value : number ) : this {
+        this.minimumCompression = value;
+
+        return this;
+    }
+
+    setAudioCodec ( codec : FFMpegAudioEncoder, stream : string = null ) : this {
         this.audioCodecs.set( stream, codec );
         
         return this;
@@ -255,6 +271,10 @@ export class FFmpegDriver implements TranscodingDriver {
     
         this.constantRateFactor = driver.constantRateFactor;
     
+        this.maximumCompression = driver.maximumCompression;
+
+        this.minimumCompression = driver.minimumCompression;
+
         this.videoBitrates = new Map( driver.videoBitrates );
     
         this.audioBitrates = new Map( driver.audioBitrates );
@@ -346,7 +366,20 @@ export class FFmpegDriver implements TranscodingDriver {
         }
 
         if ( this.constantRateFactor !== null ) {
-            args.push( '-crf', '' + this.constantRateFactor );
+            if ( this.maximumCompression == null && this.minimumCompression == null ) {
+                args.push( '-crf', '' + this.constantRateFactor );
+            } else {
+                args.push( '-rc', 'vbr' );
+
+                if ( this.minimumCompression != null ) args.push( '-qmin', '' + this.minimumCompression );
+                if ( this.maximumCompression != null ) args.push( '-qmax', '' + this.maximumCompression );
+            }
+            // args.push( '-qp', '' + this.constantRateFactor );
+            // args.push( '-cq', '' + this.constantRateFactor );
+            // args.push( '-b:v', '22M' );
+            // args.push( '-q', '22' )
+            
+            // args.push( '-maxrate', '220M' );
         }
 
         if ( this.preset != null ) {
@@ -421,6 +454,29 @@ export class FFmpegDriver implements TranscodingDriver {
 
         return task;
     }
+}
+
+export enum FFMpegVideoEncoder {
+    x264 = 'libx264',
+    NvencH264 = 'h264_nvenc',
+    x265 = 'libx265',
+    HEVC = 'libx265',
+    NvencHEVC = 'hevc_nvenc',
+    WebP = 'libwebp',
+    XviD = 'libxvid',
+    MPEG2 = 'mpeg2',
+    VP9 = 'libvpx',
+    PNG = 'png',
+    ProRes = 'prores-aw'
+}
+
+export enum FFMpegAudioEncoder {
+    AAC = 'aac',
+    AC3 = 'ac3',
+    FLAC = 'flac',
+    MP3 = 'libmp3lame',
+    Opus = 'libopus',
+    Vorbis = 'libvorbis'
 }
 
 export class FFmpegCodecConstants {

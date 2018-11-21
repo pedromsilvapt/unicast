@@ -1,8 +1,8 @@
 import { ChromecastReceiver } from "../ChromecastReceiver";
 import { MediaStream, MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { VideoMediaStream } from "../../../MediaProviders/MediaStreams/VideoStream";
-import { FFmpegPreset } from "../../../Transcoding/FFmpegDriver/FFmpegDriver";
-import { Transcoder, isTranscodedMediaStream, TranscodingSession } from "../../../Transcoding/Transcoder";
+import { FFmpegPreset, FFMpegVideoEncoder, FFMpegAudioEncoder } from "../../../Transcoding/FFmpegDriver/FFmpegDriver";
+import { Transcoder, TranscodingSession } from "../../../Transcoding/Transcoder";
 import { FFmpegHlsDriver, FFmpegHlsFlag, FFmpegHlsPlaylistType } from "../../../Transcoding/FFmpegHlsDriver/FFmpegHlsDriver";
 import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
 import { MediaRecord } from "../../../MediaRecord";
@@ -11,6 +11,7 @@ import { CancelToken } from 'data-cancel-token';
 import { MediaTrigger } from "../../../TriggerDb";
 import { TrackMediaMetadata, FileMediaMetadata } from "../../../MediaTools";
 import * as chalk from 'chalk';
+import { evaluate } from "../../../Config";
 
 export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOptions> {
     receiver : ChromecastReceiver;
@@ -22,21 +23,24 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
 
         this.receiver = receiver;
 
-        this.options = {
+        this.options = evaluate<ChromecastTranscoderOptions>( {
             segmentSize: 3,
             maxBitrate: 12000000,
             constantRateFactor: 22,
+            minimumCompression: ops => ops.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264 ? 20 : null,
+            maximumCompression: ops => ops.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264 ? 28 : null,
             maxResolution: { width: 1920, height : 1080 },
             supportedVideoCodecs: [ 'h264' ],
             supportedAudioCodecs: [ 'aac', 'ac3' ],
-            defaultVideoCodec: 'libx264',
-            defaultAudioCodec: 'aac',
+            defaultVideoEncoder: FFMpegVideoEncoder.x264,
+            defaultAudioEncoder: FFMpegAudioEncoder.AAC,
             forceVideoTranscoding: false,
             forceAudioTranscoding: false,
-            preset: FFmpegPreset.Faster,
+            preset: options => options.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264 
+                ? FFmpegPreset.Slow 
+                : FFmpegPreset.Faster,
             threads: 7,
-            ...options
-        };
+        }, options );
     }
 
     printDiagnosticsLine ( ...segments : ( string | number )[] ) {
@@ -86,7 +90,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         this.printDiagnosticsTranscodingReport( stream.metadata.files[ 0 ], video, audio, conditionVideo, conditionAudio, options, triggers );
 
         if ( conditionVideo || conditionAudio ) {
-            driver.setVideoCodec( options.defaultVideoCodec );
+            driver.setVideoCodec( options.defaultVideoEncoder );
 
             if ( conditionResolution ) {
                 driver.setResolutionProportional( 
@@ -127,7 +131,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         }
 
         if ( conditionAudio || conditionVideo ) {
-            driver.setAudioCodec( options.defaultAudioCodec );
+            driver.setAudioCodec( options.defaultAudioEncoder );
         }
 
         if ( conditionAudio || conditionVideo ) {
@@ -164,11 +168,13 @@ export interface ChromecastTranscoderOptions {
     segmentSize : number;
     maxBitrate : number;
     constantRateFactor : number;
+    minimumCompression: number;
+    maximumCompression: number;
     maxResolution : { width: number, height : number };
     supportedVideoCodecs : string[];
     supportedAudioCodecs : string[];
-    defaultVideoCodec : string;
-    defaultAudioCodec : string;
+    defaultVideoEncoder : FFMpegVideoEncoder;
+    defaultAudioEncoder : FFMpegAudioEncoder;
     forceVideoTranscoding : boolean;
     forceAudioTranscoding : boolean;
     preset : FFmpegPreset;

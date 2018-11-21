@@ -513,3 +513,51 @@ export class ObjectTypeSchema extends TypeSchema {
 export class ConfigTemplate {
     schema : TypeSchema;
 }
+
+/* DYNAMIC CONFIG */
+export type DynamicConfig<T> = {
+    [P in keyof T]: T[P] | ((options : T) => T[P]);
+}
+
+export function createLazyProperties<T extends object> ( dynamic : DynamicConfig<T> ) : T {
+    const lazy = {} as T;
+
+    for ( let key of Object.keys( dynamic ) ) {
+        
+        if ( dynamic[ key ] instanceof Function ) {
+            let state = {
+                called: false,
+                value: void 0
+            };
+
+            Object.defineProperty( lazy, key, {
+                enumerable: true,
+                get () {
+                    if ( !state.called ) {
+                        state.called = true;
+
+                        return state.value = dynamic[ key ]( lazy );
+                    }
+
+                    return state.value;
+                }
+            } );
+        } else {
+            lazy[ key ] = dynamic[ key ];
+        }
+    }
+
+    return lazy;
+}
+
+export function evaluate<T extends object> ( base : DynamicConfig<T>, ...extensions : DynamicConfig<Partial<T>>[] ) : T {
+    const dynamicResult = {} as DynamicConfig<T>;
+
+    for ( let extension of [ base, ...extensions ] ) {
+        for ( let key of Object.keys( extension ) ) {
+            dynamicResult[ key ] = extension[ key ];
+        }
+    }
+
+    return { ...createLazyProperties( dynamicResult ) as any };
+}
