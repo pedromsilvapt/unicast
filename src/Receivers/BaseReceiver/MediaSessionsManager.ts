@@ -79,11 +79,13 @@ export class MediaSessionsManager {
             const history = await this.mediaManager.database.tables.history.get( id );
     
             if ( history ) {
-                history.position = status.media.time.current;
-        
                 const lastIndex = history.positionHistory.length - 1;
 
                 const last = history.positionHistory[ lastIndex ];
+
+                if ( history.positionHistory.length <= 1 || last.end - last.start > 20 ) {
+                    history.position = status.media.time.current;
+                }
 
                 if ( Math.abs( history.position - last.end ) <= 60 ) {
                     history.positionHistory[ lastIndex ].end = history.position;
