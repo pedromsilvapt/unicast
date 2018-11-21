@@ -1,7 +1,7 @@
 import { Database } from "./Database/Database";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { DiagnosticsService, Diagnostics } from "./Diagnostics";
-import { MediaKind, AllMediaKinds, MediaRecord, TvShowMediaRecord, PlayableMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MovieMediaRecord, createRecordsSet, RecordsSet, createRecordsMap } from "./MediaRecord";
+import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap } from "./MediaRecord";
 import { BackgroundTask } from "./BackgroundTask";
 import { MediaManager } from "./UnicastServer";
 import { Future } from "@pedromsilva/data-future";
@@ -39,11 +39,26 @@ export class MediaSync {
         }
     }
 
-    async runRecord ( task : BackgroundTask, media : MediaRecord, association : Map<string, Map<string, Promise<string>>>, touched : Map<string, Set<string>>, dryRun : boolean = false ) {
+    async runRecord ( task : BackgroundTask, media : MediaRecord, association : RecordsMap<Promise<string>>, touched : RecordsSet, ignore : RecordsMap<MediaRecord>, dryRun : boolean = false ) {
         const table = this.media.getTable( media.kind );
+
+        // When the touched RecordsSet contains an item, we don't need to update it on the database
+        // Instead, we just set the association and check the touched, so that the item is not wrongly removed
+        if ( ignore.get( media.kind ).has( media.internalId ) ) {
+            association.get( media.kind ).set( media.internalId, Promise.resolve( media.id ) );
+
+            touched.get( media.kind ).add( media.id );
+
+            return;
+        }
 
         const future = new Future<string>();
 
+        // When creating a new media record, for instance, a new Tv Show, we store it on the association map.
+        // So if after that we create a new media record for, say, a season of that same Tv show, we can know it's id
+        // Since the insertion of records into the database is done concurrently, we might try to insert both the Tv show 
+        // and the season at the same time. But doing that would result in an error, since we don't have the Tv show id yet
+        // That's why we store the promise even before inserting the record, so any future media that needs it, can just wait for it
         association.get( media.kind ).set( media.internalId, future.promise );
 
         let match = ( await table.findAll( [ media.internalId ], { index: 'internalId', query : query => query.filter( { repository: media.repository } ).limit( 1 ) } ) ) [ 0 ]
@@ -92,17 +107,17 @@ export class MediaSync {
         this.diagnostics.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
     }
 
-    async findRepositoryRecordsSet ( repository : IMediaRepository ) : Promise<RecordsSet> {
-        const recordsSet = createRecordsSet();
+    async findRepositoryRecordsMap ( repository : IMediaRepository ) : Promise<RecordsMap<MediaRecord>> {
+        const recordsSet = createRecordsMap<MediaRecord>();
 
         for ( let [ kind, set ] of recordsSet ) {
             const table = this.media.getTable( kind );
 
             if ( table ) {
-                const allRecords = table.findStream( query => query.filter( { repository: repository.name } ).pluck( 'internalId' ) );
+                const allRecords = table.findStream( query => query.filter( { repository: repository.name } ) );
                 
                 for await ( let record of allRecords ) {
-                    set.add( record.internalId );
+                    set.set( record.internalId, record );
                 }
             }
         }
@@ -134,9 +149,11 @@ export class MediaSync {
 
                 // When the `refetchExisting` option is set to false, media records that are already on the database are not scraped
                 // But for that it is necessary to know which records exist in the database
-                // So instead of querying the database each time for each record found, we'll just store all of them in this Records Set
-                // When the `refetchExisting``is true, we just provide an empty Record Set, so that all records are refetched
-                const recordsToIgnore = options.refetchExisting ? createRecordsSet() : await this.findRepositoryRecordsSet( repository );
+                // So instead of querying the database each time for each record found, we'll just store all of them in this Records Map
+                // When the `refetchExisting``is true, we just provide an empty Record Map, so that all records are refetched
+                const recordsToIgnore = options.refetchExisting 
+                    ? createRecordsMap<MediaRecord>() 
+                    : await this.findRepositoryRecordsMap( repository );
 
                 for await ( let media of repository.scan( options.kinds, recordsToIgnore ) ) {
                     task.addTotal( 1 );
@@ -148,10 +165,9 @@ export class MediaSync {
                     
                     media.repository = repositoryName;
                     
-                    // TODO make sure when one promise is rejected, it doesn't take down the whole synchronization
                     updating.push(
                         task.do(
-                            this.runRecord( task, media, association, touched, options.dryRun ), 
+                            this.runRecord( task, media, association, touched, recordsToIgnore, options.dryRun ), 
                         1 )
                     );
                 }
@@ -166,6 +182,10 @@ export class MediaSync {
             
                         for ( let record of await table.find( query => query.filter( { repository: repositoryName } ) ) ) {
                             if ( !touched.get( record.kind ).has( record.id ) ) {
+                                if ( repository.ignoreUnreachableMedia && !await repository.isMediaReachable( record ) ) {
+                                    continue;
+                                }
+
                                 task.addTotal( 1 );
 
                                 deleting.push( task.do( this.deleteRecord( task, record, options.dryRun ), 1 ) );

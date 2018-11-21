@@ -1,7 +1,6 @@
 import { IEntity } from "../EntityFactory";
 import { UnicastServer } from "../UnicastServer";
-import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
-import { MediaKind, RecordsSet } from "../MediaRecord";
+import { MediaKind, MediaRecord, RecordsMap } from "../MediaRecord";
 import { ISubtitlesRepository } from "../Subtitles/SubtitlesRepository";
 
 // Why an Interface and an abstract class, I hear you asking?
@@ -16,15 +15,19 @@ export interface IMediaRepository {
 
     readonly searchable : boolean;
 
+    readonly ignoreUnreachableMedia : boolean;
+
     subtitles ?: ISubtitlesRepository;
 
     available () : Promise<boolean>;
 
-    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsSet ) : AsyncIterableIterator<T>;
+    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsMap<MediaRecord> ) : AsyncIterableIterator<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
     
     watch ? ( kind : MediaKind, id : string, watched ?: boolean ) : Promise<void>;
+
+    isMediaReachable ( record : MediaRecord ) : Promise<boolean>;
 
     setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string );
 
@@ -44,9 +47,15 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
 
     public abstract readonly searchable : boolean;
 
+    public abstract readonly ignoreUnreachableMedia : boolean;
+
     public readonly subtitles ?: ISubtitlesRepository;
 
     available () : Promise<boolean> {
+        return Promise.resolve( true );
+    }
+
+    isMediaReachable ( record : MediaRecord ) : Promise<boolean> {
         return Promise.resolve( true );
     }
 

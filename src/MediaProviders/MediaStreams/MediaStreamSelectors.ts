@@ -1,8 +1,17 @@
 import { VideoMediaStream } from './VideoStream';
 import { SubtitlesMediaStream } from './SubtitlesStream';
 import { MediaStream, MediaStreamType } from './MediaStream';
+import { Class } from '../../Tools/ToolsManager';
 
 export class MediaStreamSelectors {
+    static ofType<T extends MediaStream> ( streams : Iterable<MediaStream> | MediaStream[], type : Class<T> ): T[] {
+        const streamsArray : MediaStream[] = streams instanceof Array
+            ? streams
+            : Array.from( streams );
+
+        return streamsArray.filter( stream => stream instanceof type ) as T[];
+    }
+
     static videos ( streams : Iterable<MediaStream> | MediaStream[] ) : VideoMediaStream[] {
         const streamsArray : MediaStream[] = streams instanceof Array
             ? streams

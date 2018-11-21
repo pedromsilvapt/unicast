@@ -1,10 +1,10 @@
 import { MediaRepository } from "../MediaRepository";
-import { MediaRecord } from "../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
-import { MediaKind, RecordsSet, createRecordsSet } from "../../MediaRecord";
+import { MediaRecord, MediaKind, isPlayableRecord, RecordsMap, createRecordsMap } from "../../MediaRecord";
 import { FileSystemScanner, FileSystemScannerConfig } from "./FileSystemScanner";
 import { filter, map } from "data-async-iterators";
 import { Settings } from "../../MediaScrapers/Settings";
 import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
+import * as fs from 'mz/fs';
 
 export class FileSystemRepository extends MediaRepository {
     config : FileSystemScannerConfig;
@@ -19,12 +19,54 @@ export class FileSystemRepository extends MediaRepository {
 
     readonly searchable : boolean = false;
 
+    readonly ignoreUnreachableMedia : boolean = false;
+
     constructor ( name : string, config : FileSystemScannerConfig ) {
         super();
 
         this.name = name;
 
         this.config = config;
+
+        this.ignoreUnreachableMedia = Boolean( config.ignoreUnreachableMedia );
+    }
+
+    getFilePathMount ( mounts : string[], file : string ) : string {
+        if ( mounts != null ) {
+            const customMount = mounts.find( m => file.startsWith( m ) );
+    
+            if ( customMount ) {
+                return customMount;
+            }
+        }
+
+        if ( this.config.enableDefaultMounts ) {
+            if ( file.startsWith( file[ 0 ] + ':\\' ) ) {
+                return file.substr( 0, 3 );
+            }
+        }
+
+        return null;
+    }
+
+    isMountReachable ( mount : string ) : Promise<boolean> {
+        return fs.stat( mount ).then( () => true, () => false );
+    }
+
+    async isMediaReachable ( media : MediaRecord ) : Promise<boolean> {
+        if ( !isPlayableRecord( media ) ) {
+            return true;
+        }
+
+        const file = media.sources[ 0 ].id;
+        
+        const mount = this.getFilePathMount( this.config.mounts, file );
+
+        if ( mount ) {
+            return this.isMountReachable( mount );
+        }
+
+        return true;
     }
 
     onEntityInit () {
@@ -37,7 +79,7 @@ export class FileSystemRepository extends MediaRepository {
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsSet = createRecordsSet() ) : AsyncIterableIterator<T> {
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap() ) : AsyncIterableIterator<T> {
         let records = this.scanner.scan( ignore ) as AsyncIterableIterator<T>;
 
         if ( filterKind ) {

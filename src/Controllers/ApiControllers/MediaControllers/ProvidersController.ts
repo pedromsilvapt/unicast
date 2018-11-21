@@ -1,6 +1,6 @@
 import { BaseController, Route } from "../../BaseController";
 import { Request, Response } from "restify";
-import { MediaSync } from "../../../MediaSync";
+import { MediaSync, MediaSyncOptions } from "../../../MediaSync";
 import { BackgroundTask, Stopwatch } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
 
@@ -14,7 +14,7 @@ export class ProvidersController extends BaseController {
         const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
 
         const [ task, done ] = BackgroundTask.fromPromise( async task => {
-            const options = { kinds, cleanMissing: false, dryRun: req.query.dryRun === 'true' };
+            const options : Partial<MediaSyncOptions> = { kinds, cleanMissing: false, dryRun: req.query.dryRun === 'true', refetchExisting: false };
 
             this.server.diagnostics.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );
 
@@ -24,9 +24,11 @@ export class ProvidersController extends BaseController {
 
             stopwatch.mark( 'sync' );
 
-            await this.server.database.tables.shows.repair();
+            if ( !options.dryRun ) {
+                await this.server.database.tables.shows.repair();
 
-            await this.server.database.tables.movies.repair();
+                await this.server.database.tables.movies.repair();
+            }
 
             stopwatch.pause().mark( 'repair', 'sync' );
 
