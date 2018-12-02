@@ -2,11 +2,12 @@ import { Stopwatch } from "./BackgroundTask";
 import { UnicastServer } from "./UnicastServer";
 import { Storage } from "./Storage";
 import * as pidusage from 'pidusage';
+import * as makeDir from 'make-dir';
 import * as fs from 'mz/fs';
 import * as tpl from 'mnml-tpl';
 import { format } from "date-fns";
 import * as chalk from 'chalk';
-// import * as eyes from 'eyes';
+import * as path from 'path';
 
 export class Diagnostics {
     protected logger : Logger;
@@ -190,6 +191,8 @@ export class Logger {
             if ( this.stream ) {
                 this.stream.close();
             }
+
+            await makeDir( path.dirname( file ) );
 
             this.stream = fs.createWriteStream( file, { flags: 'a', defaultEncoding: 'utf8' } );
 
