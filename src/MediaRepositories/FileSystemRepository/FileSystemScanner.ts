@@ -153,7 +153,7 @@ export class FileSystemScanner {
         walker.useAbsolutePaths = false;
 
         for ( let folder of this.config.folders ) {
-            for await ( let [ videoFile, stats ] of walker.run( folder ) ) {
+            for await ( let [ videoFile, stats ] of walker.run( folder ).buffered( 50 ) ) {
                 const dirname = path.basename( path.dirname( videoFile ) );
 
                 const details = parseTorrentName( dirname );
@@ -336,7 +336,7 @@ export class FileSystemScanner {
         }
     }
 
-    scan ( ignore : RecordsMap<MediaRecord> ) : AsyncIterableIterator<MediaRecord> {
+    scan ( ignore : RecordsMap<MediaRecord> ) : AsyncIterable<MediaRecord> {
         if ( this.config.content === MediaScanContent.Movies ) {
             return this.scanMovies( ignore );
         } else if ( this.config.content === MediaScanContent.TvShows ) {

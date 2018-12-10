@@ -1,5 +1,6 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
+import { AsyncStream } from 'data-async-iterators';
 
 export class FileWalker {
     useAbsolutePaths : boolean = true;
@@ -44,11 +45,11 @@ export class FileWalker {
         }
     }
 
-    run ( file : string, stats ?: fs.Stats ) : AsyncIterableIterator<[ string, fs.Stats ]> {
+    run ( file : string, stats ?: fs.Stats ) : AsyncStream<[ string, fs.Stats ]> {
         if ( !path.isAbsolute( file ) ) {
             file = path.resolve( file );
         }
 
-        return this.runSingle( file, file, stats );
+        return new AsyncStream( this.runSingle( file, file, stats ) );
     }
 }

@@ -79,8 +79,8 @@ export class FileSystemRepository extends MediaRepository {
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap() ) : AsyncIterableIterator<T> {
-        let records = this.scanner.scan( ignore ) as AsyncIterableIterator<T>;
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap() ) : AsyncIterable<T> {
+        let records = this.scanner.scan( ignore ) as AsyncIterable<T>;
 
         if ( filterKind ) {
             records = filter( records, record => filterKind.includes( record.kind ) );

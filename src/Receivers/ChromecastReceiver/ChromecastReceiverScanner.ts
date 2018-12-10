@@ -2,7 +2,7 @@ import DefaultMediaRemote from './Remotes/DefaultMedia';
 import { Diagnostics } from '../../Diagnostics';
 import { Client } from 'node-ssdp';
 import * as mdns from 'multicast-dns';
-import { subject, shared, SharedIterable } from 'data-async-iterators';
+import { subject, shared, SharedNetwork } from 'data-async-iterators';
 
 export interface ChromecastReceiverIdentification {
     name : string;
@@ -27,7 +27,7 @@ export abstract class ChromecastReceiverScanner {
 
     endDevices : Function;
 
-    iterable : SharedIterable<ChromecastReceiverIdentification>;
+    iterable : SharedNetwork<ChromecastReceiverIdentification>;
 
     history : Map<string, ChromecastReceiverIdentification> = new Map;
 
@@ -39,7 +39,7 @@ export abstract class ChromecastReceiverScanner {
 
     diagnostics : Diagnostics;
 
-    constructor ( diagnostics : Diagnostics, interval : number = 60000, timeout : number = 5000 ) {
+    constructor ( diagnostics : Diagnostics, interval : number = 1000 * 60 * 5, timeout : number = 5000 ) {
         this.diagnostics = diagnostics;
 
         this.interval = interval;
@@ -48,7 +48,7 @@ export abstract class ChromecastReceiverScanner {
 
         const emitter = subject<ChromecastReceiverIdentification>();
 
-        this.pushDevice = emitter.value.bind( emitter );
+        this.pushDevice = emitter.pushValue.bind( emitter );
 
         this.endDevices = emitter.end.bind( emitter );
 
@@ -64,6 +64,8 @@ export abstract class ChromecastReceiverScanner {
     }
 
     async onResponse ( name : string, address : string ) {
+        this.diagnostics.debug( 'chromecast/scanner', name + ':' + address );
+
         if ( !this.timedOut ) {
             const device : ChromecastReceiverIdentification = {
                 name: name,
@@ -129,7 +131,7 @@ export abstract class ChromecastReceiverScanner {
 
     onTimeout () {}
 
-    devices () : AsyncIterableIterator<ChromecastReceiverIdentification> {
+    devices () : AsyncIterable<ChromecastReceiverIdentification> {
         this.onSearch();
 
         if ( typeof this.interval === 'number' ) {
@@ -209,7 +211,7 @@ export class ChromecastReceiverMDNSScanner extends ChromecastReceiverScanner {
 
     onResponseHandler : Function = null;
 
-    constructor ( diagnostics : Diagnostics, interval : number = 10000, timeout : number = 5000 ) {
+    constructor ( diagnostics : Diagnostics, interval : number = 1000 * 60 * 5, timeout : number = 1000 * 60 ) {
         super( diagnostics, interval, timeout );
 
         this.onResponseHandler = this.onMdnsResponse.bind( this );
@@ -217,7 +219,7 @@ export class ChromecastReceiverMDNSScanner extends ChromecastReceiverScanner {
 
     async onMdnsResponse ( packet, rinfo ) {
         const answer = packet.answers[ 0 ];
-
+        
         if ( !answer || ( answer.name !== this.serviceName || answer.type !== this.serviceType ) ) {
             return;
         }

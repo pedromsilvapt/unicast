@@ -21,7 +21,7 @@ export interface IMediaRepository {
 
     available () : Promise<boolean>;
 
-    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsMap<MediaRecord> ) : AsyncIterableIterator<T>;
+    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsMap<MediaRecord> ) : AsyncIterable<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
     
@@ -59,7 +59,7 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
         return Promise.resolve( true );
     }
 
-    abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[] ) : AsyncIterableIterator<T>;
+    abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[] ) : AsyncIterable<T>;
 
     abstract search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
 
