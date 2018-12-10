@@ -919,7 +919,19 @@ export class DatabaseDaemon {
         server.onClose.subscribe( this.close.bind( this ) );
     }
 
-    start () {
+    async online () : Promise<boolean> {
+        try {
+            const conn = await r.connect( this.server.config.get<r.ConnectionOptions>( 'database' ) );
+    
+            await conn.close();
+
+            return true;
+        } catch ( error ) {
+            return false;
+        }
+    }
+
+    async start () {
         if ( this.futureStart != null ) {
             return this.futureStart.promise;
         }
@@ -928,6 +940,12 @@ export class DatabaseDaemon {
         this.futureClose = new Future<void>();
 
         this.server.diagnostics.info( 'Database', 'Starting engine' );
+
+        if ( await this.online() ) {
+            this.server.diagnostics.info( 'Database', 'Engine already running. Piggybacking.' );
+
+            return this.futureStart.resolve();
+        }
 
         const config = this.server.config.get( 'database.autostart' );
 
@@ -970,13 +988,19 @@ export class DatabaseDaemon {
         
         await this.server.database.connections.close();
    
-        this.process.kill();
+        if ( this.process ) {
+            this.process.kill();
+        } else {
+            this.futureClose.resolve();
+        }
 
         const promise = await this.futureClose.promise;
 
         this.process = null;
         this.futureClose = null;
         this.futureStart = null;
+
+        return promise;
     }
 }
 
