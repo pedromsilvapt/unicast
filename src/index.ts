@@ -12,7 +12,8 @@ import { UpdatePathsTool } from "./Tools/UpdatePaths";
 import { SetArtworkTool } from "./Tools/SetArtwork";
 import { LoadArtworkTool } from "./Tools/LoadArtwork";
 import { ExportDatabaseTool } from "./Tools/ExportDatabase";
-import { TestTool } from "./Tools/Tool";
+import { AddCustomTool } from "./Tools/AddCustom";
+import { TestTool, ToolFactory } from "./Tools/Tool";
 
 if ( !Symbol.asyncIterator ) {
     (Symbol as any).asyncIterator = Symbol( "Symbol.asyncIterator" );
@@ -37,6 +38,7 @@ server.tools.add( new ToolFactory( UpdatePathsTool ) );
 server.tools.add( new ToolFactory( SetArtworkTool ) );
 server.tools.add( new ToolFactory( LoadArtworkTool ) );
 server.tools.add( new ToolFactory( ExportDatabaseTool ) );
+server.tools.add( new ToolFactory( AddCustomTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 
 server.run()

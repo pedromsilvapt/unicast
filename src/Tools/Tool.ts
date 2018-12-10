@@ -200,16 +200,19 @@ export abstract class Tool<O = any> {
 
     context : ExecutionContext;
 
+    factory : ToolFactory<O>;
+
     diagnostics : DiagnosticsService;
 
-    constructor ( server : UnicastServer, context : ExecutionContext ) {
+    constructor ( server : UnicastServer, context : ExecutionContext, factory : ToolFactory<any> ) {
         this.server = server;
         this.context = context;
+        this.factory = factory;
         this.diagnostics = server.diagnostics.service( 'Tools/' + this.getName() );
     }
 
     getName () {
-        return this.constructor.name;
+        return this.factory.name;
     }
 
     getDescription () {
@@ -330,5 +333,37 @@ export class TestTool extends Tool {
 
     run(  options : any ) {
         this.log( 'Running test', options );
+    }
+}
+
+
+
+export interface Class<T, C extends any[] = []> {
+    new ( ...args : C ) : T;
+}
+
+export class ToolFactory<T> {
+    name : string;
+
+    server : UnicastServer;
+
+    toolClass : Class<T, [ UnicastServer, ExecutionContext, ToolFactory<T> ]>;
+
+    constructor ( toolClass : Class<T, [ UnicastServer, ExecutionContext, ToolFactory<T> ]>, name : string = null ) {
+        this.toolClass = toolClass;
+
+        if ( name === null ) {
+            if ( toolClass.name.endsWith( 'Tool' ) ) {
+                name = toolClass.name.slice( 0, -4 );
+            } else {
+                name = toolClass.name;
+            }
+        }
+
+        this.name = name;
+    }
+
+    create ( server : UnicastServer, context : ExecutionContext ) : T {
+        return new this.toolClass( server, context, this );
     }
 }

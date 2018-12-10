@@ -1,5 +1,5 @@
 import { EntityManager } from "../EntityManager";
-import { Tool, ExecutionContext, LocalExecutionContext } from "./Tool";
+import { Tool, ExecutionContext, LocalExecutionContext, ToolFactory } from "./Tool";
 import { UnicastServer } from "../UnicastServer";
 import * as minimist from 'minimist';
 
@@ -19,36 +19,6 @@ function splitArray<T> ( array : T[], separator : T ) : T[][] {
     }
 
     return split;
-}
-
-export interface Class<T, C extends any[] = []> {
-    new ( ...args : C ) : T;
-}
-
-export class ToolFactory<T> {
-    name : string;
-
-    server : UnicastServer;
-
-    toolClass : Class<T, [ UnicastServer, ExecutionContext ]>;
-
-    constructor ( toolClass : Class<T, [ UnicastServer, ExecutionContext ]>, name : string = null ) {
-        this.toolClass = toolClass;
-
-        if ( name === null ) {
-            if ( toolClass.name.endsWith( 'Tool' ) ) {
-                name = toolClass.name.slice( 0, -4 );
-            } else {
-                name = toolClass.name;
-            }
-        }
-
-        this.name = name;
-    }
-
-    create ( server : UnicastServer, context : ExecutionContext ) : T {
-        return new this.toolClass( server, context );
-    }
 }
 
 export class ToolsManager extends EntityManager<ToolFactory<Tool>, string> {
