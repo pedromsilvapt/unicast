@@ -39,7 +39,9 @@ server.tools.add( new ToolFactory( LoadArtworkTool ) );
 server.tools.add( new ToolFactory( ExportDatabaseTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 
-server.run().catch( err => console.error( err.message, err.stack ) );
+server.run()
+    .catch( err => console.error( err.message, err.stack ) )
+    .then( () => process.exit() );
     
 
 process.on( 'unhandledRejection', ( error : any ) => {

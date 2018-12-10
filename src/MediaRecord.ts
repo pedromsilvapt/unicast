@@ -199,16 +199,12 @@ export class MediaSources {
     static similarity ( a : string, b : string ) : number {
         const [ na, nb ] = [ this.normalize( a ), this.normalize( b ) ];
 
-        console.log( a, na, b, nb );
-
         if ( na == null || nb == null ) {
             return 0;
         }
 
         const ia = this.list.findIndex( pool => pool[ 0 ] == na );
         const ib = this.list.findIndex( pool => pool[ 0 ] == nb );
-
-        console.log( a, ia, b, ib );
 
         return 1 - ( Math.abs( ia - ib ) / this.list.length );
     }

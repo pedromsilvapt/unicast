@@ -1,5 +1,6 @@
 import { UnicastServer } from "../UnicastServer";
 import { Future } from "@pedromsilva/data-future";
+import { DiagnosticsService } from "../Diagnostics";
 
 export enum ToolValueType {
     String = 'string',
@@ -199,9 +200,16 @@ export abstract class Tool<O = any> {
 
     context : ExecutionContext;
 
+    diagnostics : DiagnosticsService;
+
     constructor ( server : UnicastServer, context : ExecutionContext ) {
         this.server = server;
         this.context = context;
+        this.diagnostics = server.diagnostics.service( 'Tools/' + this.getName() );
+    }
+
+    getName () {
+        return this.constructor.name;
     }
 
     getDescription () {
@@ -217,11 +225,11 @@ export abstract class Tool<O = any> {
     }
 
     log ( ...messages : any[] ) {
-        console.log( ...messages );
+        this.diagnostics.info( messages.join( ' ' ) );
     }
 
     help () : string {
-        const headerHelp = `Tool ${ this.constructor.name }:\n`;
+        const headerHelp = `Tool ${ this.getName() }:\n`;
 
         const descriptionHelp = this.getDescription() ? ( this.getDescription() + '\n\n' ) : '\n';
 

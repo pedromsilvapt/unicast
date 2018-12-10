@@ -258,13 +258,15 @@ export class UnicastServer {
                 try {
                     await this.tools.run( tool, options );
                 } catch ( error ) {
-                    this.onError.notify( error );
+                    tool.diagnostics.error( error );
                 }
             }
 
             await this.close();
         } else {
             await this.listen();
+
+            return new Promise<void>( () => {} );
         }
     }
 
