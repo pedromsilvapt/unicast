@@ -1,5 +1,4 @@
 import { IVideoPlayerController } from "../IVideoPlayerController";
-import * as ControllerSource from './Controller.txt.js';
 import { UnicastServer } from "../../../UnicastServer";
 import * as fs from 'mz/fs';
 import * as path from 'path';
@@ -29,6 +28,8 @@ interface SubtitleTimestamp {
     start : number;
     end : number;
 }
+
+const ControllerSource = fs.readFileSync( path.join( __dirname, 'Controller.txt.js' ), 'utf8' );
 
 export class MpvController implements IVideoPlayerController {
     server : UnicastServer;
@@ -124,7 +125,7 @@ export class MpvController implements IVideoPlayerController {
     async play ( video : string, subtitles : string ) : Promise<void> {
         const timestamps : SubtitleTimestamp[] = await this.getTimestamps( subtitles );
 
-        const source = ( ControllerSource as string ).replace( /__timestamps__/, JSON.stringify( timestamps ) );
+        const source = ControllerSource.replace( /__timestamps__/, JSON.stringify( timestamps ) );
 
         const sourceFile = await this.server.storage.getRandomFile( 'mpv-controller-', 'js', 'temp/subtitles' );
 

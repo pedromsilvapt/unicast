@@ -1,5 +1,4 @@
 import { IVideoPlayerController } from "../IVideoPlayerController";
-import * as ControllerSource from './SynchronizerController.txt.js';
 import { UnicastServer } from "../../../UnicastServer";
 import { Pipeline, FileReader, FileWriter, ParserPipeline, DecoderPipeline, SubLine, SubboxPipeline, MessageProtocol, MessageKind, ContextManager, StdContext, CompilerPipeline, EncoderPipeline, MessageFactory } from 'subbox';
 import { filter, map, toArray, fromArray } from "data-async-iterators";
@@ -8,6 +7,8 @@ import { EventEmitter } from "events";
 import * as path from 'path';
 import * as fs from 'mz/fs';
 import * as sortBy from 'sort-by';
+
+const ControllerSource = fs.readFileSync( path.join( __dirname, 'SynchronizerController.txt.js' ), 'utf8' );
 
 export function fromEvent<T = any> ( emitter : EventEmitter, resolveName : string, rejectName : string = 'error' ) : Promise<T> {
     return new Promise<T>( ( resolve, reject ) => {
