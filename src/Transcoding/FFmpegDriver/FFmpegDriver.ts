@@ -1,15 +1,12 @@
-import { TranscodingDriver, TranscodingBackgroundTask } from "../TranscodingDriver";
+import { TranscodingDriver } from "../TranscodingDriver";
 import { DriverFactory } from "../DriverFactory";
 import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
-import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import { UnicastServer } from "../../UnicastServer";
-import { spawn } from 'child_process';
-import { FFmpegTranscodingTask } from "./FFmpegTranscodingTask";
 import { MediaTrigger } from "../../TriggerDb";
-import { boxblur, source, Stream, concat, silence, blackout, mute, sources, filters } from 'composable';
+import { boxblur, Stream, blackout, mute, filters } from 'composable';
 import { StaticStream } from "composable/lib/Stream";
-import { Compiler, EmissionsFragment, compile } from "composable/lib/Compiler/Compiler";
-import { MediaMetadata, TrackMediaMetadata } from "../../MediaTools";
+import { Compiler } from "composable/lib/Compiler/Compiler";
+import { TrackMediaMetadata } from "../../MediaTools";
 import * as path from 'path';
 import { MediaRecord } from "../../MediaRecord";
 
@@ -443,16 +440,6 @@ export class FFmpegDriver implements TranscodingDriver {
         }
 
         return 'ffmpeg';
-    }
-
-    spawn ( stream : MediaStream ) : FFmpegTranscodingTask {
-        const args = this.getCompiledArguments( stream );
-
-        const child = spawn( this.getCommandPath(), args );
-
-        const task = new FFmpegTranscodingTask( child );
-
-        return task;
     }
 }
 
