@@ -1,34 +1,48 @@
-import { UnicastServer } from "../UnicastServer";
 import * as fs from 'mz/fs';
 import { BaseTable } from "../Database/Database";
 import * as path from 'path';
-import { Tool, ToolOption } from "./Tool";
+import { Tool, ToolOption, ToolValueType } from "./Tool";
+import { format } from 'date-fns';
+import { Stopwatch } from '../BackgroundTask';
+import * as filesize from 'filesize';
 
 interface ExportDatabaseOptions {
     folder : string;
+    timestamp : boolean;
 }
 
 export class ExportDatabaseTool extends Tool<ExportDatabaseOptions> {
     getParameters () {
         return [ 
-            new ToolOption( 'folder' ).setRequired()
+            new ToolOption( 'folder' ).setDefaultValue( this.server.storage.getPath( 'backups', `${ this.server.name }_database_${ this.server.config.get( 'database.db' ) }_backup` ) ),
+            new ToolOption( 'timestamp' ).setType( ToolValueType.Boolean ).setDefaultValue( true )
         ]
     }
 
-    async exportTable ( table : BaseTable<any>, file : string ) {
+    async exportTable ( table : BaseTable<any>, file : string ) : Promise<number> {
+        const stopwatch = new Stopwatch().resume();
+
         this.log( 'Exporting', table.tableName, 'to', file );
 
         const records = await table.find();
 
         await this.server.storage.ensureDir( path.dirname( file ) );
 
-        await fs.writeFile( file, JSON.stringify( records ) );
+        const buffer = Buffer.from( JSON.stringify( records ) );
 
-        this.log( 'Exported', records.length, 'records' );
+        await fs.writeFile( file, buffer );
+
+        this.log( 'Exported', records.length, 'records', `(in ${ stopwatch.readHumanized() }, ${filesize( buffer.byteLength )})` );
+
+        return buffer.byteLength;
     }
 
     async run ( options : ExportDatabaseOptions ) {
-        const { folder } = options;
+        let { folder } = options;
+
+        if ( options.timestamp ) {
+            folder = path.join( path.dirname( folder ), `${ format( Date.now(), 'YYYYMMDD_HHmmss' ) }_${ path.basename( folder ) }` );
+        }
 
         let tables : BaseTable<any>[] = [
             this.server.database.tables.collections,
@@ -44,10 +58,16 @@ export class ExportDatabaseTool extends Tool<ExportDatabaseOptions> {
             this.server.database.tables.subtitles
         ];
     
+        const stopwatch = new Stopwatch().resume();
+
+        let size = 0;
+
         for ( let table of tables ) {
-            await this.exportTable( table, path.join( folder, 'table_' + table.tableName + '.json' ) )
+            size += await this.exportTable( table, path.join( folder, 'table_' + table.tableName + '.json' ) )
         }
+
+        stopwatch.pause();
     
-        this.log( 'All tables exported' );
+        this.log( 'All tables exported', `(in ${ stopwatch.readHumanized() }, ${ filesize( size ) })` );
     }
 }
