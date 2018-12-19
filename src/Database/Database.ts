@@ -16,6 +16,7 @@ import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
 import { Hook } from '../Hookable';
 import * as equals from 'fast-deep-equal';
 import { toArray } from 'data-async-iterators';
+import { collect, groupingBy, first } from 'data-collectors';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -598,6 +599,33 @@ export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
     baseline : Partial<R> = {};
 
     foreignMediaKeys : MediaTableForeignKeys = {};
+
+    async repair ( records : string[] = null ) {
+        if ( !records ) {
+            records = ( await this.find() ).map( record => record.id );
+        }
+
+        await super.repair( records );
+
+        const collections = collect( await this.database.tables.collections.find(), groupingBy( coll => coll.id, first() ) );
+
+        await Promise.all( records.map( async id => {
+            const record = await this.get( id );
+
+            const recordCollections = await this.database.tables.collectionsMedia.findAll( [ [ record.kind, record.id ] ], { index: 'reference' } );
+
+            const collectionsCount : Set<string> = new Set();
+
+            for ( let relation of recordCollections ) {
+                // Remove any relations linkind to a non-existing collection or duplicated collections
+                if ( !collections.has( relation.collectionId ) || collectionsCount.has( relation.collectionId ) ) {
+                    await this.database.tables.collectionsMedia.delete( relation.id );
+                }
+
+                collectionsCount.add( relation.collectionId );
+            }
+        } ) );
+    }
 }
 
 export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
@@ -691,6 +719,8 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
             shows = ( await this.find() ).map( show => show.id );
         }
 
+        await super.repair( shows );
+        
         await Promise.all( shows.map( async showId => {
             const show = await this.get( showId );
 
@@ -756,6 +786,8 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         if ( !seasons ) {
             seasons = ( await this.find() ).map( season => season.id );
         }
+
+        await super.repair( seasons );
 
         await Promise.all( seasons.map( async seasonId => {
             const season = await this.get( seasonId );

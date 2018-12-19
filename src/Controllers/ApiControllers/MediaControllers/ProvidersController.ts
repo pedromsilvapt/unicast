@@ -68,5 +68,22 @@ export class ProvidersController extends BaseController {
         }
 
         return task;
-    }        
+    }
+
+    @Route( [ 'post', 'get' ], '/repair' )
+    async repair ( req : Request, res : Response ) : Promise<void> {
+        const database = this.server.database;
+
+        const stopwatch = new Stopwatch().resume();
+
+        await database.tables.movies.repair();
+
+        stopwatch.mark( 'movies' );
+
+        await database.tables.shows.repair();
+
+        stopwatch.pause().mark( 'shows', 'movies' );
+
+        this.server.diagnostics.info( 'repositories/sync', `completed repair in + ${ stopwatch.readHumanized() } (shows = ${ stopwatch.readHumanized( 'shows' ) }, movies = ${ stopwatch.readHumanized( 'movies' ) })` );
+    }
 }
