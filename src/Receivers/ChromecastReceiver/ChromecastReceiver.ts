@@ -81,7 +81,7 @@ export class ChromecastReceiver extends BaseReceiver {
         const events : string[] = [ 
             'connected', 'playing', 'played', 'stopping', 'stopped',
             'pausing', 'paused', 'resuming', 'resumed', 'app-status',
-            'status', 'error', 'disconnected'
+            'status', 'disconnected'
         ];
 
         for ( let event of events ) {
@@ -98,7 +98,11 @@ export class ChromecastReceiver extends BaseReceiver {
 
         client.on( 'player-launched', () => this.diagnostics.info( 'Launched playing session' ) );
         
-        client.on( 'error', error => this.server.onError.notify( error ) );
+        client.on( 'error', error => {
+            this.diagnostics.error( error.message, error );
+            
+            this.reconnect().catch( error => this.diagnostics.error( error.message, error ) );
+        } );
 
         return client;
     }
@@ -119,7 +123,7 @@ export class ChromecastReceiver extends BaseReceiver {
         try {
             await this.client.disconnect();
         } catch ( err ) {
-            this.server.diagnostics.error( 'Receivers/Chromecast', err.message, err );
+            this.diagnostics.error( err.message, err );
 
             this.client = this.createClient();
         }
@@ -139,7 +143,7 @@ export class ChromecastReceiver extends BaseReceiver {
         try {
             await this.client.close();
         } catch ( err ) {
-            this.server.diagnostics.error( 'Receivers/Chromecast', err.message, err );
+            this.diagnostics.error( err.message, err );
 
             this.client = this.createClient();
         }
