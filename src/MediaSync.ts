@@ -45,9 +45,13 @@ export class MediaSync {
         // When the touched RecordsSet contains an item, we don't need to update it on the database
         // Instead, we just set the association and check the touched, so that the item is not wrongly removed
         if ( ignore.get( media.kind ).has( media.internalId ) ) {
-            association.get( media.kind ).set( media.internalId, Promise.resolve( media.id ) );
+            // The media object is the one generated from the database, but it has the id removed and was funneled through the repository
+            // As such, to obtain it's id we need to access the object stored in the `ignore` RecordsMap
+            const match = ignore.get( media.kind ).get( media.internalId );
 
-            touched.get( media.kind ).add( media.id );
+            association.get( media.kind ).set( media.internalId, Promise.resolve( match.id ) );
+
+            touched.get( media.kind ).add( match.id );
 
             return;
         }
@@ -84,12 +88,12 @@ export class MediaSync {
                     ...table.baseline,
                     ...media as any
                 } );
-
-                this.diagnostics.info( 'CREATE ' + this.print( media ) );
             } else {
                 match = media;
                 media.id = media.internalId;
             }
+
+            this.diagnostics.info( 'CREATE ' + this.print( media ) );
 
             future.resolve( match.id );
         }
