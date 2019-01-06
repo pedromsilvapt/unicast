@@ -93,8 +93,6 @@ export class MediaSessionsManager {
                     history.positionHistory.push( { start: history.position, end: history.position } );
                 }
 
-                console.log( history.watched, this.getSessionPercentage( history, status ) );
-
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
                     await this.watch( history );
                 }

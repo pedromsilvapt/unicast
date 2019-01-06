@@ -181,7 +181,7 @@ export class MessagesFactory {
                     originalSubtitlesOffset: options.subtitlesOffset || 0,
                 },
                 images: [
-                    { url: record.art.thumbnail || record.art.poster }
+                    { url: record.art.poster || ( ( record.art as any ).tvshow && ( record.art as any ).tvshow.poster ) || record.art.thumbnail }
                 ]
             }
         };
