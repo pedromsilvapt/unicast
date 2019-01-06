@@ -199,10 +199,6 @@ export class FileSystemScanner {
     }
 
     async * scanEpisodeVideoFile ( ignore : RecordsMap<MediaRecord>, scraper : IScraper, folder : string, videoFile : string, stats : fs.Stats, showsByName : Map<string, TvShowMediaRecord>, seasonsFound : Set<string>, episodesFound : Set<string> ) : AsyncIterableIterator<MediaRecord> {
-        // if ( ignore.get( MediaKind.TvEpisode ).has( episodeId ) ) {
-        //     return;
-        // }
-
         const showName = pathRootName( videoFile );
 
         let show : TvShowMediaRecord = showsByName.get( showName );
@@ -250,17 +246,17 @@ export class FileSystemScanner {
 
         const details = parseTorrentName( path.basename( videoFile ) );
 
-        const logError = ( err ?: any ) => this.logScanError( videoFile, `Cannot find ${ show.title } ${ details.season } ${ details.episode }` + (err || '') );
+        const logError = ( err ?: any ) => this.logScanError( videoFile, `Cannot find ${ show.title } ${ details.season } ${ details.episode } ` + (err || '') );
 
         if ( isNaN( details.season ) || isNaN( details.episode ) ) {
-            return logError();
+            return logError( 'Details isNaN' );
         }
 
         const seasonId = '' + show.id + 'S' + details.season;
 
         let season = unwrap( clone( ignore.get( MediaKind.TvSeason ).get( seasonId ) as TvSeasonMediaRecord ) );
 
-        if ( season != null ) {
+        if ( season == null ) {
             season = clone( await scraper.getTvShowSeason( await remoteShowInternalId.get(), details.season ) );
 
             if ( season != null ) {
@@ -271,7 +267,7 @@ export class FileSystemScanner {
         }
 
         if ( season == null ) {
-            return logError();
+            return logError( 'Season is null' );
         }
 
         if ( !seasonsFound.has( season.id ) ) {
@@ -296,7 +292,7 @@ export class FileSystemScanner {
         }
 
         if ( episode == null ) {
-            return logError();
+            return logError( 'Episode is null' );
         }
         
         this.logScanInfo( 'Found', episode.id, show.title, details.season, details.episode );
