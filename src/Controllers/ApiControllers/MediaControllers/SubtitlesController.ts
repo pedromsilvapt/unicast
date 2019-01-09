@@ -14,6 +14,16 @@ import { InvalidArgumentError } from "restify-errors";
 export class SubtitlesController extends BaseController {
     protected validateSemaphore : Semaphore = new Semaphore( 1 );
 
+    protected getRequestLanguages ( req : Request ) : string[] {
+        let langs = req.query.langs;
+
+        if ( typeof langs === 'string' ) {
+            return [ langs ];
+        }
+
+        return langs;
+    }
+
     @Route( 'get', '/:kind/:id/local' )
     async listLocal ( req : Request, res : Response ) : Promise<ILocalSubtitle[]> {
         const media = await this.server.media.get( req.params.kind, req.params.id );
@@ -21,7 +31,7 @@ export class SubtitlesController extends BaseController {
         return await this.server.subtitles.list( media );
     }
 
-    protected async listRemotePredict ( episode : TvEpisodeMediaRecord ) {
+    protected async listRemotePredict ( episode : TvEpisodeMediaRecord, langs : string[] = null ) {
         const season = await this.server.database.tables.seasons.get( episode.tvSeasonId );
         
         const episodes = await this.server.media.getEpisodes( season.tvShowId );
@@ -31,12 +41,14 @@ export class SubtitlesController extends BaseController {
         const index = episodes.findIndex( ep => ep.id === episode.id );
 
         if ( index + 1 < episodes.length ) {
-            await this.server.subtitles.providers.search( episodes[ index + 1 ], [ 'por' ] );
+            await this.server.subtitles.providers.search( episodes[ index + 1 ], langs );
         }
     }
 
     @Route( 'get', '/:kind/:id/remote' )
     async listRemote ( req : Request, res : Response ) : Promise<ISubtitle[]> {
+        const langs = this.getRequestLanguages( req );
+
         const media = await this.server.media.get( req.params.kind, req.params.id );
 
         if ( !isPlayableRecord( media ) ) {
@@ -44,14 +56,14 @@ export class SubtitlesController extends BaseController {
         }
 
         const result = await this.server.diagnostics.measure( 
-            'subtitles/search', () => this.server.subtitles.providers.search( media, [ 'por' ] ) 
+            'subtitles/search', () => this.server.subtitles.providers.search( media, langs ) 
         );
         
         // When searching for subtitles for an episode, try to predict the next episode we might search
         // (right now just means the next episode number) and start searching so that the results get cached
         // and when the user actually searches for them, the results come faster
         if ( media.kind === MediaKind.TvEpisode ) {
-            this.listRemotePredict( media as TvEpisodeMediaRecord )
+            this.listRemotePredict( media as TvEpisodeMediaRecord, langs )
                 .catch( err => this.server.onError.notify( err ) );
         }
 
@@ -103,7 +115,7 @@ export class SubtitlesController extends BaseController {
     async synchronizeRemote ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
         
-        const subtitles = await this.server.subtitles.providers.search( media, [ 'por' ] );
+        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestLanguages( req ) );
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 
@@ -159,7 +171,7 @@ export class SubtitlesController extends BaseController {
     async validateRemote ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
         
-        const subtitles = await this.server.subtitles.providers.search( media, [ 'por' ] );
+        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestLanguages( req ) );
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 

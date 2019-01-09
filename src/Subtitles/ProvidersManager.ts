@@ -24,9 +24,24 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
         return entity.name;
     }
 
+    // Returns an array of user languages to be used when searching for subtitles and the user hasn't asked for any in specific
+    getDefaultLanguages () : string[] {
+        const primaryLanguage = this.server.config.get( 'primaryLanguage', null );
+
+        if ( primaryLanguage ) {
+            return [ primaryLanguage ];
+        }
+
+        return this.server.config.get( 'secondaryLanguages', [] );
+    }
+
     async search ( media : PlayableMediaRecord, langs : string[], providersNames : string[] = null ) : Promise<ISubtitle[]> {
         if ( !providersNames ) {
             providersNames = this.entities.map( provider => provider.name );
+        }
+
+        if ( !langs || langs.length == 0 ) {
+            langs = this.getDefaultLanguages();
         }
 
         const invalid = providersNames.filter( name => !this.hasKeyed( name ) );

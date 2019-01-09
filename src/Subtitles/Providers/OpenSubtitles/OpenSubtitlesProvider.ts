@@ -1,10 +1,8 @@
 import * as subtitler from 'subtitler';
-import * as OS from 'opensubtitles-api';
 import { ISubtitlesProvider, ISubtitle } from '../ISubtitlesProvider';
 import { MediaKind, TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, PlayableMediaRecord, isTvEpisodeRecord, isMovieRecord, MediaSources } from '../../../MediaRecord';
 import * as yauzl from 'yauzl';
 import * as iconv from 'iconv-lite';
-import * as path from 'path';
 import * as isSubtitle from 'is-subtitle';
 import * as got from 'got';
 import { UnicastServer } from '../../../UnicastServer';
@@ -26,17 +24,10 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
     server : UnicastServer;
 
     protected token : any = null;
+
     protected tokenTimeout : NodeJS.Timer = null;
 
     protected api : any = subtitler.api;
-
-    protected os : any;
-
-    constructor () {
-        // this.os = new OS( {
-        //     useragent:'TemporaryUserAgent'
-        // } );
-    }
 
     protected async getQueryForMedia ( media : PlayableMediaRecord, lang : string ) {
         if ( isMovieRecord( media ) ) {
@@ -51,13 +42,14 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
             const show = await this.server.media.get( MediaKind.TvShow, season.tvShowId );
 
             return {
+                imdbid: media.external.imdb.slice( 2 ),
                 query: show.title,
                 season: media.seasonNumber,
                 episode: media.number
             };
         } else {
             return {
-                query: media.title   
+                query: media.title 
             };
         }
     }
