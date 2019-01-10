@@ -39,7 +39,7 @@ export abstract class BaseController implements Annotated {
 
             for ( let [ methods, url, action, transform ] of routes ) {
                 for ( let method of methods ) {
-                    router[ method ]( url, ( transform || handle )( this, action ) );
+                    router[ method ]( url, ( transform || JsonResponse )( this, action ) );
                 }
             }
         }
@@ -78,7 +78,7 @@ export abstract class BaseController implements Annotated {
     }
 }
 
-export function handle ( controller : { server : UnicastServer, diagnostics : DiagnosticsService }, method : string ) {
+export function JsonResponse ( controller : { server : UnicastServer, diagnostics : DiagnosticsService }, method : string ) {
     return async function ( req : Request, res : Response, next : Next ) {
         const stopwatch = controller.server.diagnostics.stopwatch().resume();
 
@@ -104,6 +104,43 @@ export function handle ( controller : { server : UnicastServer, diagnostics : Di
     };
 }
 
+export function BinaryResponse ( controller : any, method : any ) {
+    return async function ( req : Request, res : Response, next : Next ) {
+        try {
+            const file : FileInfo = await controller[ method ]( req, res );
+
+            if ( file ) {
+                res.statusCode = 200;
+                
+                res.set( 'Content-Type', file.mime );
+
+                if ( typeof file.length !== 'number' && !file.length ) {
+                    res.set( 'Content-Length', '' + file.length );
+                }
+                
+                ( res as any ).writeHead( 200, res.headers() );
+
+                if ( Buffer.isBuffer( file.data ) ) {
+                    res.write( file.data );
+                } else {
+                    file.data.pipe( res );
+                }
+            }
+
+            next();
+        } catch ( error ) {
+            console.log( error );
+            next( error );
+        }
+    }
+}
+
+export interface FileInfo {
+    mime : string;
+    length ?: number;
+    data : NodeJS.ReadableStream | Buffer;
+}
+
 export interface RouteTransform {
     ( controller : any, method : any ) : ( req : Request, res : Response, next : Next ) => void;
 }
@@ -126,18 +163,6 @@ export interface ControllerConstructor {
 
 export function Controller ( controller ?: ControllerConstructor, path ?: string ) {
     return ( target : BaseController, propertyKey : string ) => {
-        // if ( controller ) {
-        //     if ( !path ) {
-        //         path = '/' + propertyKey;
-        //     }
-
-        //     target[ propertyKey ] = new controller( target.server, path );
-        // }
-
-        // target.childControllers = target.childControllers || [];
-
-        // target.childControllers.push( target[ propertyKey ] );
-
         addAnnotation( target, Controller, {
             propertyKey,
             controller,

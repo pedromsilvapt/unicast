@@ -1,11 +1,14 @@
-import { BaseController, Controller, Route } from "../BaseController";
+import { BaseController, Controller, Route, BinaryResponse, FileInfo } from "../BaseController";
 import { Request, Response } from "restify";
 import { PlaylistsController } from "./PlaylistsController";
 import { MediaSourceDetails } from "../../MediaProviders/MediaSource";
-import { InvalidArgumentError, HttpError } from 'restify-errors';
+import { InvalidArgumentError, HttpError, NotFoundError } from 'restify-errors';
 import { MediaPlayOptions, ReceiverStatus } from "../../Receivers/BaseReceiver/IMediaReceiver";
-import { MediaRecord } from "../../MediaRecord";
+import { MediaRecord, isPlayableRecord } from "../../MediaRecord";
 import * as Case from 'case';
+import { MediaStreamSelectors } from '../../MediaProviders/MediaStreams/MediaStreamSelectors';
+import * as mime from 'mime';
+import { MediaPreview } from '../../MediaPreview';
 
 export class InvalidDeviceArgumentError extends InvalidArgumentError {
     constructor ( device : string ) {
@@ -341,6 +344,50 @@ export class PlayerController extends BaseController {
             const status = await device.callCommand<ReceiverStatus>( Case.camel( req.params.command ), req.body.args || [] );
     
             return this.preprocessStatus( req, status );
+        } else {
+            throw new InvalidDeviceArgumentError( req.params.device );
+        }
+    }
+
+    @Route( 'get', '/:device/preview/:kind/:id/:time', BinaryResponse )
+    async preview ( req : Request, res : Response ) : Promise<FileInfo | Error> {
+        const device = this.server.receivers.get( req.params.device );
+
+        if ( device ) {
+            const media = await this.server.media.get( req.params.kind, req.params.id );
+
+            if ( !isPlayableRecord( media ) ) {
+                throw new InvalidArgumentError( 'Media is not playable.' );
+            }
+
+            const streams = await this.server.providers.streams( media.sources );
+
+            const video = MediaStreamSelectors.firstVideo( streams );
+
+            if ( video == null ) {
+                return new NotFoundError( 'Media item does not contain a video source.' );
+            }
+
+            const time = +req.params.time;
+
+            if ( isNaN( time ) ) {
+                return new InvalidArgumentError( 'Time is not a number.' );
+            }
+
+            const preview = new MediaPreview( this.server, media, video, time );
+
+            if ( 'width' in req.query ) {
+                preview.width = +req.query.width;
+            }
+
+            if ( 'height' in req.query ) {
+                preview.height = +req.query.height;
+            }
+
+            return {
+                mime: mime.lookup( '.' + preview.getFileExtension() ),
+                data: preview.generate()
+            };
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }

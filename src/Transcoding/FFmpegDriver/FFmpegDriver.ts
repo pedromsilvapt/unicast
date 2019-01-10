@@ -6,7 +6,7 @@ import { MediaTrigger } from "../../TriggerDb";
 import { boxblur, Stream, blackout, mute, filters } from 'composable';
 import { StaticStream } from "composable/lib/Stream";
 import { Compiler } from "composable/lib/Compiler/Compiler";
-import { TrackMediaMetadata } from "../../MediaTools";
+import { TrackMediaMetadata, MediaTools } from "../../MediaTools";
 import * as path from 'path';
 import { MediaRecord } from "../../MediaRecord";
 
@@ -433,13 +433,7 @@ export class FFmpegDriver implements TranscodingDriver {
     }
 
     getCommandPath () {
-        const customPath = this.server.config.get( 'ffmpeg.path' );
-
-        if ( customPath ) {
-            return path.join( customPath, 'ffmpeg.exe' );
-        }
-
-        return 'ffmpeg';
+        return MediaTools.getCommandPath( this.server );
     }
 }
 

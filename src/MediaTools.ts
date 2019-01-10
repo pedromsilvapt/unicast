@@ -2,6 +2,7 @@ import * as path from 'path';
 import { spawn } from 'child_process'
 import { Config } from "./Config";
 import * as os from 'os';
+import { UnicastServer } from './UnicastServer';
 
 export class MediaTools {
     protected static probeNormalizeTracks ( tracks : any[] ) : TrackMediaMetadata[] {
@@ -68,6 +69,20 @@ export class MediaTools {
         let metadata = await probe.run();
 
         return this.probeNormalize( metadata, track );
+    }
+
+    static getCommandPath ( server : UnicastServer, command : string = 'ffmpeg' ) {
+        const customPath = server.config.get( 'ffmpeg.path' );
+
+        if ( customPath ) {
+            if ( os.platform() == 'win32' ) {
+                return path.join( customPath, command + '.exe' );
+            } else {
+                return path.join( customPath, command );
+            }
+        }
+
+        return command;
     }
 }
 
