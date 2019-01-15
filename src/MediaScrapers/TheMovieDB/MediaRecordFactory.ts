@@ -149,7 +149,7 @@ export class MediaRecordFactory {
                 thumbnail: null
             },
             tagline: movie.tagline,
-            runtime: movie.runtime,
+            runtime: movie.runtime * 60,
             trailer: null,
         } as any;
     }
