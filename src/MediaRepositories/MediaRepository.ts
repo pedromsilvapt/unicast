@@ -2,6 +2,7 @@ import { IEntity } from "../EntityFactory";
 import { UnicastServer } from "../UnicastServer";
 import { MediaKind, MediaRecord, RecordsMap } from "../MediaRecord";
 import { ISubtitlesRepository } from "../Subtitles/SubtitlesRepository";
+import { CacheOptions } from '../MediaScrapers/ScraperCache';
 
 // Why an Interface and an abstract class, I hear you asking?
 // Because abstract classes in TypeScript don't allow, for some weird reason, optional methods, while interfaces do
@@ -21,7 +22,7 @@ export interface IMediaRepository {
 
     available () : Promise<boolean>;
 
-    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsMap<MediaRecord> ) : AsyncIterable<T>;
+    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], ignore ?: RecordsMap<MediaRecord>, cache ?: CacheOptions ) : AsyncIterable<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
     

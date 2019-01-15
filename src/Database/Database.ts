@@ -17,6 +17,7 @@ import { Hook } from '../Hookable';
 import * as equals from 'fast-deep-equal';
 import { toArray } from 'data-async-iterators';
 import { collect, groupingBy, first } from 'data-collectors';
+import { ComposedTask } from '../BackgroundTask';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -108,6 +109,26 @@ export class Database {
         } catch ( err ) {
             this.installedFuture.reject( err );
         }
+    }
+
+    async repair () {
+        const task = new ComposedTask();
+
+        await task.run( 'movies', () => this.tables.movies.repair() );
+
+        await task.run( 'shows', () => this.tables.shows.repair() );
+
+        await task.run( 'collections', () => this.tables.collections.repair() );
+
+        await task.run( 'collectionsMedia', () => this.tables.collectionsMedia.repair() );
+
+        await task.run( 'custom', () => this.tables.custom.repair() );
+
+        await task.run( 'playlists', () => this.tables.playlists.repair() );
+
+        await task.run( 'history', () => this.tables.history.repair() );
+
+        return task;
     }
 }
 
@@ -334,6 +355,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     indexesSchema : IndexSchema[] = [];
 
+    dateFields : string[] = [];
+
     relations : any = {};
 
     get database () : Database {
@@ -503,6 +526,36 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
+    async createMany ( recordsIter : Iterable<R> ) : Promise<R[]> {
+        const connection = await this.pool.acquire();
+
+        const records = Array.from( recordsIter );
+
+        try {
+            for ( let record of records ) {
+                for ( let field of Object.keys( record ) ) {
+                    if ( record[ field ] === void 0 ) {
+                        record[ field ] = null;
+                    }
+                }
+            }
+    
+            const res = await this.query().insert( records ).run( connection );
+    
+            let index = 0;
+
+            for ( let record of records ) {
+                if ( !record.id ) {
+                    record.id = res.generated_keys[ index++ ];
+                }
+            }
+            
+            return records;
+        } finally {
+            this.pool.release( connection );
+        }
+    }
+
     async update ( id : string, record : any ) : Promise<R> {
         const connection = await this.pool.acquire();
 
@@ -588,7 +641,31 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    async repair ( ids : string[] = null ) { }
+    async repair ( records : string[] = null ) {
+        if ( this.dateFields != null && this.dateFields.length > 0 ) {
+            if ( !records ) {
+                records = ( await this.find() ).map( record => record.id );
+            }
+
+            await Promise.all( records.map( async id => {
+                const record = await this.get( id );
+    
+                let changed = false;
+
+                for( let field of this.dateFields ) {
+                    if ( field in record && typeof record[ field ] === 'string' ) {
+                        record[ field ] = new Date( record[ field ] );
+
+                        changed = true;
+                    }
+                }
+
+                if ( changed ) {
+                    await this.update( record.id, record );
+                }
+            } ) );
+        }
+    }
 }
 
 export interface MediaTableForeignKeys {
@@ -642,6 +719,8 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         { name: 'genres', options: { multi: true } },
     ];
 
+    dateFields = [ 'addedAt', 'lastPlayed' ];
+
     relations : {
         collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>
     };
@@ -662,6 +741,8 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
 
 export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     readonly tableName : string = 'media_tvshows';
+
+    dateFields = [ 'addedAt', 'lastPlayed' ];
 
     baseline : Partial<TvShowMediaRecord> = {
         watched: false,
@@ -804,6 +885,8 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
 export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     readonly tableName : string = 'media_tvepisodes';
     
+    dateFields = [ 'addedAt', 'airedAt', 'lastPlayed' ];
+
     baseline : Partial<TvEpisodeMediaRecord> = {
         watched: false,
         lastPlayed: null,
@@ -837,6 +920,8 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
 export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
     readonly tableName : string = 'media_custom';
 
+    dateFields = [ 'addedAt', 'lastPlayed' ];
+
     indexesSchema : IndexSchema[] = [
         { name: 'internalId' }
     ];
@@ -844,6 +929,8 @@ export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
 
 export class PlaylistsTable extends BaseTable<PlaylistRecord> {
     readonly tableName : string = 'playlists';
+
+    dateFields = [ 'createdAt', 'updatedAt' ];
 
     indexesSchema : IndexSchema[] = [ 
         { name: 'createdAt' },
@@ -865,6 +952,8 @@ export class PlaylistsTable extends BaseTable<PlaylistRecord> {
 
 export class HistoryTable extends BaseTable<HistoryRecord> {
     readonly tableName : string = 'history';
+
+    dateFields = [ 'createdAt', 'updatedAt' ];
 
     indexesSchema : IndexSchema[] = [ 
         { name: 'createdAt' }
@@ -905,6 +994,8 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
 
 export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
     readonly tableName : string = 'collection_media';
+
+    dateFields = [ 'createdAt' ];
 
     indexesSchema : IndexSchema[] = [ 
         { name: 'collectionId' },

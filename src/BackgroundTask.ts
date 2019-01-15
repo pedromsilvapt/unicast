@@ -571,3 +571,47 @@ export enum StopwatchState{
     Paused = 0,
     Running = 1
 }
+
+
+export class ComposedTask {
+    tasks : Map<string, Stopwatch>;
+
+    global : Stopwatch;
+
+    constructor () {
+        this.tasks = new Map();
+        this.global = new Stopwatch();
+    }
+
+    run <T> ( name : string, callback : ( stopwatch : Stopwatch ) => Promise<T> ) : Promise<T>;
+    run <T> ( name : string, callback : ( stopwatch : Stopwatch ) => T ) : T;
+    run <T> ( name : string, callback : ( stopwatch : Stopwatch ) => Promise<T> | T ) : Promise<T> | T {
+        const stopwatch = new Stopwatch().resume();
+
+        this.global.resume();
+
+        const stop = <V> ( value : V ) : V => {
+            stopwatch.pause();
+    
+            this.global.pause();
+
+            return value;
+        };
+
+        try {
+            const result = callback( stopwatch );
+
+            this.tasks.set( name, stopwatch );
+    
+            if ( result instanceof Promise ) {
+                return result.then( stop, err => stop( Promise.reject( err ) ) );
+            } else {
+                return stop( result );
+            }
+        } catch ( error ) {
+            stop( void 0 );
+
+            throw error;
+        }
+    }
+}

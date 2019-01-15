@@ -25,9 +25,9 @@ export class ProvidersController extends BaseController {
             stopwatch.mark( 'sync' );
 
             if ( !options.dryRun ) {
-                await this.server.database.tables.shows.repair();
+                this.server.diagnostics.info( 'repositories/sync', 'starting repair' );
 
-                await this.server.database.tables.movies.repair();
+                await this.server.database.repair();
             }
 
             stopwatch.pause().mark( 'repair', 'sync' );
@@ -74,16 +74,12 @@ export class ProvidersController extends BaseController {
     async repair ( req : Request, res : Response ) : Promise<void> {
         const database = this.server.database;
 
-        const stopwatch = new Stopwatch().resume();
+        this.server.diagnostics.info( 'repositories/sync', `starting repair` );
 
-        await database.tables.movies.repair();
+        const results = await database.repair();
 
-        stopwatch.mark( 'movies' );
+        const tasks = Array.from( results.tasks.entries() ).map( ( [ name, sw ] ) => `${name} = ${ sw.readHumanized() }` ).join( ', ' );
 
-        await database.tables.shows.repair();
-
-        stopwatch.pause().mark( 'shows', 'movies' );
-
-        this.server.diagnostics.info( 'repositories/sync', `completed repair in + ${ stopwatch.readHumanized() } (shows = ${ stopwatch.readHumanized( 'shows' ) }, movies = ${ stopwatch.readHumanized( 'movies' ) })` );
+        this.server.diagnostics.info( 'repositories/sync', `completed repair in + ${ results.global.readHumanized() } (${ tasks })` );
     }
 }
