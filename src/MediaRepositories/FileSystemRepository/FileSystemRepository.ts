@@ -4,6 +4,7 @@ import { FileSystemScanner, FileSystemScannerConfig } from "./FileSystemScanner"
 import { filter, map } from "data-async-iterators";
 import { Settings } from "../../MediaScrapers/Settings";
 import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
+import { CacheOptions } from '../../MediaScrapers/ScraperCache';
 import * as fs from 'mz/fs';
 
 export class FileSystemRepository extends MediaRepository {
@@ -79,8 +80,8 @@ export class FileSystemRepository extends MediaRepository {
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap() ) : AsyncIterable<T> {
-        let records = this.scanner.scan( ignore ) as AsyncIterable<T>;
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap(), cache : CacheOptions = {} ) : AsyncIterable<T> {
+        let records = this.scanner.scan( ignore, cache ) as AsyncIterable<T>;
 
         if ( filterKind ) {
             records = filter( records, record => filterKind.includes( record.kind ) );

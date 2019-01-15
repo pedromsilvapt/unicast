@@ -6,6 +6,7 @@ import { BackgroundTask } from "./BackgroundTask";
 import { MediaManager } from "./UnicastServer";
 import { Future } from "@pedromsilva/data-future";
 import { IMediaRepository } from "./MediaRepositories/MediaRepository";
+import { CacheOptions } from './MediaScrapers/ScraperCache';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -13,6 +14,7 @@ export interface MediaSyncOptions {
     cleanMissing : boolean;
     refetchExisting : boolean;
     dryRun : boolean;
+    cache ?: CacheOptions;
 }
 
 export class MediaSync {
@@ -159,7 +161,7 @@ export class MediaSync {
                     ? createRecordsMap<MediaRecord>() 
                     : await this.findRepositoryRecordsMap( repository );
 
-                for await ( let media of repository.scan( options.kinds, recordsToIgnore ) ) {
+                for await ( let media of repository.scan( options.kinds, recordsToIgnore, options.cache || {} ) ) {
                     task.addTotal( 1 );
                     
                     media = { ...media };
