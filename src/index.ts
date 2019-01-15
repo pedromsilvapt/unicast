@@ -7,11 +7,11 @@ import { YoutubeMediaProvider } from "./MediaProviders/YoutubeProvider/YoutubeMe
 import { TheTVDB } from "./MediaScrapers/TheTVDB/TheTVDB";
 import { TheMovieDB } from "./MediaScrapers/TheMovieDB/TheMovieDB";
 import { FileSystemRepositoryFactory } from "./MediaRepositories/FileSystemRepository/FileSystemRepositoryFactory";
-import { ToolFactory } from "./Tools/ToolsManager";
 import { UpdatePathsTool } from "./Tools/UpdatePaths";
 import { SetArtworkTool } from "./Tools/SetArtwork";
 import { LoadArtworkTool } from "./Tools/LoadArtwork";
 import { ExportDatabaseTool } from "./Tools/ExportDatabase";
+import { ImportDatabaseTool } from './Tools/ImportDatabase';
 import { AddCustomTool } from "./Tools/AddCustom";
 import { TestTool, ToolFactory } from "./Tools/Tool";
 
@@ -38,6 +38,7 @@ server.tools.add( new ToolFactory( UpdatePathsTool ) );
 server.tools.add( new ToolFactory( SetArtworkTool ) );
 server.tools.add( new ToolFactory( LoadArtworkTool ) );
 server.tools.add( new ToolFactory( ExportDatabaseTool ) );
+server.tools.add( new ToolFactory( ImportDatabaseTool ) );
 server.tools.add( new ToolFactory( AddCustomTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 

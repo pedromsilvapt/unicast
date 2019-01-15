@@ -1,6 +1,7 @@
 import { UnicastServer } from "../UnicastServer";
 import { Future } from "@pedromsilva/data-future";
 import { DiagnosticsService } from "../Diagnostics";
+import * as Case from 'case';
 
 export enum ToolValueType {
     String = 'string',
@@ -37,7 +38,7 @@ export class ToolOption {
 
     constructor ( name : string ) {
         this.name = name;
-        this.saveToName = name;
+        this.saveToName = Case.camel( name );
     }
 
     saveTo ( name : string ) : this {
@@ -76,8 +77,8 @@ export class ToolOption {
         return this;
     }
 
-    setAllowedValues ( values : any[] ) : this {
-        this.allowedValues = values;
+    setAllowedValues ( values : Iterable<any> ) : this {
+        this.allowedValues = Array.from( values );
 
         return this;
     }
@@ -95,6 +96,14 @@ export class ToolOption {
     }
 
     receive ( options : any, exists : boolean, value : any ) : void {
+        if ( value instanceof Array ) {
+            for ( let individualValue of value ) {
+                this.receive( options, exists, individualValue );
+            }
+
+            return;
+        }
+
         if ( !exists && this.defaultValue ) {
             options[ this.saveToName ] = this.defaultValue;
         } else if ( exists ) {
