@@ -14,7 +14,16 @@ export class ProvidersController extends BaseController {
         const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
 
         const [ task, done ] = BackgroundTask.fromPromise( async task => {
-            const options : Partial<MediaSyncOptions> = { kinds, cleanMissing: false, dryRun: req.query.dryRun === 'true', refetchExisting: false };
+            const options : Partial<MediaSyncOptions> = { 
+                kinds, 
+                cleanMissing: req.query.cleanMissing == 'true', 
+                dryRun: req.query.dryRun === 'true', 
+                refetchExisting: req.query.refetchExisting == 'true',
+                cache: {
+                    readCache: req.query[ 'cache[read]' ] != 'false',
+                    writeCache: req.query[ 'cache[write]' ] != 'false'
+                }
+            };
 
             this.server.diagnostics.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );
 
@@ -49,25 +58,6 @@ export class ProvidersController extends BaseController {
         const id : string = req.params.id;
 
         return this.server.tasks.get( id );
-    }
-
-    @Route( [ 'post', 'get' ], '/clean' )
-    async clean ( req : Request, res : Response ) : Promise<BackgroundTask> {
-        const kinds : MediaKind[] = req.query.kinds || null;
-        
-        const database = this.server.database;
-        
-        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
-
-        const [ task, done ] = BackgroundTask.fromPromise( task => sync.run( task, { kinds, cleanMissing: true, dryRun: req.query.dryRun === 'true' } ) );
-        
-        this.server.tasks.register( task );
-
-        if ( req.query.wait === 'true' ) {
-            await done;
-        }
-
-        return task;
     }
 
     @Route( [ 'post', 'get' ], '/repair' )
