@@ -899,6 +899,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         { name: 'number' },
         { name: 'tvSeasonId' },
         { name: 'lastPlayed' },
+        { name: 'airedAt' },
         { name: 'addedAt' }
     ];
 
