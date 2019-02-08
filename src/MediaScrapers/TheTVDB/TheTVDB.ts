@@ -125,10 +125,10 @@ export class TheTVDB implements IScraper {
                     const [ isNative, fetcher ] = keysMapper[ source ];
 
                     if ( isNative )  {
-                        const result = await fetcher( external[ source ] );
+                        const results = await fetcher( external[ source ] );
     
-                        if ( result ) {
-                            return this.getTvShow( result.id, cache );
+                        if ( results.length > 0 ) {
+                            return this.getTvShow( results[ 0 ].id, cache );
                         }
                     } else {
                         const result = await fetcher( external[ source ], cache );
@@ -249,8 +249,23 @@ export class TheTVDB implements IScraper {
         } ) );
     }
     
-    getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
-        return Promise.resolve( [] );
+    async getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+        if ( kind && kind != ArtRecordKind.Thumbnail ) {
+            return [];
+        }
+
+        const episode = await this.getTvEpisode( id, cache );
+
+        if ( !episode ) {
+            return [];
+        }
+
+        return [ { 
+            url: episode.art.thumbnail,
+            kind: ArtRecordKind.Thumbnail,
+            height: null,
+            width: null
+        } ];
     }
 
     getTvEpisode ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {

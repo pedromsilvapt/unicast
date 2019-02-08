@@ -55,6 +55,17 @@ export class TheMovieDB implements IScraper {
         return this.cache.set<T>( key, runner(), options );
     }
 
+    protected async getConfiguration ( cache : CacheOptions = {} ) : Promise<any> {
+        return this.runCachedTask<any>( 'getConfiguration', '', () => this.moviedb.configuration(), cache );
+    }
+
+    protected async getArtPath ( filePath : string, width : number | string = 'original', cache : CacheOptions = {} ) : Promise<string> {
+        const configuration = await this.getConfiguration();
+
+        return configuration.images.base_url + ( typeof width === 'number' ? `w${ width }` : width ) + filePath;
+    }
+
+
     protected getExternalCacheKey ( external : ExternalReferences ) : string {
         return Object.keys( external ).sort().map( key => '' + key + '=' + external[ key ]  ).join( ',' );
     }
@@ -98,7 +109,33 @@ export class TheMovieDB implements IScraper {
     }
 
     getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
-        throw new Error("Method not implemented.");
+        return this.runCachedTask<ArtRecord[]>( 'getMovieArt', id + kind, async () => {
+            const rawMovie = await this.moviedb.movieImages( { id: id } );
+
+            const artwork : ArtRecord[] = [];
+    
+            const keys = { 'backdrops': ArtRecordKind.Background, 'posters': ArtRecordKind.Poster };
+    
+            for ( let key of Object.keys( keys ) ) {
+                const kind : ArtRecordKind = keys[ key ];
+    
+                for ( let art of rawMovie[ key ] ) {
+                    artwork.push( {
+                        url: await this.getArtPath( art.file_path, 'original',  ),
+                        height: art.height,
+                        width: art.width,
+                        score: art.vote_average,
+                        kind: kind
+                    } );
+                }
+            }
+
+            if ( kind ) {
+                return artwork.filter( art => art.kind == kind );
+            }
+    
+            return artwork;
+        }, cache );
     }
 
     getMovieExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {

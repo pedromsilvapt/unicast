@@ -78,6 +78,39 @@ export class ScrapersController extends BaseController {
 
         return record;
     }
+    
+    @Route( 'get', '/all/:kind/external/artwork' )
+    async getAllExternalArtwork ( req : Request, res : Response ) : Promise<ArtRecord[]> {
+        const kind : MediaKind = req.params.kind;
+        
+        const external : ExternalReferences = req.query.external;
+
+        if ( ![ MediaKind.Movie, MediaKind.TvSeason, MediaKind.TvShow, MediaKind.TvEpisode ].includes( kind ) ) {
+            throw new InvalidArgumentError( `Invalid kind argument, expected "movie", "show", "season" or "episode".` );
+        }
+
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const scrapers = this.server.scrapers;
+
+        const artworks = await Promise.all( Array.from( scrapers.keys() ).map( async name => {
+            try {
+                const record = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
+
+                if ( !record ) {
+                    return [];
+                }
+
+                return scrapers.getMediaArtwork( name, kind, record.id );
+            } catch ( error ) {
+                this.server.onError.notify( error );
+                
+                return [];
+            }
+        } ) );
+
+        return artworks.reduce( ( memo, items ) => memo.concat( items ), [] );
+    }
 
     @Route( 'get', '/:scraper/:kind/external/artwork' )
     async getExternalArtwork ( req : Request, res : Response ) : Promise<ArtRecord[]> {
