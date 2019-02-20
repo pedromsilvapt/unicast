@@ -181,6 +181,7 @@ export class TranscodingSession<O = any> {
             current: 0,
             duration: 0,
             speed: 1,
+            stable: true,
             task: this.task.id
         };
     }

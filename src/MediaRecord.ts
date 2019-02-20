@@ -126,8 +126,8 @@ export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
 
 export interface CustomMediaRecord extends PlayableMediaRecord {
     kind: MediaKind.Custom;
-    subtitle: string;
-    plot: string;
+    subtitle ?: string;
+    plot ?: string;
 }
 
 
@@ -142,7 +142,6 @@ export function createRecordsMap <T> () : RecordsMap<T> {
 
     return map;
 }
-
 
 export type RecordsSet = Map<MediaKind, Set<string>>;
 

@@ -34,6 +34,7 @@ export interface ReceiverTimeStatus {
 
 export interface ReceiverTranscodingStatus extends ReceiverTimeStatus {
     task : string;
+    stable : boolean;
 }
 
 export interface ReceiverVolumeStatus {

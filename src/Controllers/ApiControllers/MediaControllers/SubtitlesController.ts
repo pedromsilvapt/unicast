@@ -5,7 +5,7 @@ import { ILocalSubtitle } from "../../../Subtitles/SubtitlesManager";
 import { MpvController } from "../../../Subtitles/Validate/MPV/Controller";
 import { MediaKind, PlayableMediaRecord, TvEpisodeMediaRecord, isPlayableRecord } from "../../../MediaRecord";
 import { MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
-import { FileSystemVideoMediaStream } from "../../../MediaProviders/FileSystemMediaProvider/MediaStreams/FileSystemVideoStream";
+import { FileSystemVideoMediaStream } from '../../../Extensions/MediaProviders/FileSystem/MediaStreams/FileSystemVideoStream';
 import { Semaphore } from "data-semaphore";
 import * as sortBy from 'sort-by';
 import { MpvSynchronizerController } from "../../../Subtitles/Validate/MPV/SynchronizerController";

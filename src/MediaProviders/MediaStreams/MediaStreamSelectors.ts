@@ -1,7 +1,7 @@
 import { VideoMediaStream } from './VideoStream';
 import { SubtitlesMediaStream } from './SubtitlesStream';
-import { MediaStream, MediaStreamType } from './MediaStream';
-import { Class } from '../../Tools/ToolsManager';
+import { MediaStream } from './MediaStream';
+import { Class } from '../../Tools/Tool';
 
 export class MediaStreamSelectors {
     static ofType<T extends MediaStream> ( streams : Iterable<MediaStream> | MediaStream[], type : Class<T> ): T[] {
