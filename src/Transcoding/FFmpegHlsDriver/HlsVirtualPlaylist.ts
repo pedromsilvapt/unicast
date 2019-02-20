@@ -1,13 +1,12 @@
 import { FFmpegHlsDriver } from "./FFmpegHlsDriver";
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import * as strToStream from 'string-to-stream';
+import { FFmpegHlsTranscodingTask } from './FFmpegHlsTranscodingTask';
 
 export class HlsVirtualPlaylist {
     protected buffer : Buffer;
 
-    driver : FFmpegHlsDriver;
-
-    input : VideoMediaStream;
+    task : FFmpegHlsTranscodingTask;
 
     get length () : number {
         if ( !this.buffer ) {
@@ -17,26 +16,31 @@ export class HlsVirtualPlaylist {
         return this.buffer.length;
     }
 
-    constructor ( driver : FFmpegHlsDriver, input : VideoMediaStream ) {
-        this.driver = driver;
-        this.input = input;
+    constructor ( task : FFmpegHlsTranscodingTask ) {
+        this.task = task;
 
-        this.buffer = this.create( driver, input );
+        this.buffer = this.create();
     }
 
-    protected create ( driver, input ) : Buffer {
+    protected create () : Buffer {
         const lines : string[] = [];
 
-        const duration : number = this.driver.getSegmentDuration();
+        const round = ( n : any, d : any ) => Math.round( n * d ) / d;
+        
+        const decimals = 100000;
+        
+        const duration = round( this.task.getSegmentDuration(), decimals );
+        const lastDuration = round( duration * ( this.task.input.duration % duration ), decimals );
 
-        const dur = 1000 * this.driver.getSegmentDuration();        
+        const initDurationString = '#EXTINF:' + duration + ',';
+        const lastDurationString = '#EXTINF:' + lastDuration + ',';
 
-        const durationString : string = '#EXTINF:' + Math.min( Math.ceil( dur / 23.98 ) * 23.98 / 1000, this.input.duration ) + ',';
+        const totalSegments = Math.ceil( this.task.input.duration / duration );
 
         lines.push( 
             '#EXTM3U',
             '#EXT-X-VERSION:3',
-            '#EXT-X-TARGETDURATION:' + ( duration + 1 ),
+            '#EXT-X-TARGETDURATION:' + ( Math.floor( duration ) + 1 ),
             '#EXT-X-MEDIA-SEQUENCE:0',
             '#EXT-X-PLAYLIST-TYPE:VOD',
             '#EXT-X-DISCONTINUITY'
@@ -44,13 +48,11 @@ export class HlsVirtualPlaylist {
 
         let i = 0;
 
-        for ( let s = 0; s < this.input.duration; i++ ) {
+        for ( let i = 0; i < totalSegments; i++ ) {
             lines.push( 
-                s + duration > this.input.duration ? '#EXTINF:' + ( this.input.duration - s ) + ',' : durationString,
-                ( this.driver.getSegmentLocationPrefix() || '' ) + 'index' + i + '.ts'
+                i == totalSegments - 1 && lastDuration > 0 ? lastDurationString : initDurationString,
+                ( this.task.driver.getSegmentLocationPrefix() || '' ) + 'index' + i + '.ts'
             );
-
-            s += duration;
         }
 
         lines.push( '#EXT-X-ENDLIST' );

@@ -61,6 +61,7 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
     async init () : Promise<void> {
         this.folder = await this.storage.getRandomFolder( 'ffmpeg-hls' );
 
+        // TODO This driver can be used for receivers other than chromecast
         const url = this.storage.server.getUrl( `/media/send/chromecast/${ this.session.receiver }/session/${ this.session.id }/stream/${ this.id }?part=` );
 
         this.driver.setSegmentLocationPrefix( url );
@@ -78,7 +79,9 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
         await this.task.segments.waitFor( 2 );
         
         if ( !this.virtual ) {
-            this.virtual = new HlsVirtualPlaylist( this.driver, this.inputStream );
+            this.virtual = new HlsVirtualPlaylist( this.task );
+
+            await fs.writeFile( path.join( this.folder, 'index.m3u8' ), this.virtual.toBuffer() );
         }
 
         this.size = this.virtual.toBuffer().length;
@@ -160,7 +163,8 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
 
                 break;
             } catch ( error ) {
-                console.error( 'Retry', tries, 'error', error.message );
+                console.error( new Error( `Retry ${ tries } error ${ error.message }` ).message );
+
                 tries++;
 
                 if ( tries >= maxTries ) {

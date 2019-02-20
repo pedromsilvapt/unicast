@@ -1,5 +1,5 @@
-import { EventEmitter }     from 'events';
-import { Client as NativeClient }           from 'castv2-client';
+import { EventEmitter } from 'events';
+import { Client as NativeClient } from 'castv2-client';
 import { Client } from './Interfaces/Client';
 import { Player } from './Interfaces/Player';
 import { Singleton } from '../../../ES2017/Singleton';

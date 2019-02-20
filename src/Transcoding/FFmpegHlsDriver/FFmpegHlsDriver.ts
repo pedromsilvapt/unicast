@@ -3,6 +3,7 @@ import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import { FFmpegDriver } from "../FFmpegDriver/FFmpegDriver";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaRecord } from "../../MediaRecord";
+import { DataAmount, DataUnit } from '../../ES2017/Units';
 
 export class FFmpegHlsDriverFactory extends DriverFactory<FFmpegHlsDriver> {
     constructor () {
@@ -26,6 +27,8 @@ export class FFmpegHlsDriver extends FFmpegDriver {
     protected segmentLocationPrefix : string = null;
 
     protected segmentListSize : number = null;
+
+    protected maxSegmentSize : DataAmount = null;
 
     protected hlsPlaylistType : FFmpegHlsPlaylistType = FFmpegHlsPlaylistType.VideoOnDemand;
 
@@ -71,6 +74,16 @@ export class FFmpegHlsDriver extends FFmpegDriver {
         this.segmentListSize = size;
         
         return this;
+    }
+
+    setMaxSegmentSize ( size : number | string | DataAmount ) : this {
+        this.maxSegmentSize = DataAmount.parse( size );
+
+        return this;
+    }
+
+    getMaxSegmentSize () : DataAmount {
+        return this.maxSegmentSize;
     }
 
     setHlsFlags ( flags : FFmpegHlsFlag[] ) : this {
@@ -164,10 +177,18 @@ export class FFmpegHlsDriver extends FFmpegDriver {
             // TODO Framerate
             const framesPerSegment = Math.ceil( this.segmentDuration * this.framerate );
 
-            // args.push( '-force_key_frames', `expr:gte(t,n_forced*${ this.segmentDuration })` );
-
             args.push( '-g', '' + Math.ceil( framesPerSegment ), '-keyint_min', '' + Math.ceil( framesPerSegment ), '-sc_threshold', '0' );
+            args.push( '-force_key_frames', `expr:gte(t,n_forced*${ this.segmentDuration })` );
             // args.push( '-x264opts', `keyint=${framesPerSegment}:min-keyint=${framesPerSegment}:no-scenecut` );
+        }
+
+        if ( this.maxSegmentSize !== null ) {
+            const bufferSize = this.maxSegmentSize;
+            const maxRate = bufferSize.minus( '1MB' ).div( this.segmentDuration );
+            
+            console.log( `${ maxRate.as( DataUnit.KILOBITS, 0 ) }k`, `${ bufferSize.as( DataUnit.KILOBITS, 0 ) }k` )
+
+            args.push( '-maxrate', maxRate.as( DataUnit.KILOBITS, 0 ) + 'k', '-bufsize', bufferSize.as( DataUnit.KILOBITS, 0 ) + 'k' );
         }
 
         // args.push( '-ar', '44100' );
@@ -186,6 +207,7 @@ export class FFmpegHlsDriver extends FFmpegDriver {
         this.segmentStartNumber = driver.segmentStartNumber;
         this.segmentDuration = driver.segmentDuration;
         this.segmentLocationPrefix = driver.segmentLocationPrefix;
+        this.maxSegmentSize = driver.maxSegmentSize;
         this.hlsFlags = new Set( driver.hlsFlags || [] );
         this.segmentListSize = driver.segmentListSize;
         this.hlsPlaylistType = driver.hlsPlaylistType;

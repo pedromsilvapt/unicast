@@ -58,20 +58,34 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         this.scheduler.on( 'cancel-job', ( job : SegmentsSchedulerJob ) => setTimeout( () => this.destroyProcess( job.id ), 2000 ) );
     }
 
+    getVideoSegmentDuration () {
+        const video = this.input.metadata.tracks.find( track => track.type === 'video' );
+                
+        const videoFrame = ( 1 / video.framerate );
+
+        return Math.ceil( this.driver.getSegmentDuration() / videoFrame ) * videoFrame;
+    }
+
+    getAudioSegmentDuration () {
+        const audio = this.input.metadata.tracks.find( track => track.type === 'audio' );
+                
+        const audioFrame = ( 1024 / audio.sampleRate );
+
+        return Math.ceil( 3 / audioFrame ) * audioFrame;
+    }
+
+    getSegmentDuration () {
+        return Math.min( this.getVideoSegmentDuration(), this.input.duration );
+    }
+
     getSegmentTime ( index : number ) : number {
-        const framerate = this.input.metadata.tracks.find( track => track.type == 'video' ).framerate;
-
-        const dur = 1000 * this.driver.getSegmentDuration();        
-
-        return Math.min( index * Math.ceil( dur / framerate ) * framerate / 1000, this.input.duration );
+        console.log( 'getSegmentTime', index, 'output', Math.min( index * this.getSegmentDuration(), this.input.duration ), 'duration', this.getSegmentDuration() );
+        return Math.min( index * this.getSegmentDuration(), this.input.duration );
     }
 
     getTimeSegment ( time : number ) : number {
-        const framerate = this.input.metadata.tracks.find( track => track.type == 'video' ).framerate;
-
-        const dur = 1000 * this.driver.getSegmentDuration();
-
-        return Math.floor( time / ( Math.ceil( dur / framerate ) * framerate / 1000 ) );
+        console.log( 'getTimeSegment', time, 'output', Math.floor( time / this.getSegmentDuration() ), 'duration', this.getSegmentDuration() );
+        return Math.floor( time / this.getSegmentDuration() );
     }
 
     destroyProcess ( id : string ) {

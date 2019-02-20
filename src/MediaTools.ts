@@ -22,6 +22,7 @@ export class MediaTools {
             }
         }
 
+        // console.log( tracks );
         return tracks.map<TrackMediaMetadata>( track => ( {
             index: track.index,
             typeIndex: track.typeIndex,
@@ -35,6 +36,8 @@ export class MediaTools {
             height: +track.height,
             aspectRatio: track.display_aspect_ratio,
             framerate: fps( track.r_frame_rate ),
+            sampleRate: +track.sample_rate,
+            channels: +track.channels,
             // Track each stream's duration as well
             duration: null
         } ) );
@@ -90,7 +93,7 @@ export interface TrackMediaMetadata {
     index: number;
     typeIndex: string;
     file: number;
-    type: string;
+    type: 'video' | 'audio' | string;
     codec: string;
     bitrate: number;
     size: number;
@@ -99,6 +102,8 @@ export interface TrackMediaMetadata {
     height: number;
     aspectRatio: string;
     framerate: number;
+    sampleRate: number;
+    channels: number;
     duration: number;
 }
 

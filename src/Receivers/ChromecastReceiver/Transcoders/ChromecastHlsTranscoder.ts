@@ -12,6 +12,7 @@ import { MediaTrigger } from "../../../TriggerDb";
 import { TrackMediaMetadata, FileMediaMetadata } from "../../../MediaTools";
 import * as chalk from 'chalk';
 import { evaluate } from "../../../Config";
+import { DataAmount } from '../../../ES2017/Units';
 
 export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOptions> {
     receiver : ChromecastReceiver;
@@ -24,11 +25,12 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         this.receiver = receiver;
 
         this.options = evaluate<ChromecastTranscoderOptions>( {
-            segmentSize: 3,
+            segmentLength: 3,
             maxBitrate: 12000000,
-            constantRateFactor: 22,
+            constantRateFactor: 18,
             minimumCompression: ops => ops.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264 ? 20 : null,
             maximumCompression: ops => ops.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264 ? 28 : null,
+            maxSegmentSize: '5mb',
             maxResolution: { width: 1920, height : 1080 },
             supportedVideoCodecs: [ 'h264' ],
             supportedAudioCodecs: [ 'aac', 'ac3' ],
@@ -103,7 +105,9 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             
             driver.setConstantRateFactor( options.constantRateFactor );
             
-            driver.setSegmentDuration( options.segmentSize );
+            driver.setSegmentDuration( options.segmentLength );
+
+            driver.setMaxSegmentSize( DataAmount.parse( options.maxSegmentSize ) );
 
             driver.setForceKeyFrames( true );
 
@@ -165,7 +169,8 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
 }
 
 export interface ChromecastTranscoderOptions {
-    segmentSize : number;
+    segmentLength : number;
+    maxSegmentSize : number | string | DataAmount;
     maxBitrate : number;
     constantRateFactor : number;
     minimumCompression: number;

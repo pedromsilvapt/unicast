@@ -77,20 +77,24 @@ export class MediaSessionsManager {
             const id = status.media.session.id;
     
             const history = await this.mediaManager.database.tables.history.get( id );
-    
+
             if ( history ) {
-                const lastIndex = history.positionHistory.length - 1;
+                let lastIndex = history.positionHistory.length - 1;
 
-                const last = history.positionHistory[ lastIndex ];
-
-                if ( history.positionHistory.length <= 1 || last.end - last.start > 20 ) {
-                    history.position = status.media.time.current;
-                }
+                let last = history.positionHistory[ lastIndex ];
 
                 if ( Math.abs( history.position - last.end ) <= 60 ) {
                     history.positionHistory[ lastIndex ].end = history.position;
                 } else {
                     history.positionHistory.push( { start: history.position, end: history.position } );
+
+                    lastIndex += 1;
+                    
+                    last = history.positionHistory[ lastIndex ];
+                }
+
+                if ( history.positionHistory.length <= 1 || last.end - last.start > 20 ) {
+                    history.position = status.media.time.current;
                 }
 
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
