@@ -69,4 +69,6 @@ lib/
 
 .fusebox
 
-dist/
+/dist/
+
+/builds/

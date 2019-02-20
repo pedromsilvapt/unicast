@@ -7,6 +7,7 @@
         "skipLibCheck": true,
         "noImplicitAny": false,
         "sourceMap": true,
+        "allowJs": true,
         "outDir": "lib/",
         "lib": [
             "es7", "esnext"

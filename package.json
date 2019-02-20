@@ -2,9 +2,20 @@
   "name": "unicast",
   "version": "2.6.0",
   "description": "21st Century Media Center",
-  "main": "index.js",
+  "main": "lib/cli.js",
+  "bin": "lib/cli.js",
+  "pkg": {
+    "scripts": "lib/**/*.js",
+    "assets": [
+      "src/**/*.js",
+      "node_modules/castv2/**/*.proto",
+      "node_modules/moviedb-api/apib/endpoints.json",
+      "node_modules/unicast-interface/dist/**/*",
+      "node_modules/sharp/build/Release/**/*"
+    ]
+  },
   "scripts": {
-    "start": "node dist/app.js --env-NODE_ENV=release",
+    "start": "node lib/cli.js --env-NODE_ENV=release",
     "test": "tape \"lib/**/*.test.js\" | \"node_modules/.bin/tap-spec\""
   },
   "author": "Pedro M. Silva <pemiolsi@hotmail.com>",
@@ -23,9 +34,10 @@
     "@types/superagent": "^3.5.5",
     "blue-tape": "^1.0.0",
     "fuse-box": "^3.1.3",
+    "pkg": "^4.3.4",
     "tap-spec": "^4.1.1",
     "tape": "^4.8.0",
-    "typescript": "^2.6.2"
+    "typescript": "^3.2.1"
   },
   "dependencies": {
     "@pedromsilva/data-future": "^1.1.2",

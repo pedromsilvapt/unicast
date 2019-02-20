@@ -30,6 +30,7 @@ import { serveMedia } from "./ES2017/HttpServeMedia";
 import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
 import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
+import { ExtensionsManager } from "./ExtensionsManager";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -78,6 +79,8 @@ export class UnicastServer {
 
     readonly tools : ToolsManager;
 
+    readonly extensions : ExtensionsManager;
+
     protected cachedIpV4 : string;
 
     isHttpsEnabled : boolean = false;
@@ -118,6 +121,8 @@ export class UnicastServer {
         this.commands = new CommandsManager( this );
 
         this.tools = new ToolsManager( this );
+
+        this.extensions = new ExtensionsManager( this );
 
         if ( Config.get<boolean>( 'server.ssl.enabled' ) && fs.existsSync( './server.key' ) ) {
             const keyFile = Config.get<string>( 'server.ssl.key' );
@@ -172,7 +177,7 @@ export class UnicastServer {
         } ) );
 
         this.onError.subscribe( error => {
-            this.diagnostics.error( 'unhandled', error.message, error );
+            this.diagnostics.error( 'unhandled', error.message + error.stack, error );
         } );
     }
 
@@ -210,6 +215,8 @@ export class UnicastServer {
 
     async listen () : Promise<void> {
         this.cachedIpV4 = await internalIp.v4();
+
+        await this.extensions.load();
 
         await this.onStart.notify();
 

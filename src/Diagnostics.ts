@@ -155,6 +155,10 @@ export class DiagnosticsService {
     fatal ( message : string, data ?: object ) : void {
         this.diagnostics.fatal( this.key, message, data );
     }
+
+    service ( name : string ) : DiagnosticsService {
+        return this.diagnostics.service( this.key + '/' + name );
+    }
 }
 
 export class Logger {
