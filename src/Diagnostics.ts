@@ -6,6 +6,7 @@ import * as makeDir from 'make-dir';
 import * as fs from 'mz/fs';
 import * as tpl from 'mnml-tpl';
 import { format } from "date-fns";
+import * as stripAnsi from 'strip-ansi';
 import * as chalk from 'chalk';
 import * as path from 'path';
 
@@ -68,7 +69,7 @@ export class Diagnostics {
         }
 
         this.logger.write( 'log', {
-            level, key, message, data
+            level, key, message: stripAnsi( message ), data
         } );
     }
 
