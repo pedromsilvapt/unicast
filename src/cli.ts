@@ -5,8 +5,14 @@ argvSetEnv( { prefix: '--env' } );
 
 import { server } from './index';
 
+let closed = false;
+
 Keyboard.setup( async () => {
-    await server.close( 15 * 1000 ),
+    if ( !closed ) {
+        closed = true;
+
+        await server.close( 15 * 1000 );
+    }
 
     Keyboard.close();
 
