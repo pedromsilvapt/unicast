@@ -107,6 +107,7 @@
     "srt-to-vtt": "^1.1.1",
     "stream-to-string": "^1.1.0",
     "string-to-stream": "^1.1.0",
+    "strip-ansi": "^5.0.0",
     "subbox": "^0.1.7",
     "subtitler": "^2.6.0",
     "subtitles-parser": "0.0.2",

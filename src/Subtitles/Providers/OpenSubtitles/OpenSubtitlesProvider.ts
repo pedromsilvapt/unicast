@@ -109,49 +109,57 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
             encoding: null
         } );
 
+        if ( content.body.length < 1000 && content.body.toString( 'utf8' ).startsWith( 'Incorrect download parameters detected;' ) ) {
+            throw new Error( content.body.toString( 'utf8' ) );
+        }
+
         let result = new Promise<NodeJS.ReadableStream>( ( resolve, reject ) => {
             yauzl.fromBuffer( content.body, { lazyEntries: true }, ( err, file ) => {
-                if ( file.entryCount > 100 ) {
-                    return reject( new Error( `Too many files in the zip "${ file.entryCount }".` ) );
-                }
-
-                let foundSubs : boolean = false;
-                
-                if ( err ) {
-                    return reject( err );
-                }
-
-                file.readEntry();
-
-                file.on( 'entry', entry => {
-                    if ( isSubtitle( entry.fileName ) ) {
-                        file.openReadStream( entry, ( err, stream : NodeJS.ReadableStream ) => {
-                            if ( err ) {
-                                return reject( err );
-                            }
-
-                            foundSubs = true;
-
-                            stream = stream
-                                .pipe( iconv.decodeStream( subtitle.encoding || 'CP1252' ) )
-                                .pipe( iconv.encodeStream( 'utf8' ) );
-
-                            resolve( stream );
-                        } );
-
-                        file.close();
-                    } else {
-                        file.readEntry();
+                try {
+                    if ( err ) {
+                        return reject( err );
                     }
-                } );
 
-                file.on( 'end', () => {
-                    if ( !foundSubs ) {
-                        reject( new Error( `Could not find subtitles.` ) );
+                    if ( file.entryCount > 100 ) {
+                        return reject( new Error( `Too many files in the zip "${ file.entryCount }".` ) );
                     }
-                } );
-
-                file.on( 'error', reject );
+    
+                    let foundSubs : boolean = false;
+                    
+                    file.readEntry();
+    
+                    file.on( 'entry', entry => {
+                        if ( isSubtitle( entry.fileName ) ) {
+                            file.openReadStream( entry, ( err, stream : NodeJS.ReadableStream ) => {
+                                if ( err ) {
+                                    return reject( err );
+                                }
+    
+                                foundSubs = true;
+    
+                                stream = stream
+                                    .pipe( iconv.decodeStream( subtitle.encoding || 'CP1252' ) )
+                                    .pipe( iconv.encodeStream( 'utf8' ) );
+    
+                                resolve( stream );
+                            } );
+    
+                            file.close();
+                        } else {
+                            file.readEntry();
+                        }
+                    } );
+    
+                    file.on( 'end', () => {
+                        if ( !foundSubs ) {
+                            reject( new Error( `Could not find subtitles.` ) );
+                        }
+                    } );
+    
+                    file.on( 'error', reject );
+                } catch ( error ) {
+                    reject( error );
+                }
             } );
         } );
 
