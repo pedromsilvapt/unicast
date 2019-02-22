@@ -16,7 +16,7 @@ export class TheMovieDB implements IScraper {
 
     cache : AsyncCache<any> = new AsyncCache();
 
-    protected factory : MediaRecordFactory = new MediaRecordFactory();
+    protected factory : MediaRecordFactory;
 
     protected moviedb : MovieDB;
 
@@ -25,6 +25,8 @@ export class TheMovieDB implements IScraper {
             consume: true,
             apiKey: apiKey
         } );
+
+        this.factory = new MediaRecordFactory( this );
     }
 
     onEntityInit () {

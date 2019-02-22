@@ -22,7 +22,7 @@ export class TheTVDB implements IScraper {
     constructor ( apiKey : string ) {
         this.tvdb = new TVDB( apiKey );
 
-        this.factory = new MediaRecordFactory();
+        this.factory = new MediaRecordFactory( this );
     }
 
     onEntityInit () {

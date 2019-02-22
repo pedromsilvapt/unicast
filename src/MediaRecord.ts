@@ -62,6 +62,7 @@ export interface MediaRecord {
     id ?: string;
     internalId : string;
     repository ?: string;
+    scraper ?: string;
     kind : MediaKind;
     title : string;
     art : MediaRecordArt;

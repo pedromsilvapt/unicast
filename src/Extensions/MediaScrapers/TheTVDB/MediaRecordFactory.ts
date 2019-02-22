@@ -1,5 +1,6 @@
 import { TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MediaKind, ArtRecord, MediaRecordArt } from "../../../MediaRecord";
 import * as sortBy from 'sort-by';
+import { TheTVDB } from './TheTVDB';
 
 export function parseDate ( data : string ) : Date {
     if ( !data ) {
@@ -71,6 +72,12 @@ export interface TvDbEpisode {
 }
 
 export class MediaRecordFactory {
+    scraper : TheTVDB;
+
+    constructor ( scraper : TheTVDB ) {
+        this.scraper = scraper;
+    }
+
     createTvShowMediaRecordArt ( art : ArtRecord[] ) : MediaRecordArt {
         const poster = art.sort( ( a, b ) => sortBy( '-score' ) ).find( art => art.kind == 'poster' && typeof art.season != 'number' );
         const background = art.sort( ( a, b ) => sortBy( '-score' ) ).find( art => art.kind == 'background' && typeof art.season != 'number' );
@@ -90,6 +97,7 @@ export class MediaRecordFactory {
             : null;
 
         return {
+            scraper: this.scraper.name,
             kind: MediaKind.TvShow,
             addedAt: null,
             episodesCount: summary.airedEpisodes,

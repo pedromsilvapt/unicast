@@ -1,4 +1,5 @@
 import { MovieMediaRecord, MediaKind } from "../../../MediaRecord";
+import { TheMovieDB } from './TheMovieDB';
 
 export interface MovieDBMovie {
     adult: boolean;
@@ -8,44 +9,44 @@ export interface MovieDBMovie {
         name: string;
         poster_path: string;
         backdrop_path: string;
-    }
+    };
     budget: number;
     genres: { id: number, name: string }[];
     homepage: string;
     id: number;
     imdb_id: string;
-    original_language: string,
-    original_title: string,
+    original_language: string;
+    original_title: string;
     overview: string;
-    popularity: number,
-    poster_path: string,
+    popularity: number;
+    poster_path: string;
     production_companies:{ 
-        id: number,
-        logo_path: string,
-        name: string,
+        id: number;
+        logo_path: string;
+        name: string;
         origin_country: string 
-    }[]
-    production_countries: { iso_3166_1: string, name: string }[]
-    release_date: string,
-    revenue: number,
-    runtime: number,
-    spoken_languages: { iso_639_1: string, name: string }[],
-    status: string,
-    tagline: string,
-    title: string,
-    video: boolean,
-    vote_average: number,
-    vote_count: number
+    }[];
+    production_countries: { iso_3166_1: string; name: string }[];
+    release_date: string;
+    revenue: number;
+    runtime: number;
+    spoken_languages: { iso_639_1: string; name: string }[];
+    status: string;
+    tagline: string;
+    title: string;
+    video: boolean;
+    vote_average: number;
+    vote_count: number;
 }
 
 export interface MovieDBMovieReleaseDate {
     iso_3166_1: string;
     release_dates: { 
-        certification: string,
-        iso_639_1: string,
-        note: string,
-        release_date: string,
-        type: number
+        certification: string;
+        iso_639_1: string;
+        note: string;
+        release_date: string;
+        type: number;
     }[];
 }
 
@@ -60,6 +61,12 @@ export function parseDate ( data : string ) : Date {
 }
 
 export class MediaRecordFactory {
+    scraper : TheMovieDB;
+    
+    constructor ( scraper : TheMovieDB ) {
+        this.scraper = scraper;
+    }
+
     createMovieMediaRecord ( movie : MovieDBMovie, releaseDates : MovieDBMovieReleaseDate[] ) : MovieMediaRecord {
         const year = movie.release_date
             ? +movie.release_date.split( '-' )[ 0 ]
@@ -79,6 +86,7 @@ export class MediaRecordFactory {
         const parentalRating = release ? release.release_dates[ 0 ].certification : null;
 
         return {
+            scraper: this.scraper.name,
             kind: MediaKind.Movie,
             addedAt: null,
             external: {
