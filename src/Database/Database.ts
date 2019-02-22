@@ -15,7 +15,7 @@ import { BelongsToOneRelation } from './Relations/OneToOneRelation';
 import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
 import { Hook } from '../Hookable';
 import * as equals from 'fast-deep-equal';
-import { toArray } from 'data-async-iterators';
+import { toArray, AsyncStream } from 'data-async-iterators';
 import { collect, groupingBy, first } from 'data-collectors';
 import { ComposedTask } from '../BackgroundTask';
 
@@ -470,7 +470,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         return toArray( this.findStream<T>( query ) );
     }
 
-    async * findStream<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : AsyncIterableIterator<T> {
+    protected async * findStreamIterator<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : AsyncIterableIterator<T> {
         const connection = await this.pool.acquire();
 
         try {
@@ -498,6 +498,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
         } finally {
             await this.pool.release( connection );
         }
+    }
+
+    findStream<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : AsyncStream<T> {
+        return AsyncStream.dynamic( () => this.findStreamIterator( query ) );
     }
 
     async findOne<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : Promise<T> {

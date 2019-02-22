@@ -51,7 +51,7 @@
     "chalk": "^2.1.0",
     "composable": "^0.2.4",
     "config": "^1.26.2",
-    "data-async-iterators": "^1.2.1",
+    "data-async-iterators": "^1.4.0",
     "data-cancel-token": "^0.5.3",
     "data-collectors": "^1.0.1",
     "data-optional": "0.0.2",
