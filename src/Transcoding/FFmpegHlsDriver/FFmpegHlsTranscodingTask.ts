@@ -320,7 +320,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
             
             await this.driver.server.storage.ensureDir( path.join( this.mainTask.destination, id ) );
 
-            const args = [ ...this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), path.join( this.mainTask.destination, id, 'index.m3u8' ) ];
+            const args = [ ...await this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), path.join( this.mainTask.destination, id, 'index.m3u8' ) ];
 
             console.log( args.join( ' ' ) );
 

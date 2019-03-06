@@ -130,12 +130,12 @@ export class FFmpegHlsDriver extends FFmpegDriver {
         return this;
     }
 
-    getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : string[] {
+    async getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : Promise<string[]> {
         if ( this.copyTimestamps && typeof this.startTime === 'number' ) {
             this.outputDuration += this.startTime;
         }
 
-        const args : string[] = super.getCompiledArguments( record, stream );
+        const args : string[] = await super.getCompiledArguments( record, stream );
 
         if ( this.copyTimestamps && typeof this.startTime === 'number' ) {
             this.outputDuration -= this.startTime;

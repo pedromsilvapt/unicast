@@ -228,8 +228,8 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
         return this.segment.start <= index && this.segment.end >= index && ( this.doneSegment.end || this.segment.start ) + 10 >= index;
     }
 
-    createProcess ( speedMetrics : SpeedMetrics ) {
-        const args = [ ...this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), '-loglevel', 'error', '-stats', path.join( this.mainTask.destination, 'video.mkv' ) ];
+    async createProcess ( speedMetrics : SpeedMetrics ) {
+        const args = [ ...await this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), '-loglevel', 'error', '-stats', path.join( this.mainTask.destination, 'video.mkv' ) ];
 
         this.process = new FFmpegProcess( this.driver.getCommandPath(), args );
 
@@ -269,7 +269,7 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
 
         this.metrics.push( this.speedMetrics );
 
-        this.createProcess( this.speedMetrics );
+        this.createProcess( this.speedMetrics ).catch( err => this.addError( err ) );
     }
 
     onPause () {

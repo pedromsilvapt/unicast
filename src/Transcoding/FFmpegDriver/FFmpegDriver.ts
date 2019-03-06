@@ -2,7 +2,7 @@ import { TranscodingDriver } from "../TranscodingDriver";
 import { DriverFactory } from "../DriverFactory";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaTrigger } from "../../TriggerDb";
-import { boxblur, Stream, blackout, mute, filters, trim, concat } from 'composable';
+import { boxblur, Stream, blackout, mute, filters, concat } from 'composable';
 import { StaticStream } from "composable/lib/Stream";
 import { Compiler } from "composable/lib/Compiler/Compiler";
 import { TrackMediaMetadata, MediaTools } from "../../MediaTools";
@@ -10,6 +10,7 @@ import * as sortBy from 'sort-by';
 import { MediaRecord } from "../../MediaRecord";
 import { VideoMediaStream } from '../../MediaProviders/MediaStreams/VideoStream';
 import { Timemap, CutTimemap, IdentityTimemap } from './Timemap';
+import * as fs from 'mz/fs';
 
 export class FFmpegDriverFactory extends DriverFactory<FFmpegDriver> {
     constructor () {
@@ -406,7 +407,7 @@ export class FFmpegDriver implements TranscodingDriver {
         }
     }
    
-    getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : string[] {
+    async getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : Promise<string[]> {
         const args : string[] = [];
 
         if ( this.startTime !== null ) {
@@ -539,9 +540,24 @@ export class FFmpegDriver implements TranscodingDriver {
 
             if ( dynamicStreams.length ) {
                 filtersComplex.push( filters( dynamicStreams ).compile( compiler ).slice( 1, -1 ) );
-        
+                
                 if ( filtersComplex.length ) {
-                    args.push( '-filter_complex', filtersComplex.join( ';' ) );
+                    const filtergraph = filtersComplex.join( ';' );
+
+                    // Windows has a reasonable character limit when running commands (something in the order of 8000 characters)
+                    // Most of the time that is fine, but sometimes the generated filtergraph can become extraordinarily big, which may cause issues
+                    // with passing it as a regular command line argument.
+                    // As such, there is a configuration toggle that saves the filtergraph to a temporary file before passing the filename, instead of
+                    // the filtergraph itself, to ffmpeg
+                    if ( this.server.config.get<boolean>( 'ffmpeg.externalFilterScripts', false ) == true ) {
+                        const filterGraphScript = await this.server.storage.getRandomFile( 'filtergraph-', '.txt' );
+
+                        await fs.writeFile( filterGraphScript, filtergraph, { encoding: 'utf8' } );
+
+                        args.push( '-filter_complex_script', filterGraphScript );
+                    } else {
+                        args.push( '-filter_complex', filtersComplex.join( ';' ) );
+                    }
                 }
             }
 

@@ -35,9 +35,14 @@ receivers:
 providers: []
 
 ffmpeg:
-    # Optional: If ffmpeg is not in PATH ENV, set a custom path
+    # Optional: If ffmpeg is not in the PATH environment variable, set a custom path
     #path: C:\path\to\ffmpeg\bin
 
+    # Change this to true if your transcoding commands are very long (for instance, have a lot of trigger points)
+    # Very rarely needs to be used, can be left as false most of the time
+    #externalFilterScripts: false
+
 mpv:
-    #path: C:\path\to\mpv
     cmd: mpv
+    # If your mpv command is not in the PATH environment variable, you can specify it's location here
+    #path: C:\path\to\mpv
