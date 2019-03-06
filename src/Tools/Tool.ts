@@ -2,6 +2,7 @@ import { UnicastServer } from "../UnicastServer";
 import { Future } from "@pedromsilva/data-future";
 import { DiagnosticsService } from "../Diagnostics";
 import * as Case from 'case';
+import { httpPing } from '../ES2017/HttpPing';
 
 export enum ToolValueType {
     String = 'string',
@@ -238,6 +239,12 @@ export abstract class Tool<O = any> {
 
     log ( ...messages : any[] ) {
         this.diagnostics.info( messages.join( ' ' ) );
+    }
+
+    async launchServer () : Promise<void> {
+        if ( !await httpPing( `http://localhost:${ this.server.getPort() }/api/ping` ) ) {
+            await this.server.listen();
+        }
     }
 
     help () : string {

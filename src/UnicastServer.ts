@@ -31,6 +31,7 @@ import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
 import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
+import { Tool } from './Tools/Tool';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -213,13 +214,25 @@ export class UnicastServer {
         }
     }
 
-    async listen () : Promise<void> {
+    async bootstrap () : Promise<void> {
         this.cachedIpV4 = await internalIp.v4();
 
         await this.extensions.load();
 
         await this.onStart.notify();
+    }
 
+    async runTools ( toolsToRun : [Tool, any][] ) : Promise<void> {
+        for( let [ tool, options ] of toolsToRun ) {
+            try {
+                await this.tools.run( tool, options );
+            } catch ( error ) {
+                tool.diagnostics.error( error );
+            }
+        }
+    }
+
+    async listen () : Promise<void> {
         const port : number = this.getPort();
 
         const sslPort : number = this.getSecurePort();
@@ -260,14 +273,10 @@ export class UnicastServer {
     async run ( args ?: string[] ) : Promise<void> {
         const toolsToRun = this.tools.parse( args );
 
+        await this.bootstrap();
+
         if ( toolsToRun.length > 0 ) {
-            for( let [ tool, options ] of toolsToRun ) {
-                try {
-                    await this.tools.run( tool, options );
-                } catch ( error ) {
-                    tool.diagnostics.error( error );
-                }
-            }
+            await this.runTools( toolsToRun );
 
             await this.close();
         } else {
