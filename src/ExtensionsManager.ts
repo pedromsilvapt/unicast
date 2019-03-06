@@ -7,6 +7,7 @@ import { EntityManager } from "./EntityManager";
 import { IEntity } from "./EntityFactory";
 import { DiagnosticsService } from "./Diagnostics";
 import * as chalk from 'chalk';
+import { Synchronized } from 'data-semaphore';
 
 let ts = null;
 
@@ -62,6 +63,8 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
     protected patched : boolean = false;
 
+    protected loaded : boolean = false;
+
     diagnostics : DiagnosticsService;
 
     constructor ( server : UnicastServer ) {
@@ -96,7 +99,12 @@ export class ExtensionsManager extends EntityManager<Extension> {
         }
     }
 
+    @Synchronized()
     async load () {
+        if ( this.loaded ) return;
+
+        this.loaded = true;
+
         this.patch();
 
         const folder = path.join( __dirname, this.extensionsFolder );
