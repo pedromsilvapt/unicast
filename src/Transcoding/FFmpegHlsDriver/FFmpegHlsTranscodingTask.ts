@@ -76,6 +76,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
     getSegmentDuration () {
         return Math.min( this.getVideoSegmentDuration(), this.input.duration );
+        return Math.min( Math.max( this.getVideoSegmentDuration(), this.getAudioSegmentDuration() ), this.input.duration );
     }
 
     getSegmentTime ( index : number ) : number {

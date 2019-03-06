@@ -101,11 +101,9 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         if ( Buffer.isBuffer( data ) ) {
             await fs.writeFile( file, data );
         } else {
-            console.log( 'saving' );
             await new Promise<void>( ( resolve, reject ) =>
                 data.pipe( fs.createWriteStream( file ) ).on( 'error', reject ).on( 'finish', resolve )
             ); 
-            console.log( 'saved' );
         }
 
         return {

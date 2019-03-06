@@ -98,11 +98,6 @@ export class ChromecastReceiver extends BaseReceiver {
 
         client.on( 'player-launched', () => this.diagnostics.info( 'Launched playing session' ) );
         
-        // DEBUG
-        for ( let event of [ 'playing', 'played', 'stopping', 'stopped', 'pausing', 'paused', 'resuming', 'resumed', 'app-status', 'status' ] ) {
-            client.on( event, ( ...args ) => this.diagnostics.debug( 'event: ' + event + ', args: ' + JSON.stringify( args ) ) );
-        }
-
         client.on( 'error', error => {
             this.diagnostics.error( error.message, error );
             

@@ -1,14 +1,15 @@
 import { TranscodingDriver } from "../TranscodingDriver";
 import { DriverFactory } from "../DriverFactory";
-import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaTrigger } from "../../TriggerDb";
-import { boxblur, Stream, blackout, mute, filters } from 'composable';
+import { boxblur, Stream, blackout, mute, filters, trim, concat } from 'composable';
 import { StaticStream } from "composable/lib/Stream";
 import { Compiler } from "composable/lib/Compiler/Compiler";
 import { TrackMediaMetadata, MediaTools } from "../../MediaTools";
-import * as path from 'path';
+import * as sortBy from 'sort-by';
 import { MediaRecord } from "../../MediaRecord";
+import { VideoMediaStream } from '../../MediaProviders/MediaStreams/VideoStream';
+import { Timemap, CutTimemap, IdentityTimemap } from './Timemap';
 
 export class FFmpegDriverFactory extends DriverFactory<FFmpegDriver> {
     constructor () {
@@ -24,6 +25,39 @@ export class FFmpegDriverFactory extends DriverFactory<FFmpegDriver> {
     }
 }
 
+export interface Scene {
+    start : number;
+    end : number;
+}
+
+export function clamp ( number: number, min : number, max : number ) : number {
+    return Math.min( Math.max( number, min ), max );
+}
+
+export function normalizeScenes ( scenes : Scene[], duration : number ) : Scene[] {
+    // We ignore any scenes with end bigger than end
+    scenes = scenes
+        .map( scene => ( { start: clamp( scene.start, 0, duration ), end: clamp( scene.end, 0, duration ) } ) )
+        .filter( scene => scene.start < scene.end )
+        .sort( sortBy( 'start', 'end' ) );
+
+    const normalized : Scene[] = [];
+
+    let lastScene : Scene = null;
+    
+    for ( let scene of scenes ) {
+        if ( !lastScene || scene.start > lastScene.end ) {
+            lastScene = { ...scene };
+            
+            normalized.push( lastScene );
+        } else {
+            lastScene.end = scene.end;
+        }
+    }
+
+    return normalized;
+}
+
 export class FFmpegDriver implements TranscodingDriver {
     server : UnicastServer;
 
@@ -33,11 +67,15 @@ export class FFmpegDriver implements TranscodingDriver {
 
     formats : FFmpegFormatConstants = new FFmpegFormatConstants;
 
+    protected timemap : Timemap = new IdentityTimemap();
+
     protected startTime : number = null;
 
     protected outputDuration : number = null;
 
     protected threads : number = 0;
+
+    protected scenes : Scene[] = [];
 
     protected videoCodecs : Map<string, FFMpegVideoEncoder> = new Map;
     
@@ -175,6 +213,39 @@ export class FFmpegDriver implements TranscodingDriver {
         return this;
     }
 
+    setScenes ( scenes : Scene[], duration : number ) : this {
+        this.scenes = normalizeScenes( scenes, duration );
+
+        let streams : [Stream, Stream][] = [];
+
+        const timemap = new CutTimemap();
+
+        let sum = 0;
+
+        for ( let [ index, scene ] of this.scenes.entries() ) {
+            let length = scene.end - scene.start;
+
+            timemap.add( scene.start, sum, length );
+
+            streams.push( [ new StaticStream( null, `${ index }:v:0` ), new StaticStream( null, `${ index }:a:0` ) ] );
+            // streams.push( trim( new StaticStream( null, `${ index }:v:0` ), new StaticStream( null, `${ index }:a:0` ), 0, scene.end ) );
+
+            sum += length;
+        }
+
+        const output = concat( streams.map( s => s[ 0 ] ), streams.map( s => s[ 1 ] ) );
+
+        this.setMap( ...output );
+
+        this.timemap = timemap;
+
+        return this;
+    }
+
+    getScenes () : Scene[] {
+        return this.scenes;
+    }
+
     setResolution ( width : number, height : number ) : this {
         this.resolution = [ width, height ];
         
@@ -196,6 +267,20 @@ export class FFmpegDriver implements TranscodingDriver {
             // Width is higher
             return this.setResolution( width, height / ( originalWidth / width ) );
         }
+    }
+
+    getMap () : (string | Stream)[] {
+        if ( this.mappings.length == 0 ) {
+            return [ new StaticStream( null, '0:v:0' ), new StaticStream( null, '0:a:0' ) ];
+        }
+
+        return this.mappings;
+    }
+
+    setMap ( ...stream : (string | Stream)[] ) : this {
+        this.mappings = stream.slice();
+
+        return this;
     }
 
     addMap ( ...stream : (string | Stream)[] ) : this {
@@ -222,35 +307,43 @@ export class FFmpegDriver implements TranscodingDriver {
         return this;
     }
     
-    setTriggers ( triggers : MediaTrigger[], videoMetadata : TrackMediaMetadata, inputVideo : string, inputAudio : string, duration : number ) : this {
-        const inputAudioStream = new StaticStream( null, inputAudio );
+    /**
+     * 
+     * @param triggers 
+     * @param videoMetadata
+     */
+    setTriggers ( triggers : MediaTrigger[], videoMetadata : TrackMediaMetadata ) : this {
+        const [ inputVideo, inputAudio ] = this.getMap();
 
-        const inputVideoStream = new StaticStream( null, inputVideo );
+        const inputAudioStream = typeof inputAudio === 'string' ? new StaticStream( null, inputAudio ) : inputAudio;
+
+        const inputVideoStream = typeof inputVideo === 'string' ? new StaticStream( null, inputVideo ) : inputVideo;
 
         let [ audio, video ] : [ Stream, Stream ] = [ inputAudioStream, inputVideoStream ];
 
+        const tm : Timemap = this.timemap;
+
         for ( let trigger of triggers ) {
             for ( let timestamp of trigger.timestamps ) {
-                const enable = `'between(t,${ timestamp.start },${ timestamp.end })'`;
+                const enable = `'between(t,${ tm.get( timestamp.start ) },${ tm.get( timestamp.end ) })'`;
 
                 if ( timestamp.type === 'lightblur' ) {
                     video = boxblur( video, { luma_radius: 20, enable } );
-                } else if ( timestamp.type === 'blur' ) {
+                } else if ( timestamp.type === 'blur' || timestamp.type === 'mediumblur' ) {
                     video = boxblur( video, { luma_radius: 40, enable } );
                 } else if ( timestamp.type === 'heavyblur' ) {
                     video = boxblur( video, { luma_radius: 60, enable } );
                 } else if ( timestamp.type === 'black' ) {
-                    video = blackout( video, videoMetadata.width, videoMetadata.height, timestamp.start, timestamp.end );
+                    video = blackout( video, videoMetadata.width, videoMetadata.height, tm.get( timestamp.start ), tm.get( timestamp.end ) );
                 }
 
                 if ( timestamp.mute ) {
-                    // audio = volume( audio, 0, { enable } );
-                    audio = mute( audio, timestamp.start, timestamp.end );
+                    audio = mute( audio, tm.get( timestamp.start ), tm.get( timestamp.end ) );
                 }
             }
         }
 
-        this.addMap( video, audio );
+        this.setMap( video, audio );
 
         return this;
     }
@@ -259,6 +352,10 @@ export class FFmpegDriver implements TranscodingDriver {
         this.factory = driver.factory as any;
 
         this.threads = driver.threads;
+
+        this.scenes = Array.from( driver.scenes );
+
+        this.timemap = driver.timemap.clone();
 
         this.framerate = driver.framerate;
 
@@ -294,15 +391,37 @@ export class FFmpegDriver implements TranscodingDriver {
 
         return this;
     }
-    
-    getCompiledArguments ( record : MediaRecord, stream : MediaStream ) : string[] {
+
+    getOutputDuration ( input : VideoMediaStream ) {
+        if ( this.scenes != null ) {
+            let sum = 0;
+
+            for ( let scene of this.getScenes() ) {
+                sum += scene.end - scene.start;
+            }
+
+            return sum;
+        } else {
+            return input.duration;
+        }
+    }
+   
+    getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : string[] {
         const args : string[] = [];
 
         if ( this.startTime !== null ) {
             args.push( '-ss', '' + this.startTime );
         }
+        
+        const url = this.server.getUrl( this.server.streams.getUrlFor( record.kind, record.id, stream.id ) );
 
-        args.push( '-i', this.server.getUrl( this.server.streams.getUrlFor( record.kind, record.id, stream.id ) ) );
+        if ( this.scenes && this.scenes.length > 0 ) {
+            for ( let scene of this.scenes ) {
+                args.push( '-ss', '' + scene.start, '-to', '' + scene.end, '-i', url );
+            }
+        } else {
+            args.push( '-i', url );
+        }
 
         // if ( stream.getInputForDriver( this.factory.name ) ) {
         //     args.push( '-i', stream.getInputForDriver( this.factory.name ) );

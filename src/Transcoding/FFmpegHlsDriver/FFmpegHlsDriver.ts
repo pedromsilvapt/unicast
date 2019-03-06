@@ -1,9 +1,9 @@
 import { DriverFactory } from "../DriverFactory";
-import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
 import { FFmpegDriver } from "../FFmpegDriver/FFmpegDriver";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaRecord } from "../../MediaRecord";
 import { DataAmount, DataUnit } from '../../ES2017/Units';
+import { VideoMediaStream } from '../../MediaProviders/MediaStreams/VideoStream';
 
 export class FFmpegHlsDriverFactory extends DriverFactory<FFmpegHlsDriver> {
     constructor () {
@@ -130,7 +130,7 @@ export class FFmpegHlsDriver extends FFmpegDriver {
         return this;
     }
 
-    getCompiledArguments ( record : MediaRecord, stream : MediaStream ) : string[] {
+    getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : string[] {
         if ( this.copyTimestamps && typeof this.startTime === 'number' ) {
             this.outputDuration += this.startTime;
         }

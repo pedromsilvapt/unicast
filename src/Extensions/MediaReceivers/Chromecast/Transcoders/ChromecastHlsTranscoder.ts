@@ -122,7 +122,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             driver.setHlsPlaylistType( FFmpegHlsPlaylistType.Event );
 
             if ( triggers.length > 0 ) {
-                driver.setTriggers( triggers, video, '0:v:0', '0:a:0', video.duration );
+                driver.setTriggers( triggers, video );
             } else {
                 driver.addMap( '0:v:0', '0:a:0' );
             }
