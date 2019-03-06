@@ -1,4 +1,4 @@
-import { MediaRecord, TvEpisodeMediaRecord, MovieMediaRecord, MediaKind } from "./MediaRecord";
+import { MediaRecord, TvEpisodeMediaRecord, MovieMediaRecord, MediaKind, ExternalReferences } from "./MediaRecord";
 import { QueryBuilder, Filter } from 'array-filter-query-builder';
 import * as fs from 'mz/fs';
 import { UnicastServer } from "./UnicastServer";
@@ -44,24 +44,23 @@ export class TriggerDb {
     async query ( query : QueryBuilder ) : Promise<MediaTrigger[]> {
         const filter = new Filter();
         
+        // TODO No need to reload every time. Once the list grows potentially bigger, this can be hurtful for the performance
         const items = await this.load();
 
         return filter.run( items, query );
     }
 
-    async queryMediaRecord ( record : MediaRecord, query ?: QueryBuilder ) : Promise<MediaTrigger[]> {
-        query = query ? query.clone() : new QueryBuilder();
+    async queryMediaRecord ( record : MediaRecord ) : Promise<MediaTrigger[]> {
+        const items = await this.load();
 
-        query.add( [ [ 'id', 'is', record.id ] ] );
-        query.add( [ [ 'kind', 'is', record.kind ] ] );
-
-        return this.query( query );
+        return items.filter( item => Object.keys( item.external ).some( key => item.external[ key ] == record.external[ key ] ) );
     }
 }
 
 export interface MediaTrigger {
     id : string;
     kind : MediaKind;
+    external: ExternalReferences;
     category : [ string, number ];
     description ?: string;
     timestamps : TriggerTimeWindow[];
@@ -71,8 +70,9 @@ export interface MediaTrigger {
 export interface TriggerTimeWindow {
     start : number;
     end : number;
-    type ?: 'none' | 'blur' | 'lightblur' | 'heavyblur' | 'black';
+    type ?: 'none' | 'blur' | 'mediumblur' | 'lightblur' | 'heavyblur' | 'black';
     mute ?: boolean;
+    level ?: number;
 }
 
 export function timeFromString ( input : number | string ) : number {
@@ -90,7 +90,7 @@ export function timeFromString ( input : number | string ) : number {
         if ( /^[0-9]+$/.test( input ) ) {
             const seconds = parseInt( input );
 
-            return parseInt( input ) + decimal;
+            return seconds + decimal;
         } else if ( /^[0-9]+:[0-9]+$/.test( input ) ) {
             const [ minutes, seconds ] = input.split( ':' );
 

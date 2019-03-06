@@ -2,23 +2,13 @@ import { IVideoPlayerController } from "../IVideoPlayerController";
 import { UnicastServer } from "../../../UnicastServer";
 import { Pipeline, FileReader, FileWriter, ParserPipeline, DecoderPipeline, SubLine, SubboxPipeline, MessageProtocol, MessageKind, ContextManager, StdContext, CompilerPipeline, EncoderPipeline, MessageFactory } from 'subbox';
 import { filter, map, toArray, fromArray } from "data-async-iterators";
-import { spawn } from 'mz/child_process';
 import { EventEmitter } from "events";
 import * as path from 'path';
 import * as fs from 'mz/fs';
 import * as sortBy from 'sort-by';
+import { MpvPlayer } from './Player';
 
 const ControllerSource = fs.readFileSync( path.join( __dirname, 'SynchronizerController.txt.js' ), 'utf8' );
-
-export function fromEvent<T = any> ( emitter : EventEmitter, resolveName : string, rejectName : string = 'error' ) : Promise<T> {
-    return new Promise<T>( ( resolve, reject ) => {
-        emitter.on( resolveName, resolve );
-
-        if ( rejectName ) {
-            emitter.on( rejectName, reject );
-        }
-    } );
-}
 
 export class ArrayReader<T> extends SubboxPipeline<T[] | Promise<T[]>, AsyncIterableIterator<MessageProtocol<T>>> {
     protected format : string;
@@ -109,19 +99,11 @@ export class MpvSynchronizerController implements IVideoPlayerController<boolean
     }
 
     protected async run ( video : string, subtitles : string, controller : string ) {
-        const program = path.join( this.server.config.get( 'mpv.path' ), this.server.config.get( 'mpv.command' ) );
+        const player = MpvPlayer.fromServer( this.server, video, subtitles );
 
-        const args = [ 
-            `--script=${ controller }`, 
-            `--sub-file=${ subtitles }`,
-            '--fullscreen=yes',
-            video,
-            ...this.server.config.get<string[]>( 'mpv.args', [] )
-        ];
+        player.script = controller;
 
-        const process = spawn( program, args );
-
-        await fromEvent( process, 'exit', 'error' );
+        await player.run().wait();
     }
 
     async backup ( file : string ) {

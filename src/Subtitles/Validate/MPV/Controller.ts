@@ -2,21 +2,9 @@ import { IVideoPlayerController } from "../IVideoPlayerController";
 import { UnicastServer } from "../../../UnicastServer";
 import * as fs from 'mz/fs';
 import * as path from 'path';
-import { spawn } from 'mz/child_process';
 import * as parser from 'subtitles-parser';
 import * as mess from 'mess';
-import * as os from 'os';
-import { EventEmitter } from "events";
-
-export function fromEvent<T = any> ( emitter : EventEmitter, resolveName : string, rejectName : string = 'error' ) : Promise<T> {
-    return new Promise<T>( ( resolve, reject ) => {
-        emitter.on( resolveName, resolve );
-
-        if ( rejectName ) {
-            emitter.on( rejectName, reject );
-        }
-    } );
-}
+import { MpvPlayer } from './Player';
 
 interface SubtitleLine {
     id : number;
@@ -107,19 +95,11 @@ export class MpvController implements IVideoPlayerController {
     }
 
     protected async run ( video : string, subtitles : string, controller : string ) {
-        const program = path.join( this.server.config.get( 'mpv.path' ), this.server.config.get( 'mpv.command' ) );
+        const player = MpvPlayer.fromServer( this.server, video, subtitles );
 
-        const args = [ 
-            `--script=${ controller }`, 
-            `--sub-file=${ subtitles }`,
-            '--fullscreen=yes',
-            video,
-            ...this.server.config.get<string[]>( 'mpv.args', [] )
-        ];
+        player.script = controller;
 
-        const process = spawn( program, args );
-
-        await fromEvent( process, 'exit', 'error' );
+        await player.run().wait();
     }
 
     async play ( video : string, subtitles : string ) : Promise<void> {

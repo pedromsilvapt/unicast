@@ -7,6 +7,7 @@ import { LoadArtworkTool } from "./Tools/LoadArtwork";
 import { ExportDatabaseTool } from "./Tools/ExportDatabase";
 import { ImportDatabaseTool } from './Tools/ImportDatabase';
 import { AddCustomTool } from "./Tools/AddCustom";
+import { PreviewTriggersTool } from './Tools/PreviewTriggers';
 import { TestTool, ToolFactory } from "./Tools/Tool";
 
 if ( !Symbol.asyncIterator ) {
@@ -24,6 +25,7 @@ server.tools.add( new ToolFactory( LoadArtworkTool ) );
 server.tools.add( new ToolFactory( ExportDatabaseTool ) );
 server.tools.add( new ToolFactory( ImportDatabaseTool ) );
 server.tools.add( new ToolFactory( AddCustomTool ) );
+server.tools.add( new ToolFactory( PreviewTriggersTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 
 server.run()
