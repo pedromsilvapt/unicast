@@ -1,7 +1,5 @@
 import { IMediaReceiver, MediaPlayOptions, ReceiverStatus } from './IMediaReceiver'
 import { EventEmitter } from "events";
-import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
-import { MediaRecord } from "../../MediaRecord";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaSessionsManager } from "./MediaSessionsManager";
 import { Transcoder } from '../../Transcoding/Transcoder';

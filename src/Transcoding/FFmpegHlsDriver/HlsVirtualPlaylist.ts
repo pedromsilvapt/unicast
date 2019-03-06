@@ -1,5 +1,3 @@
-import { FFmpegHlsDriver } from "./FFmpegHlsDriver";
-import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import * as strToStream from 'string-to-stream';
 import { FFmpegHlsTranscodingTask } from './FFmpegHlsTranscodingTask';
 

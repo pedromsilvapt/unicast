@@ -1,5 +1,5 @@
 import { ChromecastReceiver } from "../ChromecastReceiver";
-import { MediaStream, MediaStreamType } from "../../../../MediaProviders/MediaStreams/MediaStream";
+import { MediaStream } from "../../../../MediaProviders/MediaStreams/MediaStream";
 import { VideoMediaStream } from "../../../../MediaProviders/MediaStreams/VideoStream";
 import { FFmpegPreset, FFMpegVideoEncoder, FFMpegAudioEncoder } from "../../../../Transcoding/FFmpegDriver/FFmpegDriver";
 import { Transcoder, TranscodingSession } from "../../../../Transcoding/Transcoder";

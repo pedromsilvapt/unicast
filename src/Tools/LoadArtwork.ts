@@ -1,5 +1,4 @@
 import { Tool, ToolOption } from "./Tool";
-import { UnicastServer } from "../UnicastServer";
 import { MediaKind } from "../MediaRecord";
 import * as fs from 'mz/fs';
 

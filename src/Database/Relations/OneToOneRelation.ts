@@ -1,7 +1,6 @@
 import { Record, Relation } from "./Relation";
 import { BaseTable } from "../Database";
 import * as itt from "itt";
-import * as r from 'rethinkdb';
 
 export abstract class OneToOneRelation<M extends Record, R extends Record> extends Relation<M, R> {
     public relatedTable : BaseTable<R>;

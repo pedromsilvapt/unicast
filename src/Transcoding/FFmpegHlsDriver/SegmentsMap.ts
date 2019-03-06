@@ -1,5 +1,4 @@
 import { LinkedList } from "../../ES2017/LinkedList";
-import { delay } from "./HlsVideoMediaStream";
 import { EventEmitter } from 'events';
 import { Future } from "@pedromsilva/data-future";
 

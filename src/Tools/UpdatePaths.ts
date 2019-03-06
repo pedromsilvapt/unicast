@@ -1,7 +1,5 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
-import { UnicastServer } from "../UnicastServer";
-import { MediaRecord, PlayableMediaRecord } from "../MediaRecord";
-import * as path from 'path';
+import { PlayableMediaRecord } from "../MediaRecord";
 
 interface UpdatePathsOptions {
     oldPath : string;

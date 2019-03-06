@@ -1,4 +1,4 @@
-import { MediaRecord, MediaKind } from "../../MediaRecord";
+import { MediaRecord } from "../../MediaRecord";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaSessionsManager } from "./MediaSessionsManager";
 import { Transcoder } from "../../Transcoding/Transcoder";

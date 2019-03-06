@@ -1,5 +1,4 @@
 import { TranscodingBackgroundTask } from "../TranscodingDriver";
-import { ChildProcess, spawn } from "child_process";
 import * as path from 'path';
 import { VideoMediaStream } from "../../MediaProviders/MediaStreams/VideoStream";
 import { FFmpegDriver } from "./FFmpegDriver";
@@ -8,7 +7,6 @@ import { BackgroundTaskState, BackgroundTask, BackgroundTaskMetric } from "../..
 import { Future } from '@pedromsilva/data-future';
 import { MediaRecord } from "../../MediaRecord";
 import { Segment } from '../FFmpegHlsDriver/SegmentsMap';
-import { FFmpegProgress } from './FFmpegProgress';
 import { FFmpegProcess } from './FFmpegProcess';
 import { DurationUnit } from '../../ES2017/Units';
 

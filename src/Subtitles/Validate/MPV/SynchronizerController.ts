@@ -2,7 +2,6 @@ import { IVideoPlayerController } from "../IVideoPlayerController";
 import { UnicastServer } from "../../../UnicastServer";
 import { Pipeline, FileReader, FileWriter, ParserPipeline, DecoderPipeline, SubLine, SubboxPipeline, MessageProtocol, MessageKind, ContextManager, StdContext, CompilerPipeline, EncoderPipeline, MessageFactory } from 'subbox';
 import { filter, map, toArray, fromArray } from "data-async-iterators";
-import { EventEmitter } from "events";
 import * as path from 'path';
 import * as fs from 'mz/fs';
 import * as sortBy from 'sort-by';

@@ -1,4 +1,4 @@
-import { MediaRecord, TvEpisodeMediaRecord, MovieMediaRecord, MediaKind, ExternalReferences } from "./MediaRecord";
+import { MediaRecord, MediaKind, ExternalReferences } from "./MediaRecord";
 import { QueryBuilder, Filter } from 'array-filter-query-builder';
 import * as fs from 'mz/fs';
 import { UnicastServer } from "./UnicastServer";

@@ -1,6 +1,5 @@
 import { EntityManager } from "../EntityManager";
 import { Tool, ExecutionContext, LocalExecutionContext, ToolFactory } from "./Tool";
-import { UnicastServer } from "../UnicastServer";
 import * as minimist from 'minimist';
 
 function splitArray<T> ( array : T[], separator : T ) : T[][] {

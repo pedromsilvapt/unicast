@@ -1,6 +1,4 @@
 import { DriverFactory } from "./DriverFactory";
-import { TranscodingDriver } from "./TranscodingDriver";
-import { MediaStream } from "../MediaProviders/MediaStreams/MediaStream";
 import { UnicastServer } from "../UnicastServer";
 
 export class TranscodingManager {

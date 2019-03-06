@@ -1,5 +1,3 @@
-import { EventEmitter } from "events";
-import { EntityManager } from "./EntityManager";
 import { fromPromises, CancelToken } from 'data-async-iterators';
 import { UnicastServer } from "./UnicastServer";
 
