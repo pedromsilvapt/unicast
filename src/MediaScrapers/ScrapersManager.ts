@@ -67,6 +67,26 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
         return scraper.getMediaArt( record, null, cache );
     }
 
+    async getAllMediaArtork ( kind : MediaKind, external : ExternalReferences, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+        const artworks = await Promise.all( Array.from( this.keys() ).map( async name => {
+            try {
+                const record = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
+
+                if ( !record ) {
+                    return [];
+                }
+
+                return this.getMediaArtwork( name, kind, record.id );
+            } catch ( error ) {
+                this.server.onError.notify( error );
+                
+                return [];
+            }
+        } ) );
+
+        return artworks.reduce( ( memo, items ) => memo.concat( items ), [] );
+    }
+
     async search ( scraperName : string, kind : MediaKind, query : string, limit ?: number, cache ?: CacheOptions ) : Promise<MediaRecord[]> {
         const scraper = this.get( scraperName );
 

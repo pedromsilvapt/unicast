@@ -1,10 +1,11 @@
 import { BaseTableController } from "../../BaseTableController";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
-import { MediaRecord } from "../../../MediaRecord";
+import { MediaRecord, ArtRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
 import { MediaTable } from "../../../Database/Database";
+import { ResourceNotFoundError, InvalidArgumentError } from 'restify-errors';
 
 export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
     getTransientQuery ( req : Request, query : r.Sequence ) : r.Sequence {
@@ -75,6 +76,47 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         }
 
         return query;
+    }
+
+    @Route( 'get', '/:id/artwork' )
+    async listArtwork ( req : Request, res : Response ) : Promise<ArtRecord[]> {
+        const media : MediaRecord = await this.table.get( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        return this.server.scrapers.getAllMediaArtork( media.kind, media.external );
+    }
+
+    @Route( 'post', '/:id/artwork' )
+    async setArtwork ( req : Request, res : Response ) {
+        const property = req.body.property;
+        const url = req.body.url;
+
+        if ( !property ) {
+            throw new InvalidArgumentError( `When setting a media artwork, the 'property' can't be empty.` );
+        }
+
+        const validProperties = [ 'poster', 'background', 'banner', 'thumbnail' ];
+
+        if ( !validProperties.includes( property ) ) {
+            throw new InvalidArgumentError( `Expected the 'property' field to be one of [${ validProperties.join( ', ' ) }].` );
+        }
+
+        if ( !url ) {
+            throw new InvalidArgumentError( `When setting a media artwork, the 'url' can't be empty.` );
+        }
+
+        const media : MediaRecord = await this.table.get( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        await this.server.media.setArtwork( media, property, url );
+
+        return media;
     }
 
     @Route( 'get', '/:id/triggers' )

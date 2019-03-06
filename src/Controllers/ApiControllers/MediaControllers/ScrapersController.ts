@@ -91,25 +91,7 @@ export class ScrapersController extends BaseController {
 
         const cache = this.parseCacheOptions( req.query.cache );
 
-        const scrapers = this.server.scrapers;
-
-        const artworks = await Promise.all( Array.from( scrapers.keys() ).map( async name => {
-            try {
-                const record = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
-
-                if ( !record ) {
-                    return [];
-                }
-
-                return scrapers.getMediaArtwork( name, kind, record.id );
-            } catch ( error ) {
-                this.server.onError.notify( error );
-                
-                return [];
-            }
-        } ) );
-
-        return artworks.reduce( ( memo, items ) => memo.concat( items ), [] );
+        return this.server.scrapers.getAllMediaArtork( kind, external, cache );
     }
 
     @Route( 'get', '/:scraper/:kind/external/artwork' )

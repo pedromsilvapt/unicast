@@ -584,6 +584,49 @@ export class MediaManager {
 
         return this.getAll( ids );
     }
+
+    async setArtwork ( media : MediaRecord, property : string, url : string ) {
+        const repository = this.server.repositories.get( media.repository );
+
+        if ( repository ) {
+            repository.setPreferredMediaArt( media.kind, media.id, property, url );
+        } else {
+            this.server.diagnostics.warning( 'media', `No repository named ${ media.repository } was found. Skipping setting repository.` );
+        }
+
+        media.art[ property ] = url;
+
+        const table = this.server.media.getTable( media.kind );
+
+        await table.update( media.id, { art: media.art } );
+
+        // Update related media
+        if ( media.kind === MediaKind.TvShow ) {
+            await this.server.database.tables.seasons.updateMany( {
+                tvShowId: media.id
+            }, {
+                art: {
+                    [ property ]: url,
+                    tvshow: { 
+                        [ property ]: url 
+                    }
+                }
+            } );
+
+            for ( let season of await this.getSeasons( media.id ) ) {
+                await this.server.database.tables.episodes.updateMany( {
+                    tvSeasonId: season.id
+                }, {
+                    art: {
+                        [ property ]: url,
+                        tvshow: { 
+                            [ property ]: url 
+                        }
+                    }
+                } );
+            }
+        }
+    }
 }
 
 export class MediaWatchTracker {
