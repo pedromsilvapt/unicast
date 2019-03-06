@@ -50,13 +50,18 @@ export class ApiController extends BaseController {
     @Controller( ScrapersController, '/media/scrapers' )
     scrapers : ScrapersController;
 
-    @Route( 'get', '/close' )
-    async close () {
-        await this.server.quit( 1000 );
+    @Route( 'get', '/ping' )
+    ping () {
+        return { alive: true, now: Date.now() };
     }
 
     @Route( 'get', '/sitemap' )
     async sitemap () {
         return Array.from( this.server.http.routes ).sort( sortBy( 'path' ) );
+    }
+    
+    @Route( 'get', '/close' )
+    async close () {
+        await this.server.quit( 1000 );
     }
 }
