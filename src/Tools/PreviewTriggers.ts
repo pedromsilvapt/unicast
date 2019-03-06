@@ -6,7 +6,7 @@ import { FFmpegTranscodingTask } from '../Transcoding/FFmpegDriver/FFmpegTransco
 import { MediaTrigger } from '../TriggerDb';
 import { MpvPlayer } from '../Subtitles/Validate/MPV/Player';
 import { Duration, DurationUnit } from '../ES2017/Units';
-import { ProgressBarLiveComponent } from '../ES2017/ProgressBarArea';
+import { LiveProgressBar } from 'clui-progressbar';
 
 export interface PreviewTriggersOptions {
     kind : MediaKind;
@@ -74,14 +74,14 @@ export class PreviewTriggersTool extends Tool<PreviewTriggersOptions> {
         task.encoder.on( 'error', error => console.error( error ) );
 
         // Progress Bar
-        const progressBar = new ProgressBarLiveComponent( {
-            progress: 0,
+        const progressBar = new LiveProgressBar( {
+            percentage: 0,
             title: 'Transcoding file...',
             rightLabel: duration.toHumanString( false )
         } ).hook();
 
         task.encoder.on( 'encoding-progress', progress => progressBar.setState( {
-            progress: progress.percentage,
+            percentage: progress.percentage,
             leftLabel: progress.time.toHumanString( false )
         } ) );
 
