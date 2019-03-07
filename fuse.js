@@ -88,7 +88,7 @@ async function fetch ( platform, dependency, force = false ) {
         return;
     }
     
-    const targetFolder = path.join( 'builds', '.cache', platform, dependency );
+    const targetFolder = path.join( 'builds', '.cache', 'compressed', platform, dependency );
 
     if ( !force && await fs.exists( targetFolder ) ) {
         return;
@@ -130,6 +130,8 @@ function getPackageHost ( platform ) {
 }
 
 async function package ( platform ) {
+    // sharp: https://github.com/lovell/sharp/releases
+    // lipvips: https://github.com/lovell/sharp-libvips/releases/
     await fetch( platform, [ 'ffmpeg', 'rethinkdb', 'libvips', 'sharp' ] );
 
     const buildFolder = `builds/${ platform }/`;
@@ -153,34 +155,33 @@ async function package ( platform ) {
     
     await copy( 
         './lib/Extensions',
-        path.join( path.join( buildFolder, 'Extensions' ) )
+        path.join( buildFolder, 'Extensions' )
     );
 
     await copy( 
         './config',
-        path.join( path.join( buildFolder, 'config' ) ),
+        path.join( buildFolder, 'config' ),
         [ 'default*.yaml' ]
     );
 
     await copy( 
-        `./builds-cache/${ platform }/rethinkdb`,
-        path.join( path.join( buildFolder, 'storage' ) ),
-        [ '*' ]
+        `./builds/.cache/uncompressed/${ platform }/rethinkdb`,
+        path.join( buildFolder, 'storage' )
     );
     
     await copy( 
-        `./builds-cache/${ platform }/ffmpeg`,
-        path.join( path.join( buildFolder, 'storage', 'ffmpeg' ) )
+        `./builds./cache/uncompressed/${ platform }/ffmpeg`,
+        path.join( buildFolder, 'storage', 'ffmpeg' )
     );
 
     await copy( 
-        `./builds-cache/${ platform }/sharp`,
-        path.join( path.join( buildFolder, 'node_modules', 'sharp' ) )
+        `./builds/.cache/uncompressed/${ platform }/sharp`,
+        path.join( buildFolder, 'node_modules', 'sharp' )
     );
 
     await copy( 
-        `./builds-cache/${ platform }/libvips/lib`,
-        path.join( path.join( buildFolder, 'node_modules', 'sharp', 'build', 'Release' ) )
+        `./builds/.cache/uncompressed/${ platform }/libvips/lib`,
+        path.join( buildFolder, 'node_modules', 'sharp', 'build', 'Release' )
     );
 }
 
