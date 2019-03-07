@@ -15,6 +15,21 @@ export class ArtworkController extends BaseController {
         }
     }
 
+    @Route( 'get', '/scrapers/:address', BinaryResponse )
+    async getRemoteMedia ( req : Request, res : Response ) : Promise<FileInfo> {
+        const address = Buffer.from( req.params.address, 'base64' ).toString( 'utf8' );
+
+        const cachePath : string = await this.server.artwork.get( address, { width: req.query.width ? +req.query.width : null } );
+
+        const stats : fs.Stats = await fs.stat( cachePath );
+        
+        return {
+            mime: mime.lookup( cachePath ),
+            length: stats.size,
+            data: fs.createReadStream( cachePath )
+        };
+    }
+
     @Route( 'get', '/scrapers/:scraper/:kind/:id/:property', BinaryResponse )
     async getForScrapedMedia ( req : Request, res : Response ) : Promise<FileInfo> {
         const scraperName = req.params.scraper;

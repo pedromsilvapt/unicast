@@ -44,7 +44,11 @@ export class ArtworkCache {
         this.cache = new MapCachePersistence( this.server.storage.getPath( 'cache/artwork.json' ) );
     }
 
-    getCachedObject (  url : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
+    getCachedRemoteImage ( serverUrl : string, url : string ) : string {
+        return `${ serverUrl }/api/media/artwork/scrapers/${ Buffer.from( url, 'utf8' ).toString( 'base64' ) }`;
+    }
+
+    getCachedObject ( url : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
         const cached : any = {};
 
         for ( let key of Object.keys( art ) ) {
@@ -138,6 +142,8 @@ export class ArtworkCache {
     }
 
     transform ( image : any, metadata : any, options : ArtworkCacheOptions ) : any {
+        image = image.rotate();
+
         if ( options.width ) {
             const width = options.width;
 

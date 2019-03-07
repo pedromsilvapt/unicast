@@ -122,8 +122,11 @@ export class TheMovieDB implements IScraper {
                 const kind : ArtRecordKind = keys[ key ];
     
                 for ( let art of rawMovie[ key ] ) {
+                    const url = await this.getArtPath( art.file_path, 'original',  );
+                    
                     artwork.push( {
-                        url: await this.getArtPath( art.file_path, 'original',  ),
+                        id: url,
+                        url: url,
                         height: art.height,
                         width: art.width,
                         score: art.vote_average,

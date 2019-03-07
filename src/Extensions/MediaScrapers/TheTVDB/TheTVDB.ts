@@ -262,7 +262,8 @@ export class TheTVDB implements IScraper {
             return [];
         }
 
-        return [ { 
+        return [ {
+            id: episode.art.thumbnail,
             url: episode.art.thumbnail,
             kind: ArtRecordKind.Thumbnail,
             height: null,

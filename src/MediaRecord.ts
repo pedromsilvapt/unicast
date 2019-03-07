@@ -31,6 +31,7 @@ export enum ArtRecordKind {
 
 // This object represents one single piece of art, that might not even be associated with any MediaRecord
 export interface ArtRecord { 
+    id : string;
     kind: ArtRecordKind;
     width: number;
     height: number;

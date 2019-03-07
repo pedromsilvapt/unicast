@@ -188,10 +188,13 @@ export class MediaRecordFactory {
             "series": "banner"
         }
 
+        const url = `https://www.thetvdb.com/banners/${ art.fileName }`;
+        
         return {
+            id: url,
             width: +width,
             height: +heigth,
-            url: `https://www.thetvdb.com/banners/${ art.fileName }`,
+            url: url,
             kind: mapping[ art.keyType ],
             season: art.keyType == 'season' || art.keyType == 'seasonwide' ? +art.subKey : null,
             score: art.ratingsInfo.average || 0

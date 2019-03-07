@@ -85,14 +85,21 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
+        
+        const url = this.server.getMatchingUrl( req );
+        
+        const images = await this.server.scrapers.getAllMediaArtork( media.kind, media.external );
 
-        return this.server.scrapers.getAllMediaArtork( media.kind, media.external );
+        return images.map( image => ( {
+            ...image,
+            url: this.server.artwork.getCachedRemoteImage( url, image.url )
+        } ) );
     }
 
     @Route( 'post', '/:id/artwork' )
     async setArtwork ( req : Request, res : Response ) {
         const property = req.body.property;
-        const url = req.body.url;
+        const artwork = req.body.artwork;
 
         if ( !property ) {
             throw new InvalidArgumentError( `When setting a media artwork, the 'property' can't be empty.` );
@@ -104,7 +111,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
             throw new InvalidArgumentError( `Expected the 'property' field to be one of [${ validProperties.join( ', ' ) }].` );
         }
 
-        if ( !url ) {
+        if ( !artwork ) {
             throw new InvalidArgumentError( `When setting a media artwork, the 'url' can't be empty.` );
         }
 
@@ -114,7 +121,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        await this.server.media.setArtwork( media, property, url );
+        await this.server.media.setArtwork( media, property, artwork );
 
         return media;
     }
