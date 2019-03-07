@@ -29,7 +29,7 @@ export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecor
         }
 
         for ( let season of seasons ) {
-            const url = await this.server.getMatchingUrl( req );
+            const url = this.server.getMatchingUrl( req );
             
             ( season as any ).cachedArtwork = this.server.artwork.getCachedObject( url, season.kind, season.id, season.art );
 

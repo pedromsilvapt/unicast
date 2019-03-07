@@ -71,7 +71,7 @@ export class ScrapersController extends BaseController {
         const record = await this.server.scrapers.getMediaExternal( name, kind, external, cache );
 
         if ( record ) {
-            const url = await this.server.getMatchingUrl( req );
+            const url = this.server.getMatchingUrl( req );
         
             ( record as any ).cachedArtwork = this.server.artwork.getCachedScraperObject( url, name, record.kind, record.id, record.art );
         }
@@ -148,7 +148,7 @@ export class ScrapersController extends BaseController {
 
         const records = await this.server.scrapers.getMediaRelation( name, kind, relation, parent.id, cache );
         
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
 
         for ( let record of records ) {
             ( record as any ).cachedArtwork = this.server.artwork.getCachedScraperObject( url, name, record.kind, record.id, record.art );
@@ -176,7 +176,7 @@ export class ScrapersController extends BaseController {
         const record = await this.server.scrapers.getMedia( name, kind, id, cache );
 
         if ( record ) {
-            const url = await this.server.getMatchingUrl( req );
+            const url = this.server.getMatchingUrl( req );
         
             ( record as any ).cachedArtwork = this.server.artwork.getCachedScraperObject( url, name, record.kind, record.id, record.art );
         }
@@ -222,7 +222,7 @@ export class ScrapersController extends BaseController {
 
         const records = await this.server.scrapers.getMediaRelation( name, kind, relation, id, cache );
         
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
 
         for ( let record of records ) {
             ( record as any ).cachedArtwork = this.server.artwork.getCachedScraperObject( url, name, record.kind, record.id, record.art );
@@ -251,7 +251,7 @@ export class ScrapersController extends BaseController {
 
         const records = await this.server.scrapers.search( name, kind, query, limit, cache );
 
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
 
         for ( let record of records ) {
             ( record as any ).cachedArtwork = this.server.artwork.getCachedScraperObject( url, name, record.kind, record.id, record.art );

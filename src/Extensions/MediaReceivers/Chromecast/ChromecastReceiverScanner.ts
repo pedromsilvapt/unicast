@@ -64,7 +64,7 @@ export abstract class ChromecastReceiverScanner {
     }
 
     async onResponse ( name : string, address : string ) {
-        this.diagnostics.debug( 'chromecast/scanner', name + ':' + address );
+        // this.diagnostics.debug( 'chromecast/scanner', name + ':' + address );
 
         if ( !this.timedOut ) {
             const device : ChromecastReceiverIdentification = {

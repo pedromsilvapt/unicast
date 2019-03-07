@@ -17,7 +17,7 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
     async transformAll ( req : Request, res : Response, history : HistoryRecord[] ) : Promise<any[]> {
         history = await super.transformAll( req, res, history );
 
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
     
         if ( req.query.records === 'true' ) {
             await this.server.database.tables.history.relations.record.applyAll( history );

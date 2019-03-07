@@ -42,7 +42,7 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
 
         const member = this.server.database.tables.playlists.relations.items.member;
         
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
 
         let inconsistent = false;
         

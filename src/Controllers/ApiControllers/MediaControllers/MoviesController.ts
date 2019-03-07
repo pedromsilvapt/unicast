@@ -24,7 +24,7 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
     async transformAll ( req : Request, res : Response, items : MovieMediaRecord[] ) : Promise<any[]> {
         items = await super.transformAll( req, res, items );
 
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
         
         for ( let movie of items ) {
             ( movie as any ).cachedArtwork = this.server.artwork.getCachedObject( url, movie.kind, movie.id, movie.art );

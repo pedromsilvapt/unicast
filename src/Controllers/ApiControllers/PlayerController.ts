@@ -245,7 +245,7 @@ export class PlayerController extends BaseController {
 
     protected async preprocessStatus ( req, status : ReceiverStatus ) : Promise<ReceiverStatus> {
         if ( status && status.media && status.media.record ) {
-            const url = await this.server.getMatchingUrl( req );
+            const url = this.server.getMatchingUrl( req );
     
             ( status.media.record as any ).cachedArtwork = this.server.artwork.getCachedObject( url, status.media.record.kind, status.media.record.id, status.media.record.art );
         }

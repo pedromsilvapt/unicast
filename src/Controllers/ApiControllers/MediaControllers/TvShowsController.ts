@@ -23,7 +23,7 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
     async transformAll ( req : Request, res : Response, shows : TvShowMediaRecord[] ) : Promise<any> {
         shows = await super.transformAll( req, res, shows );
 
-        const url = await this.server.getMatchingUrl( req );
+        const url = this.server.getMatchingUrl( req );
         
         if ( req.query.seasons === 'true' ) {
             await this.server.database.tables.shows.relations.seasons.applyAll( shows );
