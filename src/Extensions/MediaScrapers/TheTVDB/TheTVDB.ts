@@ -206,9 +206,11 @@ export class TheTVDB implements IScraper {
     }
 
     async getTvSeasonArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
-        let art = await this.getTvShowAllArt( id, cache );
+        const [ showId, seasonNumber ] = id.split( 'S' );
 
-        art = art.filter( art => art.season !== null );
+        let art = await this.getTvShowAllArt( showId, cache );
+
+        art = art.filter( art => art.season == +seasonNumber );
 
         if ( kind ) {
             art = art.filter( art => art.kind == kind );

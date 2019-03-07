@@ -139,7 +139,9 @@ export class MediaRecordFactory {
             title: `${show.title} Season ${ number }`,
             number: +number,
             tvShowId: show.id,
-            external: {}
+            external: {
+                tvdb: show.external.tvdb + 'S' + number
+            }
         } as any;
     }
     
