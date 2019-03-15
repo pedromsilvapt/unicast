@@ -606,7 +606,6 @@ export class MediaManager {
                 tvShowId: media.id
             }, {
                 art: {
-                    [ property ]: url,
                     tvshow: { 
                         [ property ]: url 
                     }
@@ -618,7 +617,6 @@ export class MediaManager {
                     tvSeasonId: season.id
                 }, {
                     art: {
-                        [ property ]: url,
                         tvshow: { 
                             [ property ]: url 
                         }
