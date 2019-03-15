@@ -109,7 +109,9 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
             "title": options.title || path.basename( options.video, path.extname( options.video ) ),
             "transient": true,
             "watched": false,
-            "addedAt": new Date()
+            "addedAt": new Date(),
+            "createdAt": new Date(),
+            "updatedAt": new Date()
         } );
 
         this.log( 'Created media record', 'custom', record.id );

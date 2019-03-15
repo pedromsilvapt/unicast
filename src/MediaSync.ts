@@ -80,15 +80,19 @@ export class MediaSync {
         if ( match ) {
             future.resolve( match.id );
             // Update
-            if ( !dryRun ) await table.updateIfChanged( match, media );
+            if ( !dryRun ) await table.updateIfChanged( match, media, { updatedAt: new Date() } );
             
             this.diagnostics.info( 'UPDATE ' + match.id + ' ' + this.print( media ) );
         } else {
             // Create
             if ( !dryRun ) {
+                const now = new Date();
+
                 match = await table.create( {
                     ...table.baseline,
-                    ...media as any
+                    ...media as any,
+                    createdAt: now,
+                    updatedAt: now
                 } );
             } else {
                 match = media;

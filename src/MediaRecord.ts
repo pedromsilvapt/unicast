@@ -69,6 +69,8 @@ export interface MediaRecord {
     art : MediaRecordArt;
     external : ExternalReferences;
     transient ?: boolean;
+    createdAt : Date;
+    updatedAt : Date;
 }
 
 export interface PlayableMediaRecord extends MediaRecord {
