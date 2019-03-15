@@ -359,6 +359,12 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     relations : any = {};
 
+    onCreate : Hook<R> = new Hook( 'onCreate' );
+
+    onUpdate : Hook<R> = new Hook( 'onUpdate' );
+
+    onDelete : Hook<R> = new Hook( 'onDelete' );
+
     get database () : Database {
         return this.pool.database;
     }
@@ -524,6 +530,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
     
             record.id = res.generated_keys[ 0 ];
             
+            this.onCreate.notify( record );
+
             return record;
         } finally {
             this.pool.release( connection );
@@ -551,6 +559,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
             for ( let record of records ) {
                 if ( !record.id ) {
                     record.id = res.generated_keys[ index++ ];
+
+                    this.onCreate.notify( record );
                 }
             }
             
@@ -566,19 +576,22 @@ export abstract class BaseTable<R extends { id ?: string }> {
         try {
             await this.query().get( id ).update( record ).run( connection );
     
+            if ( this.onUpdate.isSubscribed() ) {
+                this.get( id ).then( updated => this.onUpdate.notify( updated ) );
+            }
+
             return record;
         } finally {
             this.pool.release( connection );
         }
     }
 
-    async updateIfChanged ( baseRecord : object, changes : object ) : Promise<R> {
+    async updateIfChanged ( baseRecord : object, changes : object, conditionalChanges : object = null ) : Promise<R> {
         if ( Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) ) ) {
-            // @DEBUG
-            // const changed = Object.keys( changes ).filter( key => !equals( baseRecord[ key ], changes[ key ] ) );
+            if ( conditionalChanges && typeof conditionalChanges == 'object' ) {
+                changes = { ...changes, ...conditionalChanges };
+            }
 
-            // console.log( changed.map( key => `${key}(${typeof baseRecord[key]} ${baseRecord[key]}, ${ typeof changes[key] } ${changes[key]})` ) );
-            
             return this.update( baseRecord[ "id" ], changes );
         }
 
@@ -594,9 +607,27 @@ export abstract class BaseTable<R extends { id ?: string }> {
             if ( limit && limit < Infinity ) {
                 query = query.limit( limit );
             }
-    
-            const operation = await query.update( update ).run( connection );
-    
+            
+            let operation : r.WriteResult;
+
+            if ( this.onUpdate.isSubscribed() ) {
+                const ids : string[] = await query.run( connection )
+                    .then( cursor => cursor.toArray() )
+                    .then( records => records.map( r => r.id ) );
+
+                operation = await this.query().getAll( ...ids ).update( update ).run( connection );
+            
+                this.query().getAll( ...ids ).run( connection )
+                    .then<R[]>( cursor => cursor.toArray() )
+                    .then( async records => {
+                        for ( let record of records ) {
+                            await this.onUpdate.notify( record );
+                        }
+                    } );
+            } else {
+                operation = await query.update( update ).run( connection );
+            }
+
             return operation.replaced;
         } finally {
             this.pool.release( connection );
@@ -607,8 +638,18 @@ export abstract class BaseTable<R extends { id ?: string }> {
         const connection = await this.pool.acquire();
 
         try {
+            let record : R = null;
+
+            if ( this.onDelete.isSubscribed() ) {
+                record = await this.get( id );
+            }
+
             const operation = await this.query().get( id ).delete().run( connection );
     
+            if ( record != null ) {
+                this.onDelete.notify( record );
+            }
+
             return operation.deleted > 0;
         } finally {
             this.pool.release( connection );
@@ -625,7 +666,24 @@ export abstract class BaseTable<R extends { id ?: string }> {
                 query = query.limit( limit );
             }
             
-            const operation = await query.delete().run( connection );
+            let operation : r.WriteResult;
+
+            if ( this.onDelete.isSubscribed() ) {
+                const records : R[] = await query.run( connection )
+                    .then( cursor => cursor.toArray() );
+
+                const ids : string[] = records.map( r => r.id )
+
+                operation = await this.query().getAll( ...ids ).delete().run( connection );
+        
+                Promise.resolve( records ).then( async records => {
+                    for ( let record of records ) {
+                        await this.onDelete.notify( record );
+                    }
+                } );
+            } else {
+                operation = await query.delete().run( connection );
+            }
     
             return operation.deleted;
         } finally {

@@ -91,6 +91,10 @@ export class Hook<T = any> {
         this.subscriptions = this.subscriptions.filter( sub => sub == callback );
     }
 
+    isSubscribed () : boolean {
+        return this.subscriptions.length > 0;
+    }
+
     async notify ( arg ?: T ) : Promise<void> {
         let release = null;
 
