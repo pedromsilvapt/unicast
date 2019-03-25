@@ -149,6 +149,12 @@ export function Route ( method : string | string[], path : string, handler : Rou
     const methods : string[] = typeof method === 'string' ? [ method ] : method;
 
     return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
+        if ( target.routes && !target.hasOwnProperty( 'routes' ) ) {
+            target.routes = [ ...target.routes ];
+        } else if ( !target.routes ) {
+            target.routes = [];
+        }
+
         target.routes = target.routes || [];
 
         target.routes.push( [ methods, path, propertyKey, handler, appendLast ] );
@@ -176,7 +182,11 @@ export function annotations<A extends Annotation> ( holder : Annotated, type : a
 }
 
 export function addAnnotation ( target : Annotated, type : any, annotation : any ) : void {
-    target.annotations = target.annotations || [];
+    if ( target.annotations && !target.hasOwnProperty( 'annotations' ) ) {
+        target.annotations = [ ...target.annotations ];
+    } else if ( !target.annotations ) {
+        target.annotations = [];
+    }
 
     target.annotations.push( {
         type, ...annotation
