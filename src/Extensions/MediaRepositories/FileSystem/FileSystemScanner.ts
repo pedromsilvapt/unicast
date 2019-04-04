@@ -154,7 +154,9 @@ export class FileSystemScanner {
         walker.useAbsolutePaths = false;
 
         for ( let folder of this.config.folders ) {
-            for await ( let [ videoFile, stats ] of walker.run( folder ).buffered( 50 ) ) {
+            const logger = this.server.logger.service( 'repositories/scanner/movies/' + folder ).live();
+
+            for await ( let [ videoFile, stats ] of walker.run( folder, null, logger ).buffered( 50 ) ) {
                 const dirname = path.basename( path.dirname( videoFile ) );
 
                 const details = parseTorrentName( dirname );
@@ -186,6 +188,8 @@ export class FileSystemScanner {
                     addedAt: stats.mtime
                 } as MovieMediaRecord;
             }
+
+            logger.clear().close();
         }
     }
 
@@ -343,12 +347,18 @@ export class FileSystemScanner {
         const episodesFound : Set<string> = new Set();
 
         for ( let folder of this.config.folders ) {
-            for await ( let [ videoFile, stats ] of walker.run( folder ) ) {
-                try {
-                    yield * this.scanEpisodeVideoFile( ignore, scraper, folder, videoFile, stats, showsByName, seasonsFound, episodesFound, cache );
-                } catch ( error ) {
-                    this.logScanError( videoFile, error );
+            const logger = this.server.logger.service( 'repositories/scanner/shows/' + folder ).live();
+
+            try {
+                for await ( let [ videoFile, stats ] of walker.run( folder, null, logger ) ) {
+                    try {
+                        yield * this.scanEpisodeVideoFile( ignore, scraper, folder, videoFile, stats, showsByName, seasonsFound, episodesFound, cache );
+                    } catch ( error ) {
+                        this.logScanError( videoFile, error );
+                    }
                 }
+            } finally {
+                logger.clear().close();
             }
         }
     }

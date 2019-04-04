@@ -1,6 +1,7 @@
 import * as fs from 'mz/fs';
 import * as path from 'path';
 import { AsyncStream } from 'data-async-iterators';
+import { LiveLogger } from 'clui-logger';
 
 export class FileWalker {
     useAbsolutePaths : boolean = true;
@@ -45,11 +46,17 @@ export class FileWalker {
         }
     }
 
-    run ( file : string, stats ?: fs.Stats ) : AsyncStream<[ string, fs.Stats ]> {
+    run ( file : string, stats ?: fs.Stats, progress ?: LiveLogger ) : AsyncStream<[ string, fs.Stats ]> {
         if ( !path.isAbsolute( file ) ) {
             file = path.resolve( file );
         }
 
-        return new AsyncStream( this.runSingle( file, file, stats ) );
+        let stream = new AsyncStream( this.runSingle( file, file, stats ) );
+
+        if ( progress ) {
+            stream = stream.tap( (v, i) => progress.info( `${ i + 1 } files` ) );
+        }
+
+        return stream;
     }
 }
