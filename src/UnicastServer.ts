@@ -4,7 +4,6 @@ import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeas
 import { Database, BaseTable, CollectionRecord, MediaTable } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
-import * as logger from 'restify-logger';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
 import { routes } from 'unicast-interface';
 import * as internalIp from 'internal-ip';
@@ -70,7 +69,6 @@ export class UnicastServer {
 
     readonly transcoding : TranscodingManager;
 
-    readonly diagnostics : Diagnostics;
     readonly logger : SharedLogger;
 
     readonly commands : CommandsManager;
@@ -168,15 +166,17 @@ export class UnicastServer {
             }
         } )
 
-        // Set logger format
-        logger.format( 'unicast-simple', `${chalk.blue( `[${this.http.name}]` ) } ${ chalk.green( ':method' ) } ${ chalk.cyan( ':url' ) } ${ chalk.grey( ':status' ) } :response-time ms` )
-        
-        // Attach the logger
-        this.http.use( logger( 'unicast-simple', {
-            skip( req: restify.Request ) {
-                return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );
-            }
-        } ) );
+        const httpLogger = new HttpRequestLogger( this, req => {
+            return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );
+        } );
+
+        this.http.use( httpLogger.before() );
+        this.http.on( 'after', httpLogger.after() );
+
+        httpLogger.registerHighFrequencyPattern( 
+            /\/media\/send\/(\w+)\/([\w\-_ ]+)\/session\/([\w\-_ ]+)\/stream\//, 
+            match => match[ 1 ] + '/' + match[ 2 ] + '/' + match[ 3 ]
+        );
 
         this.onError.subscribe( error => {
             this.logger.error( 'unhandled', error.message + error.stack, error );
@@ -312,6 +312,137 @@ export class UnicastServer {
                 process.exit();
             }
         }
+    }
+}
+export interface HttpRequestLoggerHFPArea {
+    key : string;
+    area : LiveLogger;
+    timeout : any;
+    acquired : number;
+}
+
+export interface HttpRequestLoggerHFP {
+    pattern : RegExp;
+    keyer ?: ( match : RegExpMatchArray ) => string;
+    maxTtl ?: number;
+    areas : Map<string, HttpRequestLoggerHFPArea>;
+}
+
+export interface HttpRequestLoggerFilter {
+    ( req : restify.Request ) : boolean;
+}
+
+export class HttpRequestLogger {
+    logger : Logger;
+
+    protected skip : HttpRequestLoggerFilter;
+
+    protected highFrequencyPatterns : HttpRequestLoggerHFP[] = [];
+
+    /**
+     * Controls how many seconds a high frequency pattern will be available to be rewritten.
+     * After this timeouts, the live area responsible for this pattern will be automatically
+     * closed and any new requests will create a new one
+     */
+    public highFrequencyMaxTtl : number = 60;
+
+    constructor ( server : UnicastServer, skip ?: HttpRequestLoggerFilter ) {
+        this.logger = server.logger.service( 'http' );
+        this.skip = skip;
+    }
+
+    protected findHighFrequencyPattern ( req : restify.Request ) : HttpRequestLoggerHFP {
+        return this.highFrequencyPatterns.find( pattern => pattern.pattern.test( req.url ) );
+    }
+
+    protected acquireHFPLiveArea ( hfp : HttpRequestLoggerHFP, req : restify.Request ) : LiveLogger {
+        const match = req.url.match( hfp.pattern );
+
+        const key = hfp.keyer ? hfp.keyer( match ) : ( match[ 1 ] || match[ 0 ] );
+
+        let existingArea = hfp.areas.get( key );
+
+        if ( existingArea == null ) {
+            existingArea = { key: key, area: this.logger.live(), timeout: null, acquired: 1 };
+
+            hfp.areas.set( key, existingArea );
+        } else {
+            existingArea.acquired += 1;
+        }
+
+        return existingArea.area;
+    }
+
+    protected releaseHFPLiveArea ( hfp : HttpRequestLoggerHFP, req : restify.Request ) {
+        const match = req.url.match( hfp.pattern );
+
+        const key = hfp.keyer ? hfp.keyer( match ) : ( match[ 1 ] || match[ 0 ] );
+
+        let existingArea = hfp.areas.get( key );
+
+        if ( existingArea ) {
+            existingArea.acquired -= 1;
+
+            if ( existingArea.acquired == 0 ) {
+                if ( existingArea.timeout != null ) {
+                    clearTimeout( existingArea.timeout );
+                }
+
+                existingArea.timeout = setTimeout( () => {
+                    existingArea.timeout = null;
+
+                    if ( existingArea.acquired == 0 ) {
+                        hfp.areas.delete( existingArea.key );
+
+                        existingArea.area.close();
+                    }
+                }, ( hfp.maxTtl || this.highFrequencyMaxTtl ) * 1000 );
+            }
+        }
+    }
+
+    registerHighFrequencyPattern ( pattern : RegExp, keyer : ( match : RegExpMatchArray ) => string = null, maxTtl : number = null ) {
+        this.highFrequencyPatterns.push( { pattern, keyer, maxTtl, areas: new Map() } );
+    }
+
+    before () {
+        return ( req : restify.Request, res : restify.Response, next : restify.Next ) => {
+            if ( !this.skip || !this.skip( req ) ) {
+                const hfp = this.findHighFrequencyPattern( req );
+
+                const live = hfp ? this.acquireHFPLiveArea( hfp, req ) : this.logger.live();
+    
+                live.info( `${ chalk.green( req.method.toUpperCase() ) } ${ chalk.grey( req.url ) } ${ chalk.grey( 'running...' ) }` );
+    
+                req.hfp = hfp;
+                req.live = live;
+                req.stopwatch = new Stopwatch().resume();
+            }
+
+            return next();
+        };
+    }
+
+    after () {
+        return ( req : restify.Request, res : restify.Response ) => {
+            if ( req.live ) {
+                const live : LiveLogger = req.live;
+
+                const stopwatch : Stopwatch = req.stopwatch;
+
+                const statusCode = res.statusCode >= 200 && res.statusCode <= 299
+                    ? chalk.grey( res.statusCode )
+                    : chalk.red( res.statusCode );
+
+                live.info( `${ chalk.green( req.method.toUpperCase() ) } ${ chalk.cyan( req.url ) } ${ statusCode } ${ stopwatch.readHumanized() }` )
+                
+                if ( !req.hfp ) {
+                    req.live.close();
+                } else {
+                    this.releaseHFPLiveArea( req.hfp, req );
+                }
+            }
+        };
     }
 }
 
@@ -838,6 +969,10 @@ export class MultiServer extends EventEmitter {
         super();
 
         this.servers = servers;
+
+        for ( let server of this.servers ) {
+            server.on( 'after', ( ...args : any[] ) => this.emit( 'after', ...args ) );
+        }
     }
     
     address () : restify.AddressInterface {

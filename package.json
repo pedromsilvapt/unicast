@@ -55,7 +55,7 @@
     "clui-progressbar": "^0.1.1",
     "composable": "^0.2.4",
     "config": "^1.26.2",
-    "data-async-iterators": "^1.4.0",
+    "data-async-iterators": "^1.4.2",
     "data-cancel-token": "^0.5.3",
     "data-collectors": "^1.0.1",
     "data-optional": "0.0.2",
