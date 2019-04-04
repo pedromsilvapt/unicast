@@ -17,7 +17,6 @@ test( "SegmentsMap: insert", ( t ) => {
     // t.plan( 4 + 3 );
 
     scheduler.on( 'stop-job', ( job : SegmentsSchedulerJob ) => {
-        console.log( job.segment, stopJobEventCounter );
         switch ( stopJobEventCounter++ ) {
             case 0:
                 t.deepEqual( job.segment, { start: 0, end: 100 } );

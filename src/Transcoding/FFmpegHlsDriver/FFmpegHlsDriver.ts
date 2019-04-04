@@ -186,8 +186,6 @@ export class FFmpegHlsDriver extends FFmpegDriver {
             const bufferSize = this.maxSegmentSize;
             const maxRate = bufferSize.minus( '1MB' ).div( this.segmentDuration );
             
-            console.log( `${ maxRate.as( DataUnit.KILOBITS, 0 ) }k`, `${ bufferSize.as( DataUnit.KILOBITS, 0 ) }k` )
-
             args.push( '-maxrate', maxRate.as( DataUnit.KILOBITS, 0 ) + 'k', '-bufsize', bufferSize.as( DataUnit.KILOBITS, 0 ) + 'k' );
         }
 

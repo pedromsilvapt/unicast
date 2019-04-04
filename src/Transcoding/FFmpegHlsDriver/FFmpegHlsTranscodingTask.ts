@@ -80,12 +80,10 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     }
 
     getSegmentTime ( index : number ) : number {
-        console.log( 'getSegmentTime', index, 'output', Math.min( index * this.getSegmentDuration(), this.input.duration ), 'duration', this.getSegmentDuration() );
         return Math.min( index * this.getSegmentDuration(), this.input.duration );
     }
 
     getTimeSegment ( time : number ) : number {
-        console.log( 'getTimeSegment', time, 'output', Math.floor( time / this.getSegmentDuration() ), 'duration', this.getSegmentDuration() );
         return Math.floor( time / this.getSegmentDuration() );
     }
 
@@ -365,8 +363,12 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
                 }
             } );
 
+            const area = this.driver.server.logger.service( 'transcoding/hls' ).live();
+
             child.stderr.pipe( progressStream( Infinity ) ).on( 'data', status => {
                 this.speedMetrics.register( +status.speed.slice( 0, status.speed.length - 1 ) );
+
+                area.info( `Speed: ${ status.speed }` );
 
                 this.addDone( status.frame - this.done );
             } );
