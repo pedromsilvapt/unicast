@@ -1125,10 +1125,10 @@ export class DatabaseDaemon {
         this.futureStart = new Future<void>();
         this.futureClose = new Future<void>();
 
-        this.server.diagnostics.info( 'Database', 'Starting engine' );
+        this.server.logger.info( 'Database', 'Starting engine' );
 
         if ( await this.online() ) {
-            this.server.diagnostics.info( 'Database', 'Engine already running. Piggybacking.' );
+            this.server.logger.info( 'Database', 'Engine already running. Piggybacking.' );
 
             return this.futureStart.resolve();
         }
@@ -1146,7 +1146,7 @@ export class DatabaseDaemon {
                 .filter( line => line != '' );
 
             for ( let line of lines ) {
-                this.server.diagnostics.info( 'Database', line );
+                this.server.logger.info( 'Database', line );
                     
                 if ( line.startsWith( 'Server ready,' ) ) {
                     setTimeout( () => this.futureStart.resolve(), 5000 );

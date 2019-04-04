@@ -71,7 +71,7 @@ export class ChromecastReceiverFactory extends ReceiverFactory<ChromecastReceive
     }
 
     async * entitiesFromScan ( existingDevices : ChromecastReceiver[], cancel : CancelToken ) : AsyncIterable<ChromecastReceiver> {
-        const scanner = new ChromecastReceiverMDNSScanner( this.server.diagnostics );
+        const scanner = new ChromecastReceiverMDNSScanner( this.server.logger );
 
         scanner.missedConnectionsThreshold = 6;
 

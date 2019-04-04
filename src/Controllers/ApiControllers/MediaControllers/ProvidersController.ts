@@ -11,7 +11,7 @@ export class ProvidersController extends BaseController {
         
         const database = this.server.database;
         
-        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.diagnostics );
+        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.logger );
 
         const [ task, done ] = BackgroundTask.fromPromise( async task => {
             const options : Partial<MediaSyncOptions> = { 
@@ -25,7 +25,7 @@ export class ProvidersController extends BaseController {
                 }
             };
 
-            this.server.diagnostics.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );
+            this.server.logger.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );
 
             const stopwatch = new Stopwatch().resume();
 
@@ -34,14 +34,14 @@ export class ProvidersController extends BaseController {
             stopwatch.mark( 'sync' );
 
             if ( !options.dryRun ) {
-                this.server.diagnostics.info( 'repositories/sync', 'starting repair' );
+                this.server.logger.info( 'repositories/sync', 'starting repair' );
 
                 await this.server.database.repair();
             }
 
             stopwatch.pause().mark( 'repair', 'sync' );
 
-            this.server.diagnostics.info( 'repositories/sync', `completed in + ${ stopwatch.readHumanized() } (sync = ${ stopwatch.readHumanized( 'sync' ) }, repair = ${ stopwatch.readHumanized( 'repair' ) })` );
+            this.server.logger.info( 'repositories/sync', `completed in + ${ stopwatch.readHumanized() } (sync = ${ stopwatch.readHumanized( 'sync' ) }, repair = ${ stopwatch.readHumanized( 'repair' ) })` );
         } );
         
         this.server.tasks.register( task );
@@ -64,12 +64,12 @@ export class ProvidersController extends BaseController {
     async repair ( req : Request, res : Response ) : Promise<void> {
         const database = this.server.database;
 
-        this.server.diagnostics.info( 'repositories/sync', `starting repair` );
+        this.server.logger.info( 'repositories/sync', `starting repair` );
 
         const results = await database.repair();
 
         const tasks = Array.from( results.tasks.entries() ).map( ( [ name, sw ] ) => `${name} = ${ sw.readHumanized() }` ).join( ', ' );
 
-        this.server.diagnostics.info( 'repositories/sync', `completed repair in + ${ results.global.readHumanized() } (${ tasks })` );
+        this.server.logger.info( 'repositories/sync', `completed repair in + ${ results.global.readHumanized() } (${ tasks })` );
     }
 }

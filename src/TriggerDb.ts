@@ -11,12 +11,12 @@ export class TriggerDb {
     }
 
     async load () : Promise<MediaTrigger[]> {
-        const diagnostics = this.server.diagnostics;
+        const logger = this.server.logger;
 
         const dbPath = this.server.storage.getPath( 'triggerdb.json' );
 
         if ( !( await fs.exists( dbPath ) ) ) {
-            diagnostics.info( 'triggerdb', 'No db file found. Loading empty.' );
+            logger.info( 'triggerdb', 'No db file found. Loading empty.' );
 
             return [];
         } else {
@@ -25,7 +25,7 @@ export class TriggerDb {
             try {
                 triggers = JSON.parse( await fs.readFile( dbPath, { encoding: 'utf8' } ) );
             } catch ( error ) {
-                diagnostics.error( 'triggerdb', 'Could not load the json database file', { error } );
+                logger.error( 'triggerdb', 'Could not load the json database file', { error } );
     
                 return [];
             }

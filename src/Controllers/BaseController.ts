@@ -1,7 +1,7 @@
 import { UnicastServer } from "../UnicastServer";
 import { Router } from 'restify-router';
 import { Request, Response, Next } from "restify";
-import { DiagnosticsService } from "../Diagnostics";
+import { Logger } from 'clui-logger';
 
 export type RoutesDeclarations = [ string[], string, string, RouteTransform, boolean ][];
 
@@ -14,14 +14,14 @@ export abstract class BaseController implements Annotated {
 
     readonly server : UnicastServer;
 
-    readonly diagnostics : DiagnosticsService;
+    readonly logger : Logger;
 
     constructor ( server : UnicastServer, prefix ?: string ) {
         this.prefix = prefix;
 
         this.server = server;
 
-        this.diagnostics = this.server.diagnostics.service( `${ this.server.name }/controller/${ this.name || this.constructor.name }` );
+        this.logger = this.server.logger.service( `${ this.server.name }/controller/${ this.name || this.constructor.name }` );
     }
 
     routes : RoutesDeclarations;
@@ -78,10 +78,8 @@ export abstract class BaseController implements Annotated {
     }
 }
 
-export function JsonResponse ( controller : { server : UnicastServer, diagnostics : DiagnosticsService }, method : string ) {
+export function JsonResponse ( controller : { server : UnicastServer, logger : Logger }, method : string ) {
     return async function ( req : Request, res : Response, next : Next ) {
-        const stopwatch = controller.server.diagnostics.stopwatch().resume();
-
         try {
             const result = await controller[ method ]( req, res );
 
@@ -89,18 +87,12 @@ export function JsonResponse ( controller : { server : UnicastServer, diagnostic
             
             next();
         } catch ( error ) {
-            controller.diagnostics.error( error.message + error.stack, error );
-            // controller.server.diagnostics.error( 'unicast/controller', error.message + error.stack, error );
+            const key = controller.logger.prefix + '.' + method;
+
+            controller.server.logger.error( key, error.message + error.stack, error );
 
             next( error );
         }
-
-        controller.server.diagnostics.register( 'request', stopwatch.pause(), {
-            url: req.url,
-            controllerName: controller.constructor.name,
-            controllerMethod : method,
-            method: req.method
-        } );
     };
 }
 

@@ -10,6 +10,7 @@ import { Semaphore } from "data-semaphore";
 import * as sortBy from 'sort-by';
 import { MpvSynchronizerController } from "../../../Subtitles/Validate/MPV/SynchronizerController";
 import { InvalidArgumentError } from "restify-errors";
+import { measure } from '../../../Diagnostics';
 
 export class SubtitlesController extends BaseController {
     protected validateSemaphore : Semaphore = new Semaphore( 1 );
@@ -55,8 +56,8 @@ export class SubtitlesController extends BaseController {
             throw new InvalidArgumentError( `Invalid media type ${ media.kind }.` );
         }
 
-        const result = await this.server.diagnostics.measure( 
-            'subtitles/search', () => this.server.subtitles.providers.search( media, langs ) 
+        const result = await measure( this.server.logger, 'subtitles/search', 
+            () => this.server.subtitles.providers.search( media, langs )
         );
         
         // When searching for subtitles for an episode, try to predict the next episode we might search

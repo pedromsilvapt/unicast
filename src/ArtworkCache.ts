@@ -127,7 +127,7 @@ export class ArtworkCache {
         try {
             const relativeCachePath = path.relative( this.server.storage.getPath( 'cache/artwork' ), cachePath );
 
-            this.server.diagnostics.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );            
+            this.server.logger.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );            
 
             await saveStreamTo( this.getReadableStream( url ), cachePath );
     
@@ -176,7 +176,7 @@ export class ArtworkCache {
             
             const relativeCachePath = path.relative( this.server.storage.getPath( 'cache/artwork' ), cachePathResized );
 
-            this.server.diagnostics.debug( 'artwork', `Transforming ${url}, saving to ${ relativeCachePath }.`, { type: 'transform', options } );
+            this.server.logger.debug( 'artwork', `Transforming ${url}, saving to ${ relativeCachePath }.`, { type: 'transform', options } );
 
             let image = await sharp( cachePath );
 

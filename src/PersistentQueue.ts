@@ -6,7 +6,7 @@ import { Semaphore } from "data-semaphore";
 import * as r from 'rethinkdb';
 import { addMilliseconds, isBefore } from 'date-fns';
 import * as sortBy from 'sort-by';
-import { DiagnosticsService } from "./Diagnostics";
+import { Logger } from 'clui-logger';
 
 export enum JobResult {
     DidNotRun = 'DNR',
@@ -21,7 +21,7 @@ export class PersistentQueue<P> {
 
     action : string;
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     protected _scheduler ?: IJobScheduler<P>;
 
@@ -50,7 +50,7 @@ export class PersistentQueue<P> {
         this.action = action;
         this.scheduler = scheduler;
 
-        this.diagnostics = this.server.diagnostics.service( this.action ? `jobs/${ this.action }` : 'jobs' );
+        this.logger = this.server.logger.service( this.action ? `jobs/${ this.action }` : 'jobs' );
     }
 
     async canRun ( jobs  : JobRecord<P>[] ) : Promise<boolean> {
@@ -106,14 +106,14 @@ export class PersistentQueue<P> {
     }
 
     protected async insert ( job : JobRecord<P> ) : Promise<JobRecord<P>> {
-        this.diagnostics.debug( `Creating job with priority ${ job.priority }.`, job.payload as any );
+        this.logger.debug( `Creating job with priority ${ job.priority }.`, job.payload as any );
         
         const replaced = await this.findReplaced( job );
         
         if ( replaced.length ) {
             const replacedIds = replaced.map( job => job.id );
             
-            this.diagnostics.debug( `Deleting outdated ${ replaced.length } jobs.`, replacedIds );
+            this.logger.debug( `Deleting outdated ${ replaced.length } jobs.`, replacedIds );
 
             await this.table.deleteMany( doc => r.expr( replacedIds ).contains( doc( "id" ) ) );
         }
@@ -152,7 +152,7 @@ export class PersistentQueue<P> {
             }
         }
 
-        this.diagnostics.debug( `Ran job ${ job.id } with result ${ result }.`, { payload: job.payload, result } );        
+        this.logger.debug( `Ran job ${ job.id } with result ${ result }.`, { payload: job.payload, result } );        
 
         if ( result === JobResult.Success ) {
             if ( job.id ) {
@@ -300,7 +300,7 @@ export class IntervalJobScheduler<P> implements IJobScheduler<P> {
     protected async flush ( queue : PersistentQueue<P> ) {
         const jobs = await this.findNext( queue, this.semaphore.count );
         
-        queue.diagnostics.debug( `Running ${ jobs.length } jobs.` );
+        queue.logger.debug( `Running ${ jobs.length } jobs.` );
 
         const results = await Promise.all( jobs.map( job => queue.run( job ) ) );
 
@@ -323,7 +323,7 @@ export class IntervalJobScheduler<P> implements IJobScheduler<P> {
 
     sleep ( queue : PersistentQueue<P> ) {
         if ( this.intervalToken.isAwake ) {
-            queue.diagnostics.debug( `Going to sleep.` );
+            queue.logger.debug( `Going to sleep.` );
             
             this.intervalToken.sleep();
         }
@@ -331,7 +331,7 @@ export class IntervalJobScheduler<P> implements IJobScheduler<P> {
 
     awake ( queue : PersistentQueue<P> ) {
         if ( !this.intervalToken.isAwake ) {
-            queue.diagnostics.debug( `Waking up.` );
+            queue.logger.debug( `Waking up.` );
             
             this.intervalToken.awake();
         }

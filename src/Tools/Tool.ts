@@ -1,8 +1,8 @@
 import { UnicastServer } from "../UnicastServer";
 import { Future } from "@pedromsilva/data-future";
-import { DiagnosticsService } from "../Diagnostics";
 import * as Case from 'case';
 import { httpPing } from '../ES2017/HttpPing';
+import { Logger } from 'clui-logger';
 
 export enum ToolValueType {
     String = 'string',
@@ -212,13 +212,13 @@ export abstract class Tool<O = any> {
 
     factory : ToolFactory<O>;
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     constructor ( server : UnicastServer, context : ExecutionContext, factory : ToolFactory<any> ) {
         this.server = server;
         this.context = context;
         this.factory = factory;
-        this.diagnostics = server.diagnostics.service( 'Tools/' + this.getName() );
+        this.logger = server.logger.service( 'Tools/' + this.getName() );
     }
 
     getName () {
@@ -238,7 +238,7 @@ export abstract class Tool<O = any> {
     }
 
     log ( ...messages : any[] ) {
-        this.diagnostics.info( messages.join( ' ' ) );
+        this.logger.info( messages.join( ' ' ) );
     }
 
     async launchServer () : Promise<void> {

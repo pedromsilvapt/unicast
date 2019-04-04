@@ -4,14 +4,14 @@ import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMedi
 import * as TVDB from 'node-tvdb';
 import { MediaRecordFactory } from "./MediaRecordFactory";
 import { UnicastServer } from "../../../UnicastServer";
-import { DiagnosticsService } from "../../../Diagnostics";
+import { Logger } from 'clui-logger';
 
 export class TheTVDB implements IScraper {
     server : UnicastServer;
 
     name : string = 'tvdb';
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     tvdb : TVDB;
     
@@ -26,7 +26,7 @@ export class TheTVDB implements IScraper {
     }
 
     onEntityInit () {
-        this.diagnostics = this.server.diagnostics.service( `scrapers/${ this.name }` );
+        this.logger = this.server.logger.service( `scrapers/${ this.name }` );
 
         this.cache.storage = new CacheStorage( this.server.storage.getPath( `cache/scrapers/${ this.name }.json` ) );
 

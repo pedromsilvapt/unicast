@@ -57,7 +57,7 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
         return flatten<ISubtitle>( await Promise.all( 
             providersAndLangs.map( ( [ provider, lang ] ) => this.cache.wrapSearch( provider.name, lang, media, () => {
                 return provider.search( media, lang ).catch( error => {
-                    this.server.diagnostics.error( 
+                    this.server.logger.error( 
                         'subtitles', 
                         error.message ? `Provider ${provider.name}: ${ error.message }` : `Error with subtitles provider "${ provider.name }" for record "${ media.title }".`,
                         error

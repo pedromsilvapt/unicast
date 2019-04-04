@@ -90,7 +90,7 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
         const parent = await this.server.media.get( options.mediaKind, options.mediaId );
 
         if ( !parent ) {
-            this.diagnostics.error( `Parent media item not found: [${ options.mediaKind }, ${ options.mediaId }]` );
+            this.logger.error( `Parent media item not found: [${ options.mediaKind }, ${ options.mediaId }]` );
         }
 
         const [ runtime, quality ] = await this.getVideoMetadata( options.video );

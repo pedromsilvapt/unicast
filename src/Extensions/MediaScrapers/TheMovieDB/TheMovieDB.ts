@@ -3,16 +3,16 @@ import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/S
 import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds } from "../../../MediaRecord";
 import { UnicastServer } from "../../../UnicastServer";
 import { MediaRecordFactory } from "./MediaRecordFactory";
-import { DiagnosticsService } from "../../../Diagnostics";
 import * as MovieDB from 'moviedb-api';
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
+import { Logger } from 'clui-logger';
 
 export class TheMovieDB implements IScraper {
     server : UnicastServer;
     
     name : string = 'moviedb';
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     cache : AsyncCache<any> = new AsyncCache();
 
@@ -30,7 +30,7 @@ export class TheMovieDB implements IScraper {
     }
 
     onEntityInit () {
-        this.diagnostics = this.server.diagnostics.service( `scrapers/${ this.name }` );
+        this.logger = this.server.logger.service( `scrapers/${ this.name }` );
 
         this.cache.storage = new CacheStorage( this.server.storage.getPath( `cache/scrapers/${ this.name }.json` ) );
 

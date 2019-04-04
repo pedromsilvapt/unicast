@@ -12,7 +12,7 @@ import { InvalidArgumentError } from "restify-errors";
 import { TranscodingSession } from "../../../Transcoding/Transcoder";
 import { MediaStreamSelectors } from "../../../MediaProviders/MediaStreams/MediaStreamSelectors";
 import { HlsVideoMediaStream } from "../../../Transcoding/FFmpegHlsDriver/HlsVideoMediaStream";
-import { DiagnosticsService } from "../../../Diagnostics";
+import { Logger } from 'clui-logger';
 
 export interface ChromecastSubtitlesConfig {
     lineFilters ?: (string | RegExp)[]
@@ -44,7 +44,7 @@ export class ChromecastReceiver extends BaseReceiver {
 
     config : ChromecastConfig;
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     constructor ( server : UnicastServer, name : string, address : string, config : ChromecastConfig = {} ) {
         super( server, name );
@@ -61,7 +61,7 @@ export class ChromecastReceiver extends BaseReceiver {
 
         this.transcoder = new ChromecastHlsTranscoder( this );
 
-        this.diagnostics = this.server.diagnostics.service( `Receivers/${ this.type }/${ this.name }` );
+        this.logger = this.server.logger.service( `Receivers/${ this.type }/${ this.name }` );
 
         this.subtitlesStyle = new ChromecastSubtitlesStyles( {
             ...this.getDefaultSubtitlesStyle(),
@@ -90,18 +90,18 @@ export class ChromecastReceiver extends BaseReceiver {
 
         client.on( 'status', ( ...args ) => this.emit( 'inner-status', ...args ) );
 
-        client.on( 'connected', () => this.diagnostics.info( 'Connected to device' ) );
+        client.on( 'connected', () => this.logger.info( 'Connected to device' ) );
 
-        client.on( 'disconnected', () => this.diagnostics.info( 'Disconnected from device' ) );
+        client.on( 'disconnected', () => this.logger.info( 'Disconnected from device' ) );
 
-        client.on( 'player-joined', () => this.diagnostics.info( 'Joined player session' ) );
+        client.on( 'player-joined', () => this.logger.info( 'Joined player session' ) );
 
-        client.on( 'player-launched', () => this.diagnostics.info( 'Launched playing session' ) );
+        client.on( 'player-launched', () => this.logger.info( 'Launched playing session' ) );
         
         client.on( 'error', error => {
-            this.diagnostics.error( error.message, error );
+            this.logger.error( error.message, error );
             
-            this.reconnect().catch( error => this.diagnostics.error( error.message, error ) );
+            this.reconnect().catch( error => this.logger.error( error.message, error ) );
         } );
 
         return client;
@@ -123,7 +123,7 @@ export class ChromecastReceiver extends BaseReceiver {
         try {
             await this.client.disconnect();
         } catch ( err ) {
-            this.diagnostics.error( err.message, err );
+            this.logger.error( err.message, err );
 
             this.client = this.createClient();
         }
@@ -143,7 +143,7 @@ export class ChromecastReceiver extends BaseReceiver {
         try {
             await this.client.close();
         } catch ( err ) {
-            this.diagnostics.error( err.message, err );
+            this.logger.error( err.message, err );
 
             this.client = this.createClient();
         }

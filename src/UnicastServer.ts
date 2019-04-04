@@ -12,13 +12,12 @@ import * as corsMiddleware from 'restify-cors-middleware';
 import { ApiController } from "./Controllers/ApiControllers/ApiController";
 import * as chalk from 'chalk';
 import { ResourceNotFoundError } from 'restify-errors';
-import { BackgroundTasksManager } from "./BackgroundTask";
+import { BackgroundTasksManager, Stopwatch } from "./BackgroundTask";
 import { Storage } from "./Storage";
 import { TranscodingManager } from "./Transcoding/TranscodingManager";
 import * as fs from 'mz/fs';
 import { EventEmitter } from "events";
 import { ArtworkCache } from "./ArtworkCache";
-import { Diagnostics } from "./Diagnostics";
 import { TriggerDb } from "./TriggerDb";
 import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
 import { Hookable, Hook } from "./Hookable";
@@ -32,6 +31,7 @@ import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
 import { Tool } from './Tools/Tool';
+import { LiveLogger, Logger, ConsoleBackend, SharedLogger } from 'clui-logger';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -71,6 +71,7 @@ export class UnicastServer {
     readonly transcoding : TranscodingManager;
 
     readonly diagnostics : Diagnostics;
+    readonly logger : SharedLogger;
 
     readonly commands : CommandsManager;
 
@@ -91,7 +92,7 @@ export class UnicastServer {
 
         this.storage = new Storage( this );
         
-        this.diagnostics = new Diagnostics( this );
+        this.logger = new SharedLogger( new ConsoleBackend() );
 
         this.database = new Database( this );
 
@@ -178,7 +179,7 @@ export class UnicastServer {
         } ) );
 
         this.onError.subscribe( error => {
-            this.diagnostics.error( 'unhandled', error.message + error.stack, error );
+            this.logger.error( 'unhandled', error.message + error.stack, error );
         } );
     }
 
@@ -227,7 +228,7 @@ export class UnicastServer {
             try {
                 await this.tools.run( tool, options );
             } catch ( error ) {
-                tool.diagnostics.error( error );
+                tool.logger.error( error );
             }
         }
     }
@@ -263,10 +264,10 @@ export class UnicastServer {
         
         await this.storage.clean();
 
-        this.diagnostics.info( this.name, this.name + ' listening on ' + this.getUrl() );
+        this.logger.info( this.name, this.name + ' listening on ' + this.getUrl() );
         
         if ( this.isHttpsEnabled ) {
-            this.diagnostics.info( this.name, this.name + ' listening on ' + this.getSecureUrl() );
+            this.logger.info( this.name, this.name + ' listening on ' + this.getSecureUrl() );
         }
     }
 
@@ -287,7 +288,7 @@ export class UnicastServer {
     }
 
     async close ( timeout : number = 0 ) {
-        this.diagnostics.info( 'unicast', 'Shutting down...' );
+        this.logger.info( 'unicast', 'Shutting down...' );
 
         await Promise.race( [
             this.onClose.notify(),
@@ -296,7 +297,7 @@ export class UnicastServer {
         
         this.http.close();
         
-        this.diagnostics.info( 'unicast', 'Server closed.' );
+        this.logger.info( 'unicast', 'Server closed.' );
     }
 
     async quit ( delay : number = 0, timeout : number = 0 ) {
@@ -591,7 +592,7 @@ export class MediaManager {
         if ( repository ) {
             repository.setPreferredMediaArt( media.kind, media.id, property, url );
         } else {
-            this.server.diagnostics.warning( 'media', `No repository named ${ media.repository } was found. Skipping setting repository.` );
+            this.server.logger.warn( 'media', `No repository named ${ media.repository } was found. Skipping setting repository.` );
         }
 
         media.art[ property ] = url;

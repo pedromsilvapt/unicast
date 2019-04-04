@@ -3,6 +3,7 @@ import { Diagnostics } from '../../../Diagnostics';
 import { Client } from 'node-ssdp';
 import * as mdns from 'multicast-dns';
 import { subject, shared, SharedNetwork } from 'data-async-iterators';
+import { Logger, SharedLogger } from 'clui-logger';
 
 export interface ChromecastReceiverIdentification {
     name : string;
@@ -37,10 +38,10 @@ export abstract class ChromecastReceiverScanner {
 
     timedOut : boolean = false;
 
-    diagnostics : Diagnostics;
+    logger : SharedLogger;
 
-    constructor ( diagnostics : Diagnostics, interval : number = 1000 * 60 * 5, timeout : number = 5000 ) {
-        this.diagnostics = diagnostics;
+    constructor ( logger : SharedLogger, interval : number = 1000 * 60 * 5, timeout : number = 5000 ) {
+        this.logger = logger;
 
         this.interval = interval;
 
@@ -78,7 +79,7 @@ export abstract class ChromecastReceiverScanner {
             this.misses.set( address, 0 );
 
             if ( !this.history.has( address ) ) {
-                this.diagnostics.debug( 'chromecast/scanner', 'new ' + name + ' ' + address );
+                this.logger.debug( 'chromecast/scanner', 'new ' + name + ' ' + address );
     
                 this.history.set( address, device );
     
@@ -115,7 +116,7 @@ export abstract class ChromecastReceiverScanner {
                         if ( this.rememberDevices && this.misses.get( ip ) > this.missedConnectionsThreshold ) {
                             this.pushDevice( { ...this.history.get( ip ), status: 'offline' } );
     
-                            this.diagnostics.debug( 'chromecast/scanner', 'destroy ' + this.history.get( ip ).name + ' ' + this.history.get( ip ).address );
+                            this.logger.debug( 'chromecast/scanner', 'destroy ' + this.history.get( ip ).name + ' ' + this.history.get( ip ).address );
     
                             this.history.delete( ip );
 
@@ -163,8 +164,8 @@ export class ChromecastReceiverSSDPScanner extends ChromecastReceiverScanner {
 
     client : Client;
     
-    constructor ( diagnostics : Diagnostics, interval : number = 10000, timeout : number = 5000 ) {
-        super( diagnostics, interval, timeout );
+    constructor ( logger : SharedLogger, interval : number = 10000, timeout : number = 5000 ) {
+        super( logger, interval, timeout );
 
         this.client = new Client( {
             explicitSocketBind: true
@@ -211,8 +212,8 @@ export class ChromecastReceiverMDNSScanner extends ChromecastReceiverScanner {
 
     onResponseHandler : Function = null;
 
-    constructor ( diagnostics : Diagnostics, interval : number = 1000 * 60 * 5, timeout : number = 1000 * 60 ) {
-        super( diagnostics, interval, timeout );
+    constructor ( logger : SharedLogger, interval : number = 1000 * 60 * 5, timeout : number = 1000 * 60 ) {
+        super( logger, interval, timeout );
 
         this.onResponseHandler = this.onMdnsResponse.bind( this );
     }

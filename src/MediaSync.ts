@@ -1,12 +1,12 @@
 import { Database } from "./Database/Database";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { DiagnosticsService, Diagnostics } from "./Diagnostics";
 import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap } from "./MediaRecord";
 import { BackgroundTask } from "./BackgroundTask";
 import { MediaManager } from "./UnicastServer";
 import { Future } from "@pedromsilva/data-future";
 import { IMediaRepository } from "./MediaRepositories/MediaRepository";
 import { CacheOptions } from './MediaScrapers/ScraperCache';
+import { SharedLogger, Logger } from 'clui-logger';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -24,13 +24,13 @@ export class MediaSync {
 
     repositories : RepositoriesManager;
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
-    constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, diagnostics : Diagnostics ) {
+    constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, logger : SharedLogger ) {
         this.media = media;
         this.database = db;
         this.repositories = repositories;
-        this.diagnostics = diagnostics.service( 'media/sync' );
+        this.logger = logger.service( 'media/sync' );
     }
 
     print ( record : MediaRecord ) : string {
@@ -82,7 +82,7 @@ export class MediaSync {
             // Update
             if ( !dryRun ) await table.updateIfChanged( match, media, { updatedAt: new Date() } );
             
-            this.diagnostics.info( 'UPDATE ' + match.id + ' ' + this.print( media ) );
+            this.logger.info( 'UPDATE ' + match.id + ' ' + this.print( media ) );
         } else {
             // Create
             if ( !dryRun ) {
@@ -99,7 +99,7 @@ export class MediaSync {
                 media.id = media.internalId;
             }
 
-            this.diagnostics.info( 'CREATE ' + this.print( media ) );
+            this.logger.info( 'CREATE ' + this.print( media ) );
 
             future.resolve( match.id );
         }
@@ -114,7 +114,7 @@ export class MediaSync {
             await table.delete( record.id );
         }
 
-        this.diagnostics.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
+        this.logger.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
     }
 
     async findRepositoryRecordsMap ( repository : IMediaRepository ) : Promise<RecordsMap<MediaRecord>> {

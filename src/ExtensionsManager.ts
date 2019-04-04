@@ -5,9 +5,9 @@ import * as fs from 'mz/fs';
 import { FileWalker } from "./ES2017/FileWalker";
 import { EntityManager } from "./EntityManager";
 import { IEntity } from "./EntityFactory";
-import { DiagnosticsService } from "./Diagnostics";
 import * as chalk from 'chalk';
 import { Synchronized } from 'data-semaphore';
+import { Logger } from 'clui-logger';
 
 let ts = null;
 
@@ -42,14 +42,14 @@ export class Extension implements IEntity {
 
     server: UnicastServer;
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     constructor ( name : string ) {
         this.name = name;
     }
 
     onEntityInit () {
-        this.diagnostics = this.server.extensions.diagnostics.service( this.name );
+        this.logger = this.server.extensions.logger.service( this.name );
         // throw new Error("Method not implemented.");
     }
 
@@ -65,12 +65,12 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
     protected loaded : boolean = false;
 
-    diagnostics : DiagnosticsService;
+    logger : Logger;
 
     constructor ( server : UnicastServer ) {
         super( server );
 
-        this.diagnostics = server.diagnostics.service( 'Extensions' );
+        this.logger = server.logger.service( 'Extensions' );
     }
 
     protected getEntityKey ( entity : Extension ) : Extension {
@@ -136,19 +136,19 @@ export class ExtensionsManager extends EntityManager<Extension> {
                 const extensionClass = Object.keys( exports ).map( key => exports[ key ] ).filter( value => value.prototype instanceof Extension )[ 0 ];
 
                 if ( !extensionClass ) {
-                    this.diagnostics.error( `Extension ${ chalk.red( namespacedName ) } could not be loaded: No Extension object found.` );
+                    this.logger.error( `Extension ${ chalk.red( namespacedName ) } could not be loaded: No Extension object found.` );
                 } else {
                     const extension = new extensionClass( name );
     
                     this.add( extension );
 
-                    this.diagnostics.info( `Extension ${ chalk.yellow( namespacedName ) } loaded.` );
+                    this.logger.info( `Extension ${ chalk.yellow( namespacedName ) } loaded.` );
 
                     loadedCount += 1;
                 }
             }
 
-            this.diagnostics.info( `All (${ chalk.yellow( loadedCount ) }) extensions loaded.` );
+            this.logger.info( `All (${ chalk.yellow( loadedCount ) }) extensions loaded.` );
         }
     }
 }
