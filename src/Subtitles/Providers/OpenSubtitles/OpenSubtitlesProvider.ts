@@ -135,13 +135,17 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
                                     return reject( err );
                                 }
     
-                                foundSubs = true;
-    
-                                stream = stream
-                                    .pipe( iconv.decodeStream( subtitle.encoding || 'CP1252' ) )
-                                    .pipe( iconv.encodeStream( 'utf8' ) );
-    
-                                resolve( stream );
+                                try {
+                                    foundSubs = true;
+        
+                                    stream = stream
+                                        .pipe( iconv.decodeStream( subtitle.encoding || 'CP1252' ) )
+                                        .pipe( iconv.encodeStream( 'utf8' ) );
+        
+                                    resolve( stream );
+                                } catch ( error ) {
+                                    reject( error );
+                                }
                             } );
     
                             file.close();
