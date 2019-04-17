@@ -15,6 +15,16 @@ function loadYamlFile ( file : string ) : any {
     return {};
 }
 
+async function loadYamlFileAsync ( file : string ) : Promise<any> {
+    if ( await fs.exists( file ) ) {
+        const content = await fs.readFile( file, { encoding: 'utf8' } );
+
+        return yaml.load( content );
+    }
+
+    return {};
+}
+
 export interface ConfigContext {
     instance: string;
     short_hostname: string;
@@ -28,7 +38,7 @@ export class Config {
 
     static singleton () : Config {
         if ( !this.instance ) {
-            this.instance = new Config();
+            this.instance = Config.load( path.join( process.cwd(), 'config' ) );
         }
 
         return this.instance;
@@ -103,7 +113,29 @@ export class Config {
         ].filter( name => name );
     }
 
+    static async getFilesAsync ( folder : string ) : Promise<string[]> {
+        if ( folder.toLowerCase().endsWith( '.yaml' ) ) {
+            return [ '' ];
+        }
+
+        const names : string[] = this.getFileNames();
+
+        const files : string[] = [];
+
+        for ( let name of names ) {
+            if ( await fs.exists( path.join( folder, name ) ) ) {
+                files.push( name );
+            }
+        }
+        
+        return files;
+    }
+
     static getFiles ( folder : string ) : string[] {
+        if ( folder.toLowerCase().endsWith( '.yaml' ) ) {
+            return [ '' ];
+        }
+
         const names : string[] = this.getFileNames();
 
         const files : string[] = [];
@@ -117,7 +149,21 @@ export class Config {
         return files;
     }
 
-    static load ( folder : string ) : any {
+    static async loadAsync ( folder : string ) : Promise<Config> {
+        let data = {};
+
+        let files = await Config.getFiles( folder );
+
+        for ( let file of files ) {
+            const content = await loadYamlFileAsync( path.join( folder, file ) );
+
+            data = extend( true, data, content );
+        }
+
+        return new Config( data );
+    }
+
+    static load ( folder : string ) : Config {
         let data = {};
 
         let files = Config.getFiles( folder );
@@ -128,13 +174,31 @@ export class Config {
             data = extend( true, data, content );
         }
 
-        return data;
+        return new Config( data );
+    }
+
+    static create ( data : any ) : Config {
+        return new Config( data );
+    }
+
+    static merge ( configs : Config[] ) : Config {
+        if ( configs.length == 1 ) {
+            return configs[ 0 ];
+        }
+
+        let data = {};
+
+        for ( let config of configs ) {
+            data = extend( true, data, config.data );
+        }
+        
+        return new Config( data );
     }
 
     data : any;
 
-    constructor () {
-        this.data = Config.load( path.join( process.cwd(), 'config' ) );
+    constructor ( data : any ) {
+        this.data = data;
     }
 
     has ( path : string ) : boolean {
@@ -143,6 +207,10 @@ export class Config {
 
     get<T = any> ( path : string, defaultValue ?: T ) : T {
         return ObjectPath.get( this.data, path, defaultValue );
+    }
+    
+    slice ( path : string ) : Config {
+        return Config.create( this.get( path, {} ) );
     }
 }
 
