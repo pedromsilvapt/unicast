@@ -44,6 +44,10 @@ export class MediaSessionsManager {
             try {
                 const status = await this.receiver.status();
                 
+                if ( status && !status.online ) {
+                    return;
+                }
+
                 if ( status && ( status.state == ReceiverStatusState.Playing
                     || status.state == ReceiverStatusState.Buffering
                     || status.state == ReceiverStatusState.Paused ) ) {

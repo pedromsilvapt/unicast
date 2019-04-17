@@ -280,6 +280,7 @@ export class ChromecastReceiver extends BaseReceiver {
         if ( !status || !status.media || !status.media.metadata.session ) {
             return {
                 timestamp: new Date(),
+                online: status != null,
                 state: ReceiverStatusState.Stopped,
                 media: {
                     time: { duration: 0, current: 0, speed: 0 },
@@ -297,6 +298,7 @@ export class ChromecastReceiver extends BaseReceiver {
 
         const normalized : ReceiverStatus = {
             timestamp: new Date(),
+            online: true,
             state: status.playerState,
             media: {
                 time: { duration: status.media.duration, current: status.currentTime, speed: status.playerState == ReceiverStatusState.Playing ? 1 : 0 },

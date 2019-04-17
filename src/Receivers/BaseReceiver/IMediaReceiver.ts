@@ -14,6 +14,7 @@ export enum ReceiverStatusState {
 
 export interface ReceiverStatus {
     timestamp : Date;
+    online: boolean;
     state : ReceiverStatusState;
     media : {
         time : ReceiverTimeStatus;

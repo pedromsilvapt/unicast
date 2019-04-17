@@ -1,12 +1,7 @@
 import { Client as WebSocket } from 'rpc-websockets';
 import { Synchronized } from 'data-semaphore';
 import { Lifetime } from '../../../ES2017/Lifetime';
-
-export enum LoadFileFlags {
-    Replace = 'replace',
-    Append = 'append',
-    AppendPlay = 'append-play'
-}
+import { LoadOptions, LoadFlags } from 'unicast-mpv/lib/Player';
 
 export class MpvConnection {
     public readonly address : string;
@@ -27,18 +22,21 @@ export class MpvConnection {
     }
 
     @Synchronized()
-    open () {
-        this.client = new WebSocket( `ws://${ this.address }:${ this.port }` );
+    async open () {
+        const client = new WebSocket( `ws://${ this.address }:${ this.port }` );
         this.clientLifetime = new Lifetime();
 
         const openLifetime = this.clientLifetime.bind( new Lifetime() );
 
-        return new Promise( ( resolve, reject ) => {
-            openLifetime.bindEvent( this.client, 'open', resolve );
-            openLifetime.bindEvent( this.client, 'error', reject );
+        await new Promise( ( resolve, reject ) => {
+            openLifetime.bindEvent( client, 'open', resolve );
+            openLifetime.bindEvent( client, 'error', reject );
 
-            this.clientLifetime.bindEvent( this.client, 'close', () => this.close() );
         } );
+        
+        this.client = client;
+        
+        this.clientLifetime.bindEvent( client, 'close', () => this.close() );
     }
 
     close () {
@@ -79,12 +77,12 @@ export class MpvConnection {
         }
     }
 
-    async play ( file : string, subtitles : string ) : Promise<void> {
-        return this.call( 'play', file, subtitles );
+    async play ( file : string, subtitles : string, options : LoadOptions ) : Promise<void> {
+        return this.call( 'play', file, subtitles, options );
     }
 
-    async loadFile ( file : string, flags : LoadFileFlags = LoadFileFlags.Replace ) : Promise<void> {
-        return this.call( 'loadFile', file, flags );
+    async loadFile ( file : string, flags : LoadFlags = LoadFlags.Replace, options : LoadOptions = {} ) : Promise<void> {
+        return this.call( 'loadFile', file, flags, options );
     }
 
     pause () : Promise<void> {

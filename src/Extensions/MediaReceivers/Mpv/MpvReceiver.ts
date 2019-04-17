@@ -1,6 +1,6 @@
 import { BaseReceiver } from '../../../Receivers/BaseReceiver/BaseReceiver';
 import { MediaPlayOptions, ReceiverStatus, ReceiverStatusState } from '../../../Receivers/BaseReceiver/IMediaReceiver';
-import { MpvConnection, LoadFileFlags } from './MpvConnection';
+import { MpvConnection } from './MpvConnection';
 import { UnicastServer } from '../../../UnicastServer';
 import { Synchronized } from 'data-semaphore';
 import { Logger } from 'clui-logger';
@@ -11,6 +11,8 @@ import { SubtitlesMediaStream } from '../../../MediaProviders/MediaStreams/Subti
 import { InvalidArgumentError } from 'restify-errors';
 import { UnicastMpv } from 'unicast-mpv';
 import { Config } from '../../../Config';
+import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord } from '../../../MediaRecord';
+import { LoadOptions } from 'unicast-mpv/lib/Player';
 
 export interface MpvConfig {
     config ?: any;
@@ -110,6 +112,20 @@ export class MpvReceiver extends BaseReceiver {
         return this.sender.host() + this.sender.getUrlFor( session, stream.id );
     }
 
+    protected async getRecordTitle ( record : MediaRecord ) : Promise<string> {
+        if ( isTvEpisodeRecord( record ) ) {
+            const season = await this.sender.receiver.server.media.get( MediaKind.TvSeason, record.tvSeasonId );
+
+            const show = await this.sender.receiver.server.media.get( MediaKind.TvShow, season.tvShowId );
+
+            return `${ show.title } - Season ${record.seasonNumber} Episode ${ record.number } "${record.title}"`;
+        } else if ( isMovieRecord( record ) ) {
+            return `${ record.title } (${ record.year })`
+        } else {
+            return record.title;
+        }
+    }
+
     async play ( id : string, customOptions ?: MediaPlayOptions): Promise<ReceiverStatus> {
         // Get the session information
         const { streams, record, options: recordPlayOptions } = await this.sessions.get( id );
@@ -125,10 +141,14 @@ export class MpvReceiver extends BaseReceiver {
                 throw new Error( `Trying to play media with no video stream is not currently supported.` );
             }
     
-            // const options : ChromecastPlayOptions = {
-            //     autoplay: typeof playOptions.autostart === 'boolean' ? playOptions.autostart : true,
-            //     currentTime: Math.max( playOptions.startTime, 0 )
-            // };
+            const title = await this.getRecordTitle( record );
+
+            const options : LoadOptions = {
+                pause: typeof playOptions.autostart === 'boolean' ? !playOptions.autostart : false,
+                start: Math.max( playOptions.startTime, 0 ),
+                title: title,
+                mediaTitle: title
+            };
 
             if ( this.sessions.current != null && this.sessions.current != id ) {
                 await this.sessions.release( this.sessions.current );
@@ -137,7 +157,7 @@ export class MpvReceiver extends BaseReceiver {
             const videoUrl = this.getStreamUrl( id, video );
             const subtitlesUrl = subtitles ? this.getStreamUrl( id, subtitles ) : null;
 
-            await this.connection.play( videoUrl, subtitlesUrl );
+            await this.connection.play( videoUrl, subtitlesUrl, options );
     
             this.sessions.current = id;
     
@@ -190,11 +210,18 @@ export class MpvReceiver extends BaseReceiver {
     }
 
     async status () : Promise<ReceiverStatus> {
-        const status = await this.connection.status();
+        const status = await this.connection.status().catch( err => {
+            if ( err && ( err.errno == 'ETIMEDOUT' || err.errno == 'ECONNREFUSED' ) ) {
+                return null;
+            }
+
+            return Promise.reject( err );
+        } );
 
         if ( !status || !status.path ) {
             return {
                 timestamp: new Date(),
+                online: status != null,
                 state: ReceiverStatusState.Stopped,
                 media: {
                     time: { duration: 0, current: 0, speed: 0 },
@@ -214,6 +241,7 @@ export class MpvReceiver extends BaseReceiver {
 
         const normalized : ReceiverStatus = {
             timestamp: new Date(),
+            online: true,
             state: status.pause ? ReceiverStatusState.Paused : ReceiverStatusState.Playing,
             media: {
                 time: { 

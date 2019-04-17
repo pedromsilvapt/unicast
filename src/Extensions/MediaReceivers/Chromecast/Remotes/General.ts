@@ -206,7 +206,6 @@ export class GeneralRemote extends EventEmitter {
         ] );
     }
 
-
     async disconnect () {
         return this.close( false );
     }
