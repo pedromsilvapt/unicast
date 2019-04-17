@@ -9,6 +9,7 @@ import * as Case from 'case';
 import { MediaStreamSelectors } from '../../MediaProviders/MediaStreams/MediaStreamSelectors';
 import * as mime from 'mime';
 import { MediaPreview } from '../../MediaPreview';
+import * as sortBy from 'sort-by';
 
 export class InvalidDeviceArgumentError extends InvalidArgumentError {
     constructor ( device : string ) {
@@ -33,7 +34,8 @@ export class PlayerController extends BaseController {
     @Route( 'get', '/list' )
     async list ( req : Request, res : Response ) {
         return Array.from( this.server.receivers )
-            .map( receiver => receiver.toJSON() );
+            .map( receiver => receiver.toJSON() )
+            .sort( sortBy( 'type', 'name' ) );
     }
 
     @Route( 'get', '/:device' )

@@ -22,7 +22,7 @@ export class HttpSender {
     }
 
     getUrlFor ( session : string, stream : string ) : string {
-        return `/media/send/${ this.receiver.type }/${ this.receiver.name }/session/${ session }/stream/${ stream }`;
+        return `/media/send/${ encodeURIComponent( this.receiver.type ) }/${ encodeURIComponent( this.receiver.name ) }/session/${ session }/stream/${ stream }`;
     }
 
     getUrlPattern () : string {

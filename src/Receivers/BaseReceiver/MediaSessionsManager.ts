@@ -155,7 +155,7 @@ export class MediaSessionsManager {
             
             const originalStreams = await this.mediaManager.providers.streams( record.sources );
             
-            const transcoding = await this.receiver.transcoder.transcode( history, record, originalStreams, history.transcoding || {}, cancel );
+            const transcoding = this.receiver.transcoder ? await this.receiver.transcoder.transcode( history, record, originalStreams, history.transcoding || {}, cancel ) : null;
 
             const streams = transcoding ? transcoding.outputs : originalStreams;
             

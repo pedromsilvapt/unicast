@@ -89,7 +89,9 @@ export function JsonResponse ( controller : { server : UnicastServer, logger : L
         } catch ( error ) {
             const key = controller.logger.prefix + '.' + method;
 
-            controller.server.logger.error( key, error.message + error.stack, error );
+            const message = error.message + ( error.stack ? ( '\n' + error.stack ) : '' );
+            
+            controller.server.logger.error( key, message, error );
 
             next( error );
         }

@@ -32,6 +32,8 @@ export interface ChromecastConfig {
 }
 
 export class ChromecastReceiver extends BaseReceiver {
+    readonly type : string = 'chromecast';
+
     readonly address : string;
 
     client : DefaultMediaRemote;

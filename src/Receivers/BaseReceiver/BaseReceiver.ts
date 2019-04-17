@@ -9,7 +9,7 @@ export abstract class BaseReceiver extends EventEmitter implements IMediaReceive
 
     readonly name : string;
 
-    readonly type : string = 'chromecast';
+    abstract readonly type : string;
 
     readonly server : UnicastServer;
 
