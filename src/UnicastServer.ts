@@ -30,6 +30,7 @@ import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
 import { Tool } from './Tools/Tool';
+import { Journal } from './Journal';
 import { LiveLogger, Logger, ConsoleBackend, SharedLogger } from 'clui-logger';
 
 export class UnicastServer {
@@ -71,6 +72,8 @@ export class UnicastServer {
 
     readonly logger : SharedLogger;
 
+    readonly journal : Journal;
+
     readonly commands : CommandsManager;
 
     readonly http : MultiServer;
@@ -93,6 +96,8 @@ export class UnicastServer {
         this.logger = new SharedLogger( new ConsoleBackend() );
 
         this.database = new Database( this );
+
+        this.journal = Journal.fromServer( this );
 
         this.tasks = new BackgroundTasksManager();
 

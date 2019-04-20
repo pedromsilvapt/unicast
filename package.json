@@ -60,6 +60,7 @@
     "data-collectors": "^1.0.1",
     "data-optional": "0.0.2",
     "data-semaphore": "^0.3.2",
+    "data-transactional-log": "^0.1.5",
     "date-fns": "^1.28.5",
     "deep-equal": "^1.0.1",
     "del": "^3.0.0",
