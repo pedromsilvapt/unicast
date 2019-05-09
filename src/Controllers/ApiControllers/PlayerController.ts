@@ -17,7 +17,7 @@ export class InvalidDeviceArgumentError extends InvalidArgumentError {
     }
 }
 
-export class NoNextPreviousMediaFound extends HttpError {
+export class NoMediaFound extends HttpError {
     constructor () {
         super( {
             statusCode: 412,
@@ -56,7 +56,7 @@ export class PlayerController extends BaseController {
         if ( device ) {
             const next = await device.sessions.getNext( device.sessions.current, req.query.strategy || 'auto' );
 
-            const [ record, options ] = next.orElseThrow( () => new NoNextPreviousMediaFound() );
+            const [ record, options ] = next.orElseThrow( () => new NoMediaFound() );
 
             const session = await device.sessions.register( record, options );
 
@@ -73,7 +73,7 @@ export class PlayerController extends BaseController {
         if ( device ) {
             const next = await device.sessions.getPrevious( device.sessions.current, req.query.strategy || 'auto' );
 
-            const [ record, options ] = next.orElseThrow( () => new NoNextPreviousMediaFound() );
+            const [ record, options ] = next.orElseThrow( () => new NoMediaFound() );
 
             const session = await device.sessions.register( record, options );
 
@@ -130,6 +130,10 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.get( kind, id );
     
+            if ( record == null ) {
+                throw new NoMediaFound();
+            }
+
             const { playlistId, playlistPosition, startTime, autostart, subtitlesOffset, transcoding } = req.body;
 
             const options : MediaPlayOptions = playlistId ? { playlistId, playlistPosition } : {};
@@ -167,6 +171,10 @@ export class PlayerController extends BaseController {
             
             const record = await this.server.media.createFromSources( sources );
     
+            if ( record == null ) {
+                throw new NoMediaFound();
+            }
+
             const session = await device.sessions.register( record );
 
             return this.preprocessStatus( req, await device.play( session ) );
