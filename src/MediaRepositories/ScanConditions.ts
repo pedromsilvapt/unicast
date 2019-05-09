@@ -21,61 +21,6 @@ export class FiltersContainer<F> {
     }
 }
 
-// export interface MediaRecordFilter {
-//     test ( media : MediaManager, record : MediaRecord ) : Promise<boolean> | boolean;
-// }
-
-// export class MediaRecordFiltersContainer extends FiltersContainer<MediaRecordFilter> implements MediaRecordFilter {
-//     public async test ( media : MediaManager, record : MediaRecord ) : Promise<boolean> {
-//         for ( let filter of this.filters ) {
-//             if ( await filter.test( media, record ) ) {
-//                 return true;
-//             }
-//         }
-        
-//         return false;
-//     }
-// }
-
-// export class MediaRecordFilterConverter implements MediaRecordFilter {
-//     protected originalFilter : PreMediaRecordFilter;
-
-//     protected useInternalId : boolean = true;
-
-//     public constructor ( filter : PreMediaRecordFilter, useInternalId : boolean = true ) {
-//         this.originalFilter = filter;
-//         this.useInternalId = useInternalId;
-//     }
-
-//     public async test ( media : MediaManager, record : MediaRecord ) : Promise<boolean> {
-//         if ( isMovieRecord( record ) && this.originalFilter.testMovie ) {
-//             const id = this.useInternalId ? record.internalId : record.id;
-
-//             return this.originalFilter.testMovie( id );
-//         } else if ( isTvShowRecord( record ) && this.originalFilter.testTvShow ) {
-//             const id = this.useInternalId ? record.internalId : record.id;
-
-//             return this.originalFilter.testTvShow( id );
-//         } else if ( isTvSeasonRecord( record ) && this.originalFilter.testTvSeason ) {
-//             const show = await media.get( MediaKind.TvShow, record.tvShowId );
-
-//             const id = this.useInternalId ? show.internalId : show.id;
-
-//             return this.originalFilter.testTvSeason( id, record.number );
-//         } else if ( isTvEpisodeRecord( record ) && this.originalFilter.testTvEpisode ) {
-//             const season = await media.get( MediaKind.TvSeason, record.tvSeasonId );
-
-//             const show = await media.get( MediaKind.TvShow, season.tvShowId );
-
-//             const id = this.useInternalId ? show.internalId : show.id;
-
-//             return this.originalFilter.testTvEpisode( id, record.seasonNumber, record.number );
-//         } else {
-//             return false;
-//         }
-//     }
-// }
-
 export interface MediaRecordFilter {
     testMovie ? ( id : string ) : boolean;
 

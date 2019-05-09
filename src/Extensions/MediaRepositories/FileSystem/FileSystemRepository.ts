@@ -82,7 +82,6 @@ export class FileSystemRepository extends MediaRepository {
 
         scanner.ignore = ignore;
 
-        //scanner.refreshConditions.add( TvMediaFilter.episode( 'Z1cMeVQ', null, null, false ) );
         scanner.refreshConditions.set( refreshConditions );
 
         let records = scanner.scan( cache ) as AsyncIterable<T>;
