@@ -7,6 +7,7 @@ import { Future } from "@pedromsilva/data-future";
 import { IMediaRepository } from "./MediaRepositories/MediaRepository";
 import { CacheOptions } from './MediaScrapers/ScraperCache';
 import { SharedLogger, Logger } from 'clui-logger';
+import { MediaRecordFilter } from './MediaRepositories/ScanConditions';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -165,7 +166,10 @@ export class MediaSync {
                     ? createRecordsMap<MediaRecord>() 
                     : await this.findRepositoryRecordsMap( repository );
 
-                for await ( let media of repository.scan( options.kinds, recordsToIgnore, options.cache || {} ) ) {
+                // Allows setting up special conditions for refreshing particular media records
+                const conditions : MediaRecordFilter[] = [];
+
+                for await ( let media of repository.scan( options.kinds, recordsToIgnore, conditions, options.cache || {} ) ) {
                     task.addTotal( 1 );
                     
                     media = { ...media };

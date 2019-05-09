@@ -6,11 +6,10 @@ import { Settings } from "../../../MediaScrapers/Settings";
 import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import * as fs from 'mz/fs';
+import { TvMediaFilter, MediaRecordFilter } from '../../../MediaRepositories/ScanConditions';
 
 export class FileSystemRepository extends MediaRepository {
     config : FileSystemScannerConfig;
-
-    scanner : FileSystemScanner;
 
     settings : Settings;
 
@@ -74,14 +73,19 @@ export class FileSystemRepository extends MediaRepository {
         this.subtitles = new FileSystemSubtitlesRepository( this.server );
 
         this.settings = new Settings( this.server.storage.getPath( `settings/repositories/${ this.name }.json` ) );
-    
-        this.scanner = new FileSystemScanner( this.server, this.config, this.settings );
 
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap(), cache : CacheOptions = {} ) : AsyncIterable<T> {
-        let records = this.scanner.scan( ignore, cache ) as AsyncIterable<T>;
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap(), refreshConditions : MediaRecordFilter[] = [], cache : CacheOptions = {} ) : AsyncIterable<T> {
+        const scanner = new FileSystemScanner( this.server, this.config, this.settings );
+
+        scanner.ignore = ignore;
+
+        //scanner.refreshConditions.add( TvMediaFilter.episode( 'Z1cMeVQ', null, null, false ) );
+        scanner.refreshConditions.set( refreshConditions );
+
+        let records = scanner.scan( cache ) as AsyncIterable<T>;
 
         if ( filterKind ) {
             records = filter( records, record => filterKind.includes( record.kind ) );
@@ -108,11 +112,11 @@ export class FileSystemRepository extends MediaRepository {
     }
 
     setPreferredMediaArt ( kind : MediaKind, id : string, key : string, url : string ) {
-        this.scanner.settings.set( [ 'art', kind, id, key ], url );
+        this.settings.set( [ 'art', kind, id, key ], url );
     }
 
     getPreferredMediaArt ( kind : MediaKind, id : string, key : string ) : string {
-        return this.scanner.settings.get<string>( [ 'art', kind, id, key ], null );
+        return this.settings.get<string>( [ 'art', kind, id, key ], null );
     }
 
     setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string ) {

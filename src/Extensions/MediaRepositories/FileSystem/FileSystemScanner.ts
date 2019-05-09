@@ -1,4 +1,4 @@
-import { MovieMediaRecord, TvEpisodeMediaRecord, TvShowMediaRecord, MediaRecord, PlayableQualityRecord, MediaKind, RecordsMap, TvSeasonMediaRecord } from "../../../MediaRecord";
+import { MovieMediaRecord, TvEpisodeMediaRecord, TvShowMediaRecord, MediaRecord, PlayableQualityRecord, MediaKind, RecordsMap, TvSeasonMediaRecord, createRecordsMap } from "../../../MediaRecord";
 import * as parseTorrentName from 'parse-torrent-name';
 import { FileWalker } from "../../../ES2017/FileWalker";
 import * as path from 'path';
@@ -11,6 +11,7 @@ import * as minimatch from 'minimatch';
 import { Settings } from "../../../MediaScrapers/Settings";
 import { LazyValue } from "../../../ES2017/LazyValue";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
+import { MediaRecordFiltersContainer } from '../../../MediaRepositories/ScanConditions';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
     if ( obj == null ) {
@@ -107,6 +108,17 @@ export class FileSystemScanner {
     // TODO placeholder for repository name
     name : string = 'filesystem';
 
+    ignore : RecordsMap<MediaRecord> = createRecordsMap();
+
+    refreshConditions : MediaRecordFiltersContainer = new MediaRecordFiltersContainer();
+
+    protected showsByName : Map<string, TvShowMediaRecord> = new Map();
+
+    protected seasonsFound : Set<string> = new Set();
+
+    protected episodesFound : Set<string> = new Set();
+
+
     constructor ( server : UnicastServer, config : FileSystemScannerConfig, settings : Settings ) {
         this.server = server;
 
@@ -122,7 +134,15 @@ export class FileSystemScanner {
     async logScanInfo ( ...info : any[] ) {
         // console.log( ...info );
     }
-    
+
+    protected removeIgnore ( kind : MediaKind, id : string ) {
+        const map = this.ignore.get( kind );
+
+        if ( map != null ) {
+            map.delete( id );
+        }
+    }
+
     parseQuality ( file : string ) : PlayableQualityRecord {
         const quality = parseTorrentName( path.basename( file, path.extname( file ) ) ) || {};
 
@@ -139,14 +159,14 @@ export class FileSystemScanner {
 
         if ( !movieId ) {
             const title = typeof details.year === 'number' ? ( details.title + ` (${ details.year })` ) : details.title;
-                    
+            
             return ( await scraper.searchMovie( title, 1, cache ) )[ 0 ];
         } else {
             return scraper.getMovie( movieId, cache );
         }
     }
 
-    async * scanMovies ( ignore : RecordsMap<MediaRecord>, cache : CacheOptions = {} ) : AsyncIterableIterator<MovieMediaRecord> {
+    async * scanMovies ( cache : CacheOptions = {} ) : AsyncIterableIterator<MovieMediaRecord> {
         const walker = new VideosFileWalker( this.config.exclude || [] );
 
         const scraper = this.server.scrapers.get( this.config.scrapper );
@@ -157,36 +177,52 @@ export class FileSystemScanner {
             const logger = this.server.logger.service( 'repositories/scanner/movies/' + folder ).live();
 
             for await ( let [ videoFile, stats ] of walker.run( folder, null, logger ).buffered( 50 ) ) {
-                const dirname = path.basename( path.dirname( videoFile ) );
+                try {
+                    const dirname = path.basename( path.dirname( videoFile ) );
+    
+                    if ( !dirname ) {
+                        logger.static().warn( `File ${ videoFile } is not inside a directory, will be skipped.` );
 
-                const details = parseTorrentName( dirname );
+                        continue;
+                    }
 
-                const id = shorthash.unique( videoFile );
+                    const details = parseTorrentName( dirname );
+    
+                    const id = shorthash.unique( videoFile );
+    
+                    let movie = unwrap( clone( this.ignore.get( MediaKind.Movie ).get( id ) as MovieMediaRecord ) );
 
-                if ( ignore.get( MediaKind.Movie ).has( id ) ) {
-                    yield unwrap( clone( ignore.get( MediaKind.Movie ).get( id ) as MovieMediaRecord ) );
+                    if ( movie != null && !this.refreshConditions.testMovie( id ) ) {
+                        yield movie;
+    
+                        continue;
+                    }
 
-                    continue;
+                    this.removeIgnore( MediaKind.Movie, id );
+    
+                    const movieCache : CacheOptions = this.refreshConditions.testMovie( id ) ? { ...cache, readTtl: 60  } : cache;
+
+                    movie = await this.findMovieFor( scraper, id, details, movieCache );
+    
+                    if ( !movie ) {
+                        this.logScanError( videoFile, 'Cannot find movie ' + id + ' ' + details.title );
+    
+                        continue;
+                    }
+    
+                    this.logScanInfo( 'Found', movie.id, movie.title, movie.year );
+    
+                    yield {
+                        ...movie,
+                        id: id,
+                        internalId: movie.id,
+                        sources: [ { "id": path.join( folder, videoFile ) } ],
+                        quality: this.parseQuality( videoFile ),
+                        addedAt: stats.mtime
+                    } as MovieMediaRecord;
+                } catch ( error ) {
+                    logger.static().error( videoFile + ' ' + error.message + '\n' + error.stack );
                 }
-
-                const movie = await this.findMovieFor( scraper, id, details, cache );
-
-                if ( !movie ) {
-                    this.logScanError( videoFile, 'Cannot find movie ' + id + ' ' + details.title );
-
-                    continue;
-                }
-
-                this.logScanInfo( 'Found', movie.id, movie.title, movie.year );
-
-                yield {
-                    ...movie,
-                    id: id,
-                    internalId: movie.id,
-                    sources: [ { "id": path.join( folder, videoFile ) } ],
-                    quality: this.parseQuality( videoFile ),
-                    addedAt: stats.mtime
-                } as MovieMediaRecord;
             }
 
             logger.clear().close();
@@ -203,26 +239,30 @@ export class FileSystemScanner {
         }
     }
 
-    async * scanEpisodeVideoFile ( ignore : RecordsMap<MediaRecord>, scraper : IScraper, folder : string, videoFile : string, stats : fs.Stats, showsByName : Map<string, TvShowMediaRecord>, seasonsFound : Set<string>, episodesFound : Set<string>, cache : CacheOptions = {} ) : AsyncIterableIterator<MediaRecord> {
+    async * scanEpisodeVideoFile ( scraper : IScraper, folder : string, videoFile : string, stats : fs.Stats, cache : CacheOptions = {} ) : AsyncIterableIterator<MediaRecord> {
         const showName = pathRootName( videoFile );
 
         // Since each TV Show has many episodes, it would be wasteful to try and fetch it every time
         // So we simply save a cached version after the first episode to speed up the process
-        let show : TvShowMediaRecord = showsByName.get( showName );
+        let show : TvShowMediaRecord = this.showsByName.get( showName );
 
         const id = shorthash.unique( showName );
 
         if ( !show ) {            
             // In case the option `refetchExisting` is false, the existing media records stored in the database are accessible in the 
             // `ignore` variable. We try to retrieve the record (show can therefore be null or not)
-            show = unwrap( clone( ignore.get( MediaKind.TvShow ).get( id ) as TvShowMediaRecord ) );
+            show = unwrap( clone( this.ignore.get( MediaKind.TvShow ).get( id ) as TvShowMediaRecord ) );
 
             // If show is not null, we can simply store it for later, and move one
-            if ( show != null ) {
-                showsByName.set( showName, show );
+            if ( show != null && !this.refreshConditions.testTvShow( id ) ) {
+                this.showsByName.set( showName, show );
             } else {
+                this.removeIgnore( MediaKind.TvShow, id );
+
                 // Or if it is null, it must be a new show (or `refetchExisting` is true) and so we need to fetch it from the scraper
-                showsByName.set( showName, show = clone( await this.findTvShowFor( scraper, showName, cache ) ) );
+                const showCache : CacheOptions = this.refreshConditions.testTvShow( id ) ? { ...cache, readTtl: 60  } : cache;
+
+                this.showsByName.set( showName, show = clone( await this.findTvShowFor( scraper, showName, showCache ) ) );
 
                 // If we found a show in the scraper
                 if ( show != null ) {
@@ -279,10 +319,16 @@ export class FileSystemScanner {
 
         const seasonId = '' + show.id + 'S' + details.season;
 
-        let season = unwrap( clone( ignore.get( MediaKind.TvSeason ).get( seasonId ) as TvSeasonMediaRecord ) );
+        let season = unwrap( clone( this.ignore.get( MediaKind.TvSeason ).get( seasonId ) as TvSeasonMediaRecord ) );
 
-        if ( season == null ) {
-            season = clone( await scraper.getTvShowSeason( await remoteShowInternalId.get(), details.season, cache ) );
+        if ( season == null || this.refreshConditions.testTvSeason( id, details.season ) ) {
+            this.removeIgnore( MediaKind.TvSeason, seasonId );
+
+            const seasonCache : CacheOptions = this.refreshConditions.testTvSeason( id, details.season ) 
+                ? { ...cache, readTtl: 60  } 
+                : cache;
+
+            season = clone( await scraper.getTvShowSeason( await remoteShowInternalId.get(), details.season, seasonCache ) );
 
             if ( season != null ) {
                 season.internalId = season.id;
@@ -295,8 +341,8 @@ export class FileSystemScanner {
             return logError( 'Season is null' );
         }
 
-        if ( !seasonsFound.has( season.id ) ) {
-            seasonsFound.add( season.id );
+        if ( !this.seasonsFound.has( season.id ) ) {
+            this.seasonsFound.add( season.id );
 
             yield season;
         }
@@ -305,10 +351,16 @@ export class FileSystemScanner {
 
         const episodeId = shorthash.unique( fullVideoFile );
 
-        let episode = unwrap( clone( ignore.get( MediaKind.TvEpisode ).get( episodeId ) as TvEpisodeMediaRecord ) );
+        let episode = unwrap( clone( this.ignore.get( MediaKind.TvEpisode ).get( episodeId ) as TvEpisodeMediaRecord ) );
         
-        if ( episode == null ) {
-            episode = clone( await scraper.getTvShowEpisode( await remoteShowInternalId.get(), details.season, details.episode, cache ).catch<TvEpisodeMediaRecord>( () => null ) );
+        if ( episode == null || this.refreshConditions.testTvEpisode( id, details.season, details.episode ) ) {
+            this.removeIgnore( MediaKind.TvEpisode, episodeId );
+
+            const episodeCache : CacheOptions = this.refreshConditions.testTvEpisode( id, details.season, details.episode ) 
+                ? { ...cache, readTtl: 60  } 
+                : cache;
+
+            episode = clone( await scraper.getTvShowEpisode( await remoteShowInternalId.get(), details.season, details.episode, episodeCache ).catch<TvEpisodeMediaRecord>( () => null ) );
         } else {
             // If episode was supposed to be ignored, we can just yield it and exit from the function
             yield episode;
@@ -333,18 +385,12 @@ export class FileSystemScanner {
         } as TvEpisodeMediaRecord;
     }
 
-    async * scanShows ( ignore : RecordsMap<MediaRecord>, cache : CacheOptions = {} ) : AsyncIterableIterator<MediaRecord> {
+    async * scanShows ( cache : CacheOptions = {} ) : AsyncIterableIterator<MediaRecord> {
         const walker = new VideosFileWalker( this.config.exclude || [] );
 
         const scraper = this.server.scrapers.get( this.config.scrapper );
 
         walker.useAbsolutePaths = false;
-
-        const showsByName : Map<string, TvShowMediaRecord> = new Map();
-
-        const seasonsFound : Set<string> = new Set();
-
-        const episodesFound : Set<string> = new Set();
 
         for ( let folder of this.config.folders ) {
             const logger = this.server.logger.service( 'repositories/scanner/shows/' + folder ).live();
@@ -352,7 +398,7 @@ export class FileSystemScanner {
             try {
                 for await ( let [ videoFile, stats ] of walker.run( folder, null, logger ) ) {
                     try {
-                        yield * this.scanEpisodeVideoFile( ignore, scraper, folder, videoFile, stats, showsByName, seasonsFound, episodesFound, cache );
+                        yield * this.scanEpisodeVideoFile( scraper, folder, videoFile, stats, cache );
                     } catch ( error ) {
                         this.logScanError( videoFile, error );
                     }
@@ -363,11 +409,11 @@ export class FileSystemScanner {
         }
     }
 
-    scan ( ignore : RecordsMap<MediaRecord>, cache : CacheOptions = {} ) : AsyncIterable<MediaRecord> {
+    scan ( cache : CacheOptions = {} ) : AsyncIterable<MediaRecord> {
         if ( this.config.content === MediaScanContent.Movies ) {
-            return this.scanMovies( ignore, cache );
+            return this.scanMovies( cache );
         } else if ( this.config.content === MediaScanContent.TvShows ) {
-            return this.scanShows( ignore, cache );
+            return this.scanShows( cache );
         } else {
             throw new Error( `Invalid file system scanning type ${ this.config.content }` );
         }
