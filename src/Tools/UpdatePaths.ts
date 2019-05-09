@@ -1,5 +1,6 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
 import { PlayableMediaRecord } from "../MediaRecord";
+import * as shorthash from 'shorthash';
 
 interface UpdatePathsOptions {
     oldPath : string;
@@ -45,6 +46,8 @@ export class UpdatePathsTool extends Tool<UpdatePathsOptions> {
 
                     source.id = newPath;
 
+                    record.internalId = shorthash.unique( newPath );
+
                     changed = true;
                 }
             }
@@ -53,7 +56,7 @@ export class UpdatePathsTool extends Tool<UpdatePathsOptions> {
                 const table = this.server.media.getTable( record.kind );
 
                 if ( !options.dryRun ) {
-                    await table.update( record.id, { sources: record.sources } );
+                    await table.update( record.id, { sources: record.sources, internalId: record.internalId } );
                 }
             }
         }
