@@ -1,5 +1,6 @@
-import { MediaRecord, MediaKind, isMovieRecord, isTvShowRecord, isTvSeasonRecord, isTvEpisodeRecord } from '../MediaRecord';
+import { MediaRecord, MediaKind, isMovieRecord, isTvShowRecord, isTvSeasonRecord, isTvEpisodeRecord, RecordsSet, createRecordsSet } from '../MediaRecord';
 import { MediaManager } from '../UnicastServer';
+import { AsyncStream } from 'data-async-iterators';
 
 export class FiltersContainer<F> {
     protected filters : F[] = [];
@@ -115,5 +116,63 @@ export class MovieMediaFilter implements MediaRecordFilter {
 
     public testMovie ( id : string ) : boolean {
         return this.movie === null || this.movie === id;
+    }
+}
+
+export class MediaSetFilter implements MediaRecordFilter {
+    protected static async identifier ( record : MediaRecord, media : MediaManager ) : Promise<string> {
+        if ( isMovieRecord( record ) || isTvShowRecord( record ) ) {
+            return record.internalId;
+        } else if ( isTvSeasonRecord( record ) ) {
+            const tvShowId = await media.get( MediaKind.TvSeason, record.tvShowId );
+
+            return `${ tvShowId.internalId }|${ record.number }`;
+        } else if ( isTvEpisodeRecord( record ) ) {
+            const tvSeason = await media.get( MediaKind.TvSeason, record.tvSeasonId );
+
+            const tvShow = await media.get( MediaKind.TvShow, tvSeason.tvShowId );
+
+            return `${ tvShow.internalId }|${ tvSeason.number }|${ record.number }`;
+        } else {
+            return null;
+        }
+    }
+
+    public static async list ( records : Iterable<MediaRecord>, media : MediaManager ) : Promise<MediaSetFilter> {
+        const set = createRecordsSet();
+
+        await new AsyncStream( records )
+            .parallel( async record => {
+                const id = await MediaSetFilter.identifier( record, media );
+                
+                if ( id != null ) {
+                    set.get( record.kind ).add( id );
+                }
+            }, 10 )
+            .drain();
+
+        return new MediaSetFilter( set );
+    }
+
+    recordsSet : RecordsSet;
+
+    constructor ( set : RecordsSet ) {
+        this.recordsSet = set;
+    }
+
+    public testMovie ( id : string ) : boolean {
+        return this.recordsSet.get( MediaKind.Movie ).has( id );
+    }
+
+    public testTvShow ( id : string ) : boolean {
+        return this.recordsSet.get( MediaKind.TvShow ).has( id );
+    }
+
+    public testTvSeason ( id : string, season : number ) : boolean {
+        return this.recordsSet.get( MediaKind.TvSeason ).has( `${ id }|${ season }` );
+    }
+
+    public testTvEpisode ( id : string, season : number, episode : number ) : boolean {
+        return this.recordsSet.get( MediaKind.TvEpisode ).has( `${ id }|${ season }|${ episode }` );
     }
 }

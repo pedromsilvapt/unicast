@@ -7,13 +7,14 @@ import { Future } from "@pedromsilva/data-future";
 import { IMediaRepository } from "./MediaRepositories/MediaRepository";
 import { CacheOptions } from './MediaScrapers/ScraperCache';
 import { SharedLogger, Logger } from 'clui-logger';
-import { MediaRecordFilter } from './MediaRepositories/ScanConditions';
+import { MediaRecordFilter, TvMediaFilter, MediaSetFilter } from './MediaRepositories/ScanConditions';
 
 export interface MediaSyncOptions {
     repositories : string[];
     kinds : MediaKind[];
     cleanMissing : boolean;
     refetchExisting : boolean;
+    refetchIncompleteRecords : boolean;
     dryRun : boolean;
     cache ?: CacheOptions;
 }
@@ -136,6 +137,14 @@ export class MediaSync {
         return recordsSet;
     }
 
+    async findIncompleteRecords ( repository : IMediaRepository ) : Promise<MediaRecordFilter[]> {
+        const episodes = await this.database.tables.episodes.findStream( query => query.filter( { repository: repository.name } ) )
+            .filter( ep => ep.art.thumbnail == null )
+            .toArray();
+
+            return [ await MediaSetFilter.list( episodes, this.media ) ];
+    }
+
     async run ( task : BackgroundTask = null, options : Partial<MediaSyncOptions> = {} ) : Promise<void> {
         task = task || new BackgroundTask();
 
@@ -167,7 +176,9 @@ export class MediaSync {
                     : await this.findRepositoryRecordsMap( repository );
 
                 // Allows setting up special conditions for refreshing particular media records
-                const conditions : MediaRecordFilter[] = [];
+                const conditions : MediaRecordFilter[] = options.refetchIncompleteRecords
+                    ? await this.findIncompleteRecords( repository )
+                    : [];
 
                 for await ( let media of repository.scan( options.kinds, recordsToIgnore, conditions, options.cache || {} ) ) {
                     task.addTotal( 1 );
