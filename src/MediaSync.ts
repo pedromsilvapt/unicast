@@ -139,10 +139,14 @@ export class MediaSync {
 
     async findIncompleteRecords ( repository : IMediaRepository ) : Promise<MediaRecordFilter[]> {
         const episodes = await this.database.tables.episodes.findStream( query => query.filter( { repository: repository.name } ) )
-            .filter( ep => ep.art.thumbnail == null )
+            .filter( ep => ep.art.thumbnail == null || ep.plot == null )
             .toArray();
 
-            return [ await MediaSetFilter.list( episodes, this.media ) ];
+        const seasons = await this.database.tables.seasons.findStream( query => query.filter( { repository: repository.name } ) )
+            .filter( ep => ep.art.poster == null )
+            .toArray();
+
+        return [ await MediaSetFilter.list( [...episodes, ...seasons], this.media ) ];
     }
 
     async run ( task : BackgroundTask = null, options : Partial<MediaSyncOptions> = {} ) : Promise<void> {
