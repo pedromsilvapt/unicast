@@ -14,7 +14,7 @@ export interface MediaSyncOptions {
     kinds : MediaKind[];
     cleanMissing : boolean;
     refetchExisting : boolean;
-    refetchIncompleteRecords : boolean;
+    refetchIncomplete : boolean;
     dryRun : boolean;
     cache ?: CacheOptions;
 }
@@ -180,7 +180,7 @@ export class MediaSync {
                     : await this.findRepositoryRecordsMap( repository );
 
                 // Allows setting up special conditions for refreshing particular media records
-                const conditions : MediaRecordFilter[] = options.refetchIncompleteRecords
+                const conditions : MediaRecordFilter[] = options.refetchIncomplete
                     ? await this.findIncompleteRecords( repository )
                     : [];
 

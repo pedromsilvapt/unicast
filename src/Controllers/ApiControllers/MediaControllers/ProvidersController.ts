@@ -19,7 +19,7 @@ export class ProvidersController extends BaseController {
                 cleanMissing: req.query.cleanMissing == 'true', 
                 dryRun: req.query.dryRun === 'true', 
                 refetchExisting: req.query.refetchExisting == 'true',
-                refetchIncompleteRecords: req.query.refetchIncompleteRecords == 'true',
+                refetchIncomplete: req.query.refetchIncomplete == 'true',
                 cache: {
                     readCache: req.query[ 'cache[read]' ] != 'false',
                     writeCache: req.query[ 'cache[write]' ] != 'false'

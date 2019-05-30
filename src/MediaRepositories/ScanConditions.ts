@@ -124,13 +124,25 @@ export class MediaSetFilter implements MediaRecordFilter {
         if ( isMovieRecord( record ) || isTvShowRecord( record ) ) {
             return record.internalId;
         } else if ( isTvSeasonRecord( record ) ) {
-            const tvShowId = await media.get( MediaKind.TvSeason, record.tvShowId );
+            const tvShow = await media.get( MediaKind.TvShow, record.tvShowId );
 
-            return `${ tvShowId.internalId }|${ record.number }`;
+            if ( tvShow == null ) {
+                return null;
+            }
+
+            return `${ tvShow.internalId }|${ record.number }`;
         } else if ( isTvEpisodeRecord( record ) ) {
             const tvSeason = await media.get( MediaKind.TvSeason, record.tvSeasonId );
 
+            if ( tvSeason == null ) {
+                return null;
+            }
+
             const tvShow = await media.get( MediaKind.TvShow, tvSeason.tvShowId );
+
+            if ( tvShow == null ) {
+                return null;
+            }
 
             return `${ tvShow.internalId }|${ tvSeason.number }|${ record.number }`;
         } else {
