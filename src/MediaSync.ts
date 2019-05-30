@@ -84,7 +84,7 @@ export class MediaSync {
             // Update
             if ( !dryRun ) await table.updateIfChanged( match, media, { updatedAt: new Date() } );
             
-            this.logger.info( 'UPDATE ' + match.id + ' ' + this.print( media ) );
+            if ( table.isChanged( match, media ) ) this.logger.info( 'UPDATE ' + match.id + ' ' + this.print( media ) + ' ' + JSON.stringify( table.getLocalChanges( match, media ) ) );
         } else {
             // Create
             if ( !dryRun ) {

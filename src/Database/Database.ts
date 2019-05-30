@@ -586,8 +586,16 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
+    getLocalChanges ( baseRecord : object, changes : object ) : string[] {
+        return Object.keys( changes ).filter( key => !equals( baseRecord[ key ], changes[ key ] ) );
+    }
+
+    isChanged ( baseRecord : object, changes : object ) : boolean {
+        return Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) );
+    }
+
     async updateIfChanged ( baseRecord : object, changes : object, conditionalChanges : object = null ) : Promise<R> {
-        if ( Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) ) ) {
+        if ( this.isChanged( baseRecord, changes ) ) {
             if ( conditionalChanges && typeof conditionalChanges == 'object' ) {
                 changes = { ...changes, ...conditionalChanges };
             }
