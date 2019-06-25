@@ -20,6 +20,7 @@ export class ProvidersController extends BaseController {
                 dryRun: req.query.dryRun === 'true', 
                 refetchExisting: req.query.refetchExisting == 'true',
                 refetchIncomplete: req.query.refetchIncomplete == 'true',
+                updateMoved: req.query.updateMoved == 'true' || true,
                 cache: {
                     readCache: req.query[ 'cache[read]' ] != 'false',
                     writeCache: req.query[ 'cache[write]' ] != 'false'

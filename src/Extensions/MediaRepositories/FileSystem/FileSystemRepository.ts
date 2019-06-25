@@ -7,6 +7,7 @@ import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import * as fs from 'mz/fs';
 import { TvMediaFilter, MediaRecordFilter } from '../../../MediaRepositories/ScanConditions';
+import { MediaSyncSnapshot } from '../../../MediaSync';
 
 export class FileSystemRepository extends MediaRepository {
     config : FileSystemScannerConfig;
@@ -77,10 +78,10 @@ export class FileSystemRepository extends MediaRepository {
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, ignore : RecordsMap<MediaRecord> = createRecordsMap(), refreshConditions : MediaRecordFilter[] = [], cache : CacheOptions = {} ) : AsyncIterable<T> {
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, snapshot : MediaSyncSnapshot, refreshConditions : MediaRecordFilter[] = [], cache : CacheOptions = {} ) : AsyncIterable<T> {
         const scanner = new FileSystemScanner( this.server, this.config, this.settings );
 
-        scanner.ignore = ignore;
+        scanner.snapshot = snapshot;
 
         scanner.refreshConditions.set( refreshConditions );
 

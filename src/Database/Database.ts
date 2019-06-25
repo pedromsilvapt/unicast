@@ -1027,7 +1027,8 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
     dateFields = [ 'createdAt', 'updatedAt' ];
 
     indexesSchema : IndexSchema[] = [ 
-        { name: 'createdAt' }
+        { name: 'createdAt' },
+        { name: 'reference', expression: [ r.row( 'reference' )( 'mediaKind' ), r.row( 'reference' )( 'mediaId' ) ] }
     ];
     
     relations: {

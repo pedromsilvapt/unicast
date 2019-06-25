@@ -12,6 +12,7 @@ import { Settings } from "../../../MediaScrapers/Settings";
 import { LazyValue } from "../../../ES2017/LazyValue";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import { MediaRecordFiltersContainer } from '../../../MediaRepositories/ScanConditions';
+import { MediaSyncSnapshot } from '../../../MediaSync';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
     if ( obj == null ) {
@@ -108,7 +109,7 @@ export class FileSystemScanner {
     // TODO placeholder for repository name
     name : string = 'filesystem';
 
-    ignore : RecordsMap<MediaRecord> = createRecordsMap();
+    snapshot : MediaSyncSnapshot;
 
     refreshConditions : MediaRecordFiltersContainer = new MediaRecordFiltersContainer();
 
@@ -136,7 +137,7 @@ export class FileSystemScanner {
     }
 
     protected removeIgnore ( kind : MediaKind, id : string ) {
-        const map = this.ignore.get( kind );
+        const map = this.snapshot.recordsToIgnore.get( kind );
 
         if ( map != null ) {
             map.delete( id );
@@ -190,7 +191,7 @@ export class FileSystemScanner {
     
                     const id = shorthash.unique( videoFile );
     
-                    let movie = unwrap( clone( this.ignore.get( MediaKind.Movie ).get( id ) as MovieMediaRecord ) );
+                    let movie = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.Movie ).get( id ) as MovieMediaRecord ) );
 
                     if ( movie != null && !this.refreshConditions.testMovie( id ) ) {
                         yield movie;
@@ -251,7 +252,7 @@ export class FileSystemScanner {
         if ( !show ) {            
             // In case the option `refetchExisting` is false, the existing media records stored in the database are accessible in the 
             // `ignore` variable. We try to retrieve the record (show can therefore be null or not)
-            show = unwrap( clone( this.ignore.get( MediaKind.TvShow ).get( id ) as TvShowMediaRecord ) );
+            show = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.TvShow ).get( id ) as TvShowMediaRecord ) );
 
             // If show is not null, we can simply store it for later, and move one
             if ( show != null && !this.refreshConditions.testTvShow( id ) ) {
@@ -319,7 +320,7 @@ export class FileSystemScanner {
 
         const seasonId = '' + show.id + 'S' + details.season;
 
-        let season = unwrap( clone( this.ignore.get( MediaKind.TvSeason ).get( seasonId ) as TvSeasonMediaRecord ) );
+        let season = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.TvSeason ).get( seasonId ) as TvSeasonMediaRecord ) );
 
         if ( season == null || this.refreshConditions.testTvSeason( id, details.season ) ) {
             this.removeIgnore( MediaKind.TvSeason, seasonId );
@@ -351,7 +352,7 @@ export class FileSystemScanner {
 
         const episodeId = shorthash.unique( fullVideoFile );
 
-        let episode = unwrap( clone( this.ignore.get( MediaKind.TvEpisode ).get( episodeId ) as TvEpisodeMediaRecord ) );
+        let episode = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.TvEpisode ).get( episodeId ) as TvEpisodeMediaRecord ) );
         
         if ( episode == null || this.refreshConditions.testTvEpisode( id, details.season, details.episode ) ) {
             this.removeIgnore( MediaKind.TvEpisode, episodeId );
