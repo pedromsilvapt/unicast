@@ -11,6 +11,7 @@ import { SubtitlesMediaStream } from '../../../MediaProviders/MediaStreams/Subti
 import { InvalidArgumentError } from 'restify-errors';
 import { UnicastMpv } from 'unicast-mpv';
 import { Config } from '../../../Config';
+import { MpvHlsTranscoder } from './MpvHlsTranscoder';
 import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord } from '../../../MediaRecord';
 import { LoadOptions } from 'unicast-mpv/lib/Player';
 
@@ -39,6 +40,8 @@ export class MpvReceiver extends BaseReceiver {
         this.sender = new HttpSender( this );
 
         this.logger = this.server.logger.service( `Receivers/${ this.type }/${ this.name }` );
+
+        // this.transcoder = new MpvHlsTranscoder( this );
 
         this.port = port;
 
@@ -162,8 +165,6 @@ export class MpvReceiver extends BaseReceiver {
             this.sessions.current = id;
     
             this.emit( 'play', id );
-    
-            // await this.changeSubtitlesSize( this.subtitlesStyle.fontScale );
         } catch ( err ) {
             this.sessions.release( id );
 

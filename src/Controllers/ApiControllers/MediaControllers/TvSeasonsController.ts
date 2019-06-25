@@ -3,6 +3,7 @@ import { MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
+import { Route } from '../../BaseController';
 
 export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecord> {
     sortingFields : string[] = [ 'number' ];
@@ -41,5 +42,18 @@ export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecor
         }
 
         return seasons;
+    }
+
+    @Route( 'get', '/:id/subtitles' )
+    async subtitles ( req : Request, res : Response ) {
+        const episodes = await this.server.media.getSeasonEpisodes( req.params.id );
+
+        const subtitles : any = {};
+
+        for ( let episode of episodes ) {
+            subtitles[ episode.number ] = await this.server.subtitles.list( episode );
+        }
+
+        return subtitles;
     }
 }

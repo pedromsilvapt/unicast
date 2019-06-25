@@ -70,6 +70,7 @@
     "fast-deep-equal": "^2.0.1",
     "ffmpeg-progress-stream": "^1.2.1",
     "filesize": "^3.6.1",
+    "franc": "^4.1.0",
     "got": "^7.1.0",
     "iconv-lite": "^0.4.19",
     "internal-ip": "^2.0.2",

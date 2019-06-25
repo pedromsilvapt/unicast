@@ -88,7 +88,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         
         const url = this.server.getMatchingUrl( req );
         
-        const images = await this.server.scrapers.getAllMediaArtork( media.kind, media.external );
+        const images = await this.server.scrapers.getAllMediaArtork( media.kind, media.external, { readCache: false } );
 
         return images.map( image => ( {
             ...image,

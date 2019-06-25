@@ -76,7 +76,7 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
                     return [];
                 }
 
-                return this.getMediaArtwork( name, kind, record.id );
+                return this.getMediaArtwork( name, kind, record.id, cache );
             } catch ( error ) {
                 this.server.onError.notify( error );
                 

@@ -34,7 +34,7 @@ export class ArtworkCache {
 
     index : Map<string, [ ArtworkCacheOptions, string ][]> = new Map;
 
-    httpSemaphore : Semaphore = new Semaphore( 2 );
+    httpSemaphore : Semaphore = new Semaphore( 5 );
 
     sharpSemaphore : Semaphore = new Semaphore( 5 );
 

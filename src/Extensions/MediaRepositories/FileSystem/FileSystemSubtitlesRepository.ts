@@ -8,6 +8,9 @@ import * as isSubtitle from 'is-subtitle';
 import * as fs from 'mz/fs';
 import { ISubtitle } from "../../../Subtitles/Providers/ISubtitlesProvider";
 import * as shorthash from 'shorthash';
+import { Pipeline, ParserPipeline, FileReader, DecoderPipeline, StdContext, SubsMessageProtocol, SubLine, MessageProtocol, MessageKind } from 'subbox';
+import * as franc from 'franc';
+import { toArray } from 'data-async-iterators';
 
 export interface ILocalFileSystemSubtitle extends ILocalSubtitle {
     file : string;
@@ -20,6 +23,22 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
 
     constructor ( server : UnicastServer ) {
         this.server = server;
+    }
+
+    async getFileLanguage ( file : string ) : Promise<string> {
+        const pipeline = Pipeline.create( 
+            new FileReader(),
+            new DecoderPipeline(),
+            new ParserPipeline()
+        );
+
+        const messages = await toArray( pipeline.run( new StdContext(), file ) );
+
+        const lines = messages.filter( s => s.kind == MessageKind.Data ).map( s => ( s.payload as SubLine ).text );
+
+        const text = lines.join( '\n' );
+
+        return franc( text );
     }
 
     getMediaFile ( media : MediaRecord ) : string {
@@ -65,10 +84,12 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         const subtitles : ILocalFileSystemSubtitle[] = [];
         
         for ( let subFile of matchingFiles ) {
+            const subFilePath = path.join( folder, subFile );
+
             subtitles.push( {
-                id: shorthash.unique( path.join( folder, subFile ) ),
+                id: shorthash.unique( subFilePath ),
                 format: path.extname( subFile ),
-                language: null,
+                language: await this.getFileLanguage( subFilePath ),
                 releaseName: path.basename( subFile, path.extname( subFile ) ),
                 file: subFile
             } );
