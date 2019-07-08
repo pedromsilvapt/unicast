@@ -3,6 +3,7 @@ import { MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import { MediaTableController } from "./MediaController";
 import * as r from 'rethinkdb';
+import { Route } from '../../BaseController';
 
 export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
     sortingFields : string[] = [ 'title', 'seasonsCount', 'rating', 'parentalRating', 'year', 'lastPlayed', 'addedAt' ]
@@ -50,5 +51,12 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
         }
 
         return shows;
+    }
+
+    @Route( 'get', '/genres' )
+    async genres ( req : Request, res : Response ) {
+        return this.table.find( query => {
+            return ( query as any ).distinct( { index: 'genres' } );
+        } );
     }
 }
