@@ -83,8 +83,7 @@ export abstract class MediaStream {
         const mime = this.mime;
         const size = this.size;
         const provider = this.source.provider.type;
-        const source = this.source;
-
-        return { id, provider, type, mime, size, source };
+        
+        return { id, provider, type, mime, size };
     }
 }

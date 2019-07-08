@@ -1,7 +1,7 @@
 import { BaseTableController } from "../../BaseTableController";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
-import { MediaRecord, ArtRecord } from "../../../MediaRecord";
+import { MediaRecord, ArtRecord, isPlayableRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
 import { MediaTable } from "../../../Database/Database";
@@ -133,6 +133,22 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         const triggers = await this.server.triggerdb.queryMediaRecord( media );
 
         return triggers;
+    }
+
+    @Route('get', '/:id/streams')
+    async streams ( req : Request, res : Response ) {
+        const media = await this.table.get( req.params.id );
+
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( 'Media is not playable.' );
+        }
+
+        const streams = await this.server.providers.streams( media.sources );
+
+        return streams.map( s => ( {
+            ...s.toJSON(),
+            path: this.server.streams.getUrlFor( media.kind, media.id, s.id )
+        } ) );
     }
 
     @Route( 'post', '/:id/watch/:status' )
