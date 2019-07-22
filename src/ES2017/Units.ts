@@ -263,7 +263,7 @@ export class Duration extends Amount<DurationUnit, Duration> {
     }
 
     static parse ( value : string | number | Duration ) : Duration {
-        if ( !value ) {
+        if ( value === void 0 || value === null ) {
             throw new DurationParseError( `Value is null.` )
         }
 

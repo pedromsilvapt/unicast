@@ -391,7 +391,9 @@ export class ChromecastReceiver extends BaseReceiver {
 
         const id = this.sessions.current;
         
-        const { options } = await this.sessions.get( id );
+        const { options, record } = await this.sessions.get( id );
+
+        this.server.rcHistory.add( id, record, status.media.time.current, 'setSubtitlesOffset', [ offset ] );
 
         const index = this.messagesFactory.getTrackIndexForOffset( 0, {
             ...options,

@@ -1,12 +1,12 @@
 import { HttpSender } from '../../../Receivers/BaseReceiver/HttpSender';
 import { MediaStream, MediaStreamType } from '../../../MediaProviders/MediaStreams/MediaStream';
 import { SubtitlesMediaStream } from "../../../MediaProviders/MediaStreams/SubtitlesStream";
-import { SubtitlesPipelineMediaStream, SubtitlesStreamPipeline } from "./MediaStreams/SubtitlesPipelineMediaStream";
+import { SubtitlesPipelineMediaStream, SubtitlesStreamPipeline } from "../Chromecast/MediaStreams/SubtitlesPipelineMediaStream";
 import { Pipeline, FilterEmptyLinesPipeline, FilterPipeline, EditFormattingPipeline, OffsetPipeline } from "subbox";
-import { ChromecastReceiver } from "./ChromecastReceiver";
+import { MpvReceiver } from './MpvReceiver';
 
-export class ChromecastHttpSender extends HttpSender {
-    receiver : ChromecastReceiver;
+export class MpvHttpSender extends HttpSender {
+    receiver : MpvReceiver;
 
     getFilterPipeline () : FilterPipeline {
         const subtitles = this.receiver.config.subtitles;
@@ -36,7 +36,7 @@ export class ChromecastHttpSender extends HttpSender {
             pipeline = pipeline.pipe( filter as any );
         }
 
-        if ( typeof offset === 'number' && offset != 0 ) {
+        if ( typeof offset === 'number' && offset != 0 && !isNaN( offset ) ) {
             pipeline = pipeline.pipe( new OffsetPipeline( offset ) as any );
         }
 
@@ -50,9 +50,6 @@ export class ChromecastHttpSender extends HttpSender {
             const subtitles = match as SubtitlesMediaStream;
             
             if ( subtitles.format === 'srt' ) {
-                // TODO Remove this line and SubtitlesConvertMediaStream
-                // const converted = new SubtitlesConvertMediaStream( subtitles );
-
                 const converted = new SubtitlesPipelineMediaStream( subtitles, this.getSubtitlesPipeline( +options.offset ) );
 
                 converted.format = 'vtt';

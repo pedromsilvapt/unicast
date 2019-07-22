@@ -14,9 +14,20 @@ import { Config } from '../../../Config';
 import { MpvHlsTranscoder } from './MpvHlsTranscoder';
 import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord } from '../../../MediaRecord';
 import { LoadOptions } from 'unicast-mpv/lib/Player';
+import * as objectPath from 'object-path';
+import { MpvHttpSender } from './MpvHttpSender';
 
 export interface MpvConfig {
     config ?: any;
+    subtitles ?: MpvSubtitlesConfig;
+}
+
+export interface MpvSubtitlesConfig {
+    lineFilters ?: (string | RegExp)[]
+    delay: {
+        duration : number;
+        rollback : number;
+    }
 }
 
 export class MpvReceiver extends BaseReceiver {
@@ -31,13 +42,17 @@ export class MpvReceiver extends BaseReceiver {
     protected instance : UnicastMpv = null;
 
     sender : HttpSender;
+    
+    config : MpvConfig;
 
     logger : Logger;
 
     constructor ( server : UnicastServer, name : string, address : string, port : number, config : MpvConfig = {} ) {
         super( server, name );
 
-        this.sender = new HttpSender( this );
+        this.config = config;
+
+        this.sender = new MpvHttpSender( this );
 
         this.logger = this.server.logger.service( `Receivers/${ this.type }/${ this.name }` );
 
@@ -238,7 +253,7 @@ export class MpvReceiver extends BaseReceiver {
 
         const session = this.sessions.current;
         
-        const { record } = await this.sessions.get( session );
+        const { record, options } = await this.sessions.get( session );
 
         const normalized : ReceiverStatus = {
             timestamp: new Date(),
@@ -253,7 +268,7 @@ export class MpvReceiver extends BaseReceiver {
                 transcoding: null,
                 record: record,
                 session: await this.server.database.tables.history.get( session ),
-                options: null
+                options: options
             },
             volume: { level: Math.round( status.volume ), muted: status.mute },
             subtitlesStyle: {
@@ -306,7 +321,51 @@ export class MpvReceiver extends BaseReceiver {
         throw new InvalidArgumentError();
     }
 
+    async setSubtitlesOffset ( offset : number ) {
+        let status = await this.status();
+
+        const id = this.sessions.current;
+        
+        const { options, record } = await this.sessions.get( id );
+        
+        this.server.rcHistory.add( id, record, status.media.time.current, 'setSubtitlesOffset', [ offset ] );
+
+        await this.sessions.update( id, {
+            ...options,
+            subtitlesOffset: offset
+        } );
+
+        await this.connection.adjustSubtitleTiming( offset / 1000 );
+
+        return this.status();
+    }
     
+    async getSubtitlesOffset () : Promise<number> {
+        if ( !this.sessions.current ) {
+            return 0;
+        }
+        
+        const { options } = await this.sessions.get( this.sessions.current );
+        
+        return options.subtitlesOffset || 0;
+    }
+
+    async increaseSubtitlesOffset ( offset : number = null ) {
+        if ( typeof offset !== 'number' ) {
+            offset = objectPath.get( this.config, 'subtitles.delay.duration', 250 );
+        }
+
+        return this.setSubtitlesOffset( ( await this.getSubtitlesOffset() ) + offset );
+    }
+
+    async decreaseSubtitlesOffset ( offset : number = null ) {
+        if ( typeof offset !== 'number' ) {
+            offset = objectPath.get( this.config, 'subtitles.delay.duration', 250 );
+        }
+
+        return this.setSubtitlesOffset( ( await this.getSubtitlesOffset() ) - offset );
+    }
+
     async changeSubtitles ( index : number ) : Promise<ReceiverStatus> {
         // await this.client.changeSubtitles( index );
 

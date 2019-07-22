@@ -4,7 +4,7 @@ import { SubboxPipeline, SubsMessageProtocol, CompilerPipeline, EncoderPipeline,
 import * as rangeStream from 'range-stream';
 import * as pump from 'pump';
 
-export type SubtitlesStreamPipeline = SubboxPipeline<AsyncIterable<SubsMessageProtocol>, AsyncIterableIterator<SubsMessageProtocol>>;
+export type SubtitlesStreamPipeline = SubboxPipeline<AsyncIterable<SubsMessageProtocol>, AsyncIterable<SubsMessageProtocol>>;
 
 const streamLength = ( stream : NodeJS.ReadableStream ) : Promise<number> => {
     return new Promise<number>( ( resolve, reject ) => {
@@ -46,7 +46,7 @@ export class SubtitlesPipelineMediaStream extends SubtitlesMediaStream {
 
     open ( range ?: MediaRange ) : NodeJS.ReadableStream {
         const fullStream = this.pipeline()
-            .pipe( new CompilerPipeline( this.format ) )
+            .pipe( new CompilerPipeline( this.format ) as any )
             .pipe( new EncoderPipeline( this.encoding || 'utf8' ) )
             .pipe( new StreamDuplex() )
             .run( new StdContext() );
