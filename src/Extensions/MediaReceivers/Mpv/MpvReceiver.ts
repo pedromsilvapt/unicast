@@ -16,6 +16,8 @@ import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord } from '../../
 import { LoadOptions } from 'unicast-mpv/lib/Player';
 import * as objectPath from 'object-path';
 import { MpvHttpSender } from './MpvHttpSender';
+import { MediaTrigger } from '../../../TriggerDb';
+import { MpvFFmpegDriver } from './MpvFFmpegDriver';
 
 export interface MpvConfig {
     config ?: any;
@@ -167,6 +169,14 @@ export class MpvReceiver extends BaseReceiver {
                 title: title,
                 mediaTitle: title
             };
+
+            const triggers : MediaTrigger[] = await this.server.triggerdb.queryMediaRecord( record );
+
+            if ( triggers.length > 0 ) {
+                const videoMetadata = video.metadata.tracks.find( track => track.type === 'video' );
+
+                options.lavfiComplex = MpvFFmpegDriver.getFilterGraph( this.server, triggers, videoMetadata );
+            }
 
             if ( this.sessions.current != null && this.sessions.current != id ) {
                 await this.sessions.release( this.sessions.current );
