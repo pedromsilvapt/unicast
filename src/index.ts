@@ -27,6 +27,7 @@ server.tools.add( new ToolFactory( LoadArtworkTool ) );
 server.tools.add( new ToolFactory( ExportDatabaseTool ) );
 server.tools.add( new ToolFactory( ImportDatabaseTool ) );
 server.tools.add( new ToolFactory( AddCustomTool ) );
+server.tools.add( new ToolFactory( PersistSubtitlesTool ) );
 server.tools.add( new ToolFactory( PreviewTriggersTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 
