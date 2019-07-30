@@ -32,6 +32,7 @@ import { ExtensionsManager } from "./ExtensionsManager";
 import { Tool } from './Tools/Tool';
 import { Journal } from './Journal';
 import { LiveLogger, Logger, ConsoleBackend, SharedLogger } from 'clui-logger';
+import { CommandsHistory } from './Receivers/CommandsHistory';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -73,6 +74,8 @@ export class UnicastServer {
     readonly logger : SharedLogger;
 
     readonly journal : Journal;
+
+    readonly rcHistory : CommandsHistory;
 
     readonly commands : CommandsManager;
 
@@ -122,6 +125,8 @@ export class UnicastServer {
         this.http = new MultiServer( [ restify.createServer() ] );
 
         this.streams = new HttpRawMediaServer( this );
+
+        this.rcHistory = new CommandsHistory( this );
 
         this.commands = new CommandsManager( this );
 

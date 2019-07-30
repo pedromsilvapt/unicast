@@ -556,7 +556,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
                         args.push( '-filter_complex_script', filterGraphScript );
                     } else {
-                        args.push( '-filter_complex', filtersComplex.join( ';' ) );
+                        args.push( '-filter_complex', filtergraph );
                     }
                 }
             }
