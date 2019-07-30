@@ -294,7 +294,7 @@ export class ChromecastReceiver extends BaseReceiver {
             }
         }
 
-        const { record, transcoding } = await this.sessions.get( status.media.metadata.session );
+        const { record, transcoding, options } = await this.sessions.get( status.media.metadata.session );
 
         const normalized : ReceiverStatus = {
             timestamp: new Date(),
@@ -305,7 +305,7 @@ export class ChromecastReceiver extends BaseReceiver {
                 transcoding: transcoding ? this.statusTranscoding( status, transcoding ) : null,
                 record: record,
                 session: await this.server.database.tables.history.get( status.media.metadata.session ),
-                options: status.media.metadata.options
+                options: { ...( status.media.metadata.options || {} ), ...(options || {}) }
             },
             volume: { level: Math.round( status.volume.level * 100 ), muted: status.volume.muted },
             subtitlesStyle: {
