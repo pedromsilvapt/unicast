@@ -141,7 +141,7 @@ export class MediaSync {
 
             const now = new Date();
 
-            return media = await table.create( {
+            media = await table.create( {
                 ...table.baseline,
                 ...media as any,
                 createdAt: now,
