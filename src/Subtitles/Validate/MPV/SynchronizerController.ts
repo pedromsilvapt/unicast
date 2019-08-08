@@ -45,7 +45,7 @@ export class MpvSynchronizerController implements IVideoPlayerController<boolean
         this.server = server;
     }
 
-    async getSubtitles ( subtitles : string ) {
+    async getSubtitles ( subtitles : string ) : Promise<SubLine[]> {
         const pipeline = Pipeline.create(
             new FileReader(),
             new DecoderPipeline(),
@@ -53,7 +53,7 @@ export class MpvSynchronizerController implements IVideoPlayerController<boolean
             new ArrayWriter()
         );
 
-        return await pipeline.run( new StdContext(), subtitles );
+        return await pipeline.run( new StdContext(), subtitles ) as SubLine[];
     }
 
     fixSubtitles ( subtitles : SubLine[], fixes : { [ key : string ] : number } ) : SubLine[] {

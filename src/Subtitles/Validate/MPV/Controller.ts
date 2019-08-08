@@ -26,7 +26,7 @@ export class MpvController implements IVideoPlayerController {
         this.server = server;
     }
 
-    async getSubtitles ( subtitles : string ) {
+    async getSubtitles ( subtitles : string ) : Promise<SubtitleLine[]> {
         let contents = await fs.readFile( subtitles, 'utf8' );
 
         return parser.fromSrt( contents, true );
