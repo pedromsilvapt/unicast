@@ -59,18 +59,50 @@ export interface PlayableQualityRecord {
     codec : string;
 }
 
-export interface MediaRecord {
+export interface EntityRecord {
     id ?: string;
     internalId : string;
-    repository ?: string;
-    scraper ?: string;
-    kind : MediaKind;
-    title : string;
-    art : MediaRecordArt;
+    scraper : string;
     external : ExternalReferences;
-    transient ?: boolean;
     createdAt : Date;
     updatedAt : Date;
+}
+
+export interface PersonRecord {
+    id ?: string;
+    name : string;
+    art : MediaRecordArt;
+    biography ?: null;
+    birthday ?: Date;
+    deathday ?: Date;
+    naturalFrom ?: string;
+
+    // Foreign Relation
+    cast ?: MediaCastRecord;
+}
+
+export interface RoleRecord extends PersonRecord {
+    role : string;
+    order : number;
+    internalId : string;
+}
+
+export interface MediaCastRecord extends EntityRecord {
+    mediaKind : MediaKind;
+    mediaId : string;
+    personId : string;
+    role : string;
+    order : number;
+    createdAt : Date;
+    updatedAt : Date;
+}
+
+export interface MediaRecord extends EntityRecord {
+    art : MediaRecordArt;
+    repository ?: string;
+    kind : MediaKind;
+    title : string;
+    transient ?: boolean;
 }
 
 export interface PlayableMediaRecord extends MediaRecord {

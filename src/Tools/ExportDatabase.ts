@@ -55,7 +55,9 @@ export class ExportDatabaseTool extends Tool<ExportDatabaseOptions> {
             this.server.database.tables.playlists,
             this.server.database.tables.seasons,
             this.server.database.tables.shows,
-            this.server.database.tables.subtitles
+            this.server.database.tables.subtitles,
+            this.server.database.tables.people,
+            this.server.database.tables.mediaCast
         ];
     
         const stopwatch = new Stopwatch().resume();

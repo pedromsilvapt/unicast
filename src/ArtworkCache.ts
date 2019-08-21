@@ -48,6 +48,22 @@ export class ArtworkCache {
         return `${ serverUrl }/api/media/artwork/scrapers/${ Buffer.from( url, 'utf8' ).toString( 'base64' ) }`;
     }
 
+    getCachedRemoteObject ( serverUrl : string, art : any ) : any {
+        const cached : any = {};
+
+        for ( let key of Object.keys( art ) ) {
+            if ( typeof art[ key ] === 'string' ) {
+                cached[ key ] = this.getCachedRemoteImage( serverUrl, art[ key ] );
+            } else if ( art[ key ] && typeof art[ key ] === 'object' ) {
+                cached[ key ] = this.getCachedRemoteObject( serverUrl, art[ key ] );
+            } else {
+                cached[ key ] = art[ key ];
+            }
+        }
+
+        return cached;
+    }
+
     getCachedObject ( url : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
         const cached : any = {};
 
@@ -64,7 +80,7 @@ export class ArtworkCache {
         return cached;
     }
     
-    getCachedScraperObject (  url : string, scraper : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
+    getCachedScraperObject ( url : string, scraper : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
         const cached : any = {};
 
         for ( let key of Object.keys( art ) ) {
@@ -127,13 +143,13 @@ export class ArtworkCache {
         try {
             const relativeCachePath = path.relative( this.server.storage.getPath( 'cache/artwork' ), cachePath );
 
-            this.server.logger.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );            
+            this.server.logger.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );
 
             await saveStreamTo( this.getReadableStream( url ), cachePath );
     
             this.setCached( url, cachePath );
         } catch ( err ) {
-            await this.server.onError.notify( err );            
+            await this.server.onError.notify( err );
         } finally {
             release();
         }

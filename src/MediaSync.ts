@@ -1,6 +1,6 @@
 import { Database, MediaTable } from "./Database/Database";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap } from "./MediaRecord";
+import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord } from "./MediaRecord";
 import { BackgroundTask } from "./BackgroundTask";
 import { MediaManager } from "./UnicastServer";
 import { Future } from "@pedromsilva/data-future";
@@ -8,6 +8,10 @@ import { IMediaRepository } from "./MediaRepositories/MediaRepository";
 import { CacheOptions } from './MediaScrapers/ScraperCache';
 import { SharedLogger, Logger } from 'clui-logger';
 import { MediaRecordFilter, TvMediaFilter, MediaSetFilter } from './MediaRepositories/ScanConditions';
+import { ScrapersManager } from './MediaScrapers/ScrapersManager';
+import { collect, groupingBy, first } from 'data-collectors';
+import { ProvidersController } from './Controllers/ApiControllers/MediaControllers/ProvidersController';
+import { AsyncStream } from 'data-async-iterators';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -27,18 +31,23 @@ export class MediaSync {
 
     repositories : RepositoriesManager;
 
+    scrapers : ScrapersManager;
+
     logger : Logger;
 
-    constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, logger : SharedLogger ) {
+    constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, scrapers : ScrapersManager, logger : SharedLogger ) {
         this.media = media;
         this.database = db;
         this.repositories = repositories;
+        this.scrapers = scrapers;
         this.logger = logger.service( 'media/sync' );
     }
 
     print ( record : MediaRecord ) : string {
-        if ( record.kind === MediaKind.TvEpisode || record.kind === MediaKind.Movie ) {
+        if ( isTvEpisodeRecord( record ) ) {
             return record.title + ' ' + ( record as PlayableMediaRecord ).sources[ 0 ].id;
+        } else if ( isMovieRecord( record ) ) {
+            return `${ record.title } (${ record.year }) ${ record.sources[ 0 ].id }`;
         } else {
             return record.title;
         }
@@ -61,7 +70,7 @@ export class MediaSync {
      * @param media 
      * @param snapshot 
      */
-    async runRecord ( task : BackgroundTask, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
+    async runRecord ( task : BackgroundTask, media : MediaRecord, snapshot : MediaSyncSnapshot, cache ?: CacheOptions ) {
         // !! IMPORTANT !! This function must always, at some point, call snapshot.scanBarrier.ready();
         snapshot.scanBarrier.increase();
 
@@ -104,7 +113,7 @@ export class MediaSync {
 
             await this.runRecordForeigns( table, media, snapshot );
 
-            await this.updateRecord( task, match, media, snapshot.options.dryRun );
+            await this.updateRecord( task, match, media, snapshot.options.dryRun, cache );
         } else {
             const existingMatch = snapshot.getAnyExternal( media.external );
             
@@ -134,7 +143,7 @@ export class MediaSync {
         snapshot.association.get( media.kind ).get( media.internalId ).resolve( media.id );
     }
 
-    async createRecord ( task : BackgroundTask, media : MediaRecord, dryRun : boolean = false ) : Promise<MediaRecord> {
+    async createRecord ( task : BackgroundTask, media : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) : Promise<MediaRecord> {
         // Create
         if ( !dryRun ) {
             const table = this.media.getTable( media.kind );
@@ -150,13 +159,15 @@ export class MediaSync {
         } else {
             media.id = media.internalId;
         }
- 
+
         this.logger.info( 'CREATE ' + this.print( media ) );
+        
+        await this.runCast( media, dryRun, cache );
         
         return media;
     }
 
-    async updateRecord ( task : BackgroundTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false ) {
+    async updateRecord ( task : BackgroundTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) {
         const table = this.media.getTable( newRecord.kind );
         
         newRecord = { ...newRecord };
@@ -169,9 +180,11 @@ export class MediaSync {
             delete newRecord[ key ];
         }
 
-        if ( !dryRun ) await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() } );
+        if ( !dryRun ) newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() } );
             
         if ( table.isChanged( oldRecord, newRecord ) ) this.logger.info( 'UPDATE ' + oldRecord.id + ' ' + this.print( newRecord ) + ' ' + JSON.stringify( table.getLocalChanges( oldRecord, newRecord ) ) );
+
+        await this.runCast( newRecord, dryRun, cache );
     }
 
     async moveRecord ( task : BackgroundTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false ) {
@@ -187,6 +200,128 @@ export class MediaSync {
         }
 
         this.logger.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
+    }
+
+    async runCast<R extends MediaRecord> ( media : R, dryRun : boolean = false, cache ?: CacheOptions ) {
+        const peopleTable = this.database.tables.people;
+
+        const table = this.media.getTable( media.kind );
+
+        if ( !media.scraper ) {
+            this.logger.error( `[${ media.kind } ${this.print( media )}] Has no scraper defined. Could not get cast.` );
+
+            return;
+        }
+        
+        if ( !this.scrapers.hasKeyed( media.scraper ) ) {
+            this.logger.error( `[${ media.kind } ${this.print( media )}] Could not find scraper "${ media.scraper }". Could not get cast.` );
+
+            return;
+        }
+
+        // We get the scraper media record associated with our local `media` record (using the external object)
+        // We do this so we can then get the record's internal scraper id to get the cast
+        const scraperMedia = await this.scrapers.getMediaExternal( media.scraper, media.kind, media.external, cache );
+
+        if ( !scraperMedia ) {
+            this.logger.error( `[${ media.kind } ${this.print( media )}] No external media found for ${ JSON.stringify( media.external ) }. Could not get cast.` );
+
+            return;
+        }
+
+        // A list of RoleRecord from the scraper
+        const newRoles : RoleRecord[] = await this.scrapers.getMediaCast( media.scraper, media.kind, scraperMedia.id, cache );
+
+        // A map associating the internal id (meaning, the id from the scraper)
+        // and the existing person record in the local database
+        // The role that associates the person and the media is accessible
+        // via the `.cast` property on each PersonRecord
+        const existingRoles : Map<string, PersonRecord> = collect( 
+            await table.relations.cast.load( media ),
+            groupingBy( role => role.cast.internalId, first() )
+        );
+
+        // We will iterate over the new roles we found to check if they are already present
+        // on the database or if they are new. 
+        // When we find one that is already in  the database, we remove it so that in the end
+        // we can check which ones are stale (exist in the local database but not in scraper anymore)
+        await new AsyncStream( newRoles ).parallel( async role => {
+            let person : PersonRecord = null;
+            
+            const matchRole = existingRoles.get( role.internalId );
+
+            if ( matchRole != null ) {
+                existingRoles.delete( role.internalId );
+
+                person = matchRole;
+            }
+
+            // Just because there was no match found for this person on the database
+            // as being part of the cast, the person's record might already exist 
+            // (associated to other media records) and as such we should reuse it
+            if ( person == null ) {
+                person = ( await peopleTable.findAll( [ role.internalId ], { index: 'internalId' } ) )[ 0 ];
+            }
+
+            if ( person != null ) {
+                if ( !dryRun ) {
+                    person = await peopleTable.updateIfChanged( person, {
+                        name: role.name,
+                        biography: role.biography || person.biography,
+                        birthday: role.birthday || person.birthday,
+                        deathday: role.deathday || person.deathday,
+                        naturalFrom: role.naturalFrom || person.naturalFrom,
+                        art: role.art || person.art
+                    } );
+                }
+            } else {
+                person = {
+                    art: role.art,
+                    biography: role.biography,
+                    birthday: role.birthday,
+                    deathday: role.deathday,
+                    name: role.name,
+                    naturalFrom: role.naturalFrom
+                };
+
+                if ( !dryRun ) {
+                    person = await peopleTable.create( person );
+                }
+            }
+
+            const cast : Partial<MediaCastRecord> = {
+                internalId: role.internalId,
+                external: {},
+                mediaId: media.id,
+                mediaKind: media.kind,
+                order: role.order,
+                role: role.role,
+                scraper: media.scraper,
+                personId: person.id,
+            };
+
+            if ( !dryRun ) {
+                if ( matchRole != null ) {
+                    await this.database.tables.mediaCast.updateIfChanged( matchRole.cast, cast, {
+                        updatedAt: new Date()
+                    } );
+                } else {
+                    await this.database.tables.mediaCast.create( {
+                        ...cast as any,
+                        updatedAt: new Date(),
+                        createdAt: new Date(),
+                    } );
+                }
+            }
+        }, 30 ).last();
+
+        // When updating the roles in the loop above, we remove from the `existingRoles` map
+        // all roles that already exist in the database. As such, whatever is left is stale data that
+        // has been removed from the remote database and as such we should sync that up
+        // by removing them in our database as well
+        const toBeRemovedIds = Array.from( existingRoles.values() ).map( role => role.id );
+
+        await this.database.tables.mediaCast.deleteKeys( toBeRemovedIds );
     }
 
     async findRepositoryRecordsMap ( repository : IMediaRepository ) : Promise<RecordsMap<MediaRecord>> {
@@ -247,7 +382,9 @@ export class MediaSync {
 
                 snapshot.scanBarrier.freeze();
 
-                for await ( let media of repository.scan( options.kinds, snapshot, conditions, options.cache || {} ) ) {
+                const logger = this.logger.service( repository.name );
+
+                for await ( let media of repository.scan( options.kinds, snapshot, conditions, options.cache || {}, logger ) ) {
                     task.addTotal( 1 );
                     
                     media = { ...media };
@@ -259,7 +396,7 @@ export class MediaSync {
                     
                     updating.push(
                         task.do(
-                            this.runRecord( task, media, snapshot ), 
+                            this.runRecord( task, media, snapshot, options.cache || {} ), 
                         1 )
                     );
                 }

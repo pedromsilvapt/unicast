@@ -10,8 +10,9 @@ import { ProvidersController } from "./MediaControllers/ProvidersController";
 import { TasksController } from "./TasksController";
 import { SubtitlesController } from "./MediaControllers/SubtitlesController";
 import { SessionsController } from "./MediaControllers/SessionsController";
-import * as sortBy from 'sort-by';
 import { ScrapersController } from "./MediaControllers/ScrapersController";
+import { PeopleController } from './MediaControllers/PeopleController';
+import * as sortBy from 'sort-by';
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -31,6 +32,9 @@ export class ApiController extends BaseController {
 
     @Controller( TvEpisodesController, '/media/episode' )
     episodes : TvEpisodesController;
+
+    @Controller( PeopleController, '/media/people' )
+    people : PeopleController;
 
     @Controller( CollectionsController, '/media/collection' )
     collections : CollectionsController;

@@ -1,6 +1,6 @@
 import { IScraper } from "../../../MediaScrapers/IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/ScraperCache";
-import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds } from "../../../MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds, RoleRecord } from "../../../MediaRecord";
 import { UnicastServer } from "../../../UnicastServer";
 import { MediaRecordFactory } from "./MediaRecordFactory";
 import * as MovieDB from 'moviedb-api';
@@ -228,13 +228,52 @@ export class TheMovieDB implements IScraper {
         }
     }
 
+    
+    /* Get Media Cast */
+    getMovieCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return this.runCachedTask<RoleRecord[]>( 'getMovieCast', id, async () => {
+            const actors : any = await this.moviedb.movieCredits( { id } );
+
+            return actors.cast.map( actor => this.factory.createActorRoleRecord( actor ) );
+        }, cache );
+    }
+
+    getTvShowCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return Promise.resolve( [] );
+    }
+
+    getTvSeasonCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return Promise.resolve( [] );
+    }
+
+    getTvEpisodeCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return Promise.resolve( [] );
+    }
+
+    getMediaCast ( record : MediaRecord, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        const id = record.external.tvdb;
+
+        if ( !id ) {
+            return Promise.resolve( [] );
+        }
+
+        if ( record.kind === MediaKind.Movie ) {
+            return this.getMovieCast( id, cache );
+        } else if ( record.kind === MediaKind.TvShow ) {
+            return this.getTvShowCast( id, cache );
+        } else if ( record.kind === MediaKind.TvSeason ) {
+            return this.getTvSeasonCast( id, cache );
+        } else if ( record.kind === MediaKind.TvEpisode ) {
+            return this.getTvEpisodeCast( id, cache );
+        }
+    }
 
     /* Searching Media */
     searchMovie ( name : string, limit : number = 5, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]> {
         return this.runCachedTask<MovieMediaRecord[]>( 'searchMovie', '' + limit + '|' + name, async () => {
             const yearMatch = name.match( /(\(?((?:19[0-9]|20[01])[0-9])\))$/i );
 
-            const year = yearMatch ? yearMatch[ 2 ] : void 0;
+            const year = yearMatch ? +yearMatch[ 2 ] : void 0;
 
             const title = yearMatch ? name.substring( 0, yearMatch.index - 1 ) : name;
 

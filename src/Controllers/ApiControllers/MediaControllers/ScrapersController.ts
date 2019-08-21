@@ -1,6 +1,6 @@
 import { BaseController, Route } from "../../BaseController";
 import { Request, Response } from "restify";
-import { MediaKind, ExternalReferences, ArtRecord } from "../../../MediaRecord";
+import { MediaKind, ExternalReferences, ArtRecord, RoleRecord } from "../../../MediaRecord";
 import { InvalidArgumentError } from "restify-errors";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { CacheOptions } from "../../../MediaScrapers/ScraperCache";
@@ -226,6 +226,34 @@ export class ScrapersController extends BaseController {
 
         for ( let record of records ) {
             ( record as any ).cachedArtwork = this.server.artwork.getCachedScraperObject( url, name, record.kind, record.id, record.art );
+        }
+
+        return records;
+    }
+
+    
+    @Route( 'get', '/:scraper/:kind/:id/cast' )
+    async getCast ( req : Request, res : Response ) : Promise<RoleRecord[]> {
+        const name : string = req.params.scraper;
+        const kind : MediaKind = req.params.kind;
+        const id : string = req.params.id;
+        
+        if ( ![ MediaKind.Movie, MediaKind.TvSeason, MediaKind.TvShow, MediaKind.TvEpisode ].includes( kind ) ) {
+            throw new InvalidArgumentError( `Invalid kind argument, expected "movie", "show", "season" or "episode".` );
+        }
+
+        if ( !this.server.scrapers.hasKeyed( name ) ) {
+            throw new InvalidArgumentError( `Invalid scraper name argument, no "${ name } scraper found."` );
+        }
+        
+        const cache = this.parseCacheOptions( req.query.cache );
+
+        const records = await this.server.scrapers.getMediaCast( name, kind, id, cache );
+        
+        const url = this.server.getMatchingUrl( req );
+
+        for ( let record of records ) {
+            ( record as any ).cachedArtwork = this.server.artwork.getCachedRemoteObject( url, record.art );
         }
 
         return records;

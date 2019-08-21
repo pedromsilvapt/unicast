@@ -1,4 +1,4 @@
-import { MovieMediaRecord, MediaKind } from "../../../MediaRecord";
+import { MovieMediaRecord, MediaKind, RoleRecord } from "../../../MediaRecord";
 import { TheMovieDB } from './TheMovieDB';
 
 export interface MovieDBMovie {
@@ -63,6 +63,8 @@ export function parseDate ( data : string ) : Date {
 export class MediaRecordFactory {
     scraper : TheMovieDB;
     
+    baseImageUrl : string = 'https://image.tmdb.org/t/p/original';
+
     constructor ( scraper : TheMovieDB ) {
         this.scraper = scraper;
     }
@@ -102,14 +104,33 @@ export class MediaRecordFactory {
             plot: movie.overview,
             year: year,
             art: {
-                background: 'https://image.tmdb.org/t/p/original' + movie.backdrop_path,
+                background: this.baseImageUrl + movie.backdrop_path,
                 banner: null,
-                poster: 'https://image.tmdb.org/t/p/original' + movie.poster_path,
+                poster: this.baseImageUrl + movie.poster_path,
                 thumbnail: null
             },
             tagline: movie.tagline,
             runtime: movie.runtime * 60,
             trailer: null,
         } as any;
+    }
+
+    createActorRoleRecord ( actor : any ) : RoleRecord {
+        return {
+            art: {
+                poster: actor.profile_path ? ( this.baseImageUrl + actor.profile_path ) : null,
+                thumbnail: null,
+                background: null,
+                banner: null,
+            },
+            internalId: actor.id,
+            name: actor.name,
+            role: actor.character,
+            order: actor.order,
+            biography: null,
+            birthday: null,
+            deathday: null,
+            naturalFrom: null,
+        }
     }
 }

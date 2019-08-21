@@ -5,6 +5,7 @@ import { ISubtitlesRepository } from "../Subtitles/SubtitlesRepository";
 import { CacheOptions } from '../MediaScrapers/ScraperCache';
 import { MediaRecordFilter } from './ScanConditions';
 import { MediaSyncSnapshot } from '../MediaSync';
+import { LoggerInterface } from 'clui-logger';
 
 // Why an Interface and an abstract class, I hear you asking?
 // Because abstract classes in TypeScript don't allow, for some weird reason, optional methods, while interfaces do
@@ -24,7 +25,7 @@ export interface IMediaRepository {
 
     available () : Promise<boolean>;
 
-    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions ) : AsyncIterable<T>;
+    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, logger ?: LoggerInterface ) : AsyncIterable<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
     
@@ -62,7 +63,7 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
         return Promise.resolve( true );
     }
 
-    abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions ) : AsyncIterable<T>;
+    abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, logger ?: LoggerInterface ) : AsyncIterable<T>;
 
     abstract search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
 

@@ -10,6 +10,8 @@ import { ImportDatabaseTool } from './Tools/ImportDatabase';
 import { AddCustomTool } from "./Tools/AddCustom";
 import { PreviewTriggersTool } from './Tools/PreviewTriggers';
 import { TestTool, ToolFactory } from "./Tools/Tool";
+import { PersistSubtitlesTool } from './Tools/PersistSubtitles';
+import { FullScanMediaCastTool } from './Tools/Migrations/FullScanMediaCast';
 
 if ( !Symbol.asyncIterator ) {
     (Symbol as any).asyncIterator = Symbol( "Symbol.asyncIterator" );
@@ -29,6 +31,7 @@ server.tools.add( new ToolFactory( ImportDatabaseTool ) );
 server.tools.add( new ToolFactory( AddCustomTool ) );
 server.tools.add( new ToolFactory( PersistSubtitlesTool ) );
 server.tools.add( new ToolFactory( PreviewTriggersTool ) );
+server.tools.add( new ToolFactory( FullScanMediaCastTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 
 server.run()

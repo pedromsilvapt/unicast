@@ -2,7 +2,7 @@ import { EntityManager, EntityFactoryManager } from "../EntityManager";
 import { IScraper } from "./IScraper";
 import { UnicastServer } from "../UnicastServer";
 import { ScraperFactory } from "./ScraperFactory";
-import { MediaKind, ExternalReferences, ArtRecord } from "../MediaRecord";
+import { MediaKind, ExternalReferences, ArtRecord, RoleRecord } from "../MediaRecord";
 import { CacheOptions } from "../MediaProviders/ProvidersManager";
 import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 
@@ -56,6 +56,22 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
             return scraper.getTvEpisodeExternal( external, cache );
         } else {
             return null;
+        }
+    }
+
+    getMediaCast ( name : string, kind : MediaKind, id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        const scraper = this.get( name );
+
+        if ( kind == MediaKind.Movie ) {
+            return scraper.getMovieCast( id, cache );
+        } else if ( kind == MediaKind.TvShow ) {
+            return scraper.getTvShowCast( id, cache );
+        } else if ( kind === MediaKind.TvSeason ) {
+            return scraper.getTvSeasonCast( id, cache );
+        } else if ( kind === MediaKind.TvEpisode ) {
+            return scraper.getTvEpisodeCast( id, cache );
+        } else {
+            return Promise.resolve( [] );
         }
     }
 

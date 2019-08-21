@@ -11,7 +11,7 @@ export class ProvidersController extends BaseController {
         
         const database = this.server.database;
         
-        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.logger );
+        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.scrapers, this.server.logger );
 
         const [ task, done ] = BackgroundTask.fromPromise( async task => {
             const options : Partial<MediaSyncOptions> = { 

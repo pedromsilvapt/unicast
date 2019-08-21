@@ -1,4 +1,4 @@
-import { TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MediaKind, ArtRecord, MediaRecordArt } from "../../../MediaRecord";
+import { TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MediaKind, ArtRecord, MediaRecordArt, RoleRecord } from "../../../MediaRecord";
 import * as sortBy from 'sort-by';
 import { TheTVDB } from './TheTVDB';
 
@@ -10,6 +10,10 @@ export function parseDate ( data : string ) : Date {
     const parts = data.split( '-' );
 
     return new Date( +parts[ 0 ], +parts[ 1 ] - 1, +parts[ 2 ], 0, 0, 0, 0 );
+}
+
+function stringNotEmpty ( string : string ) : boolean {
+    return string != void 0 && string != null && string != '';
 }
 
 export interface TvDbShow {
@@ -74,14 +78,16 @@ export interface TvDbEpisode {
 export class MediaRecordFactory {
     scraper : TheTVDB;
 
+    baseImageUrl : string = 'https://www.thetvdb.com/banners/';
+
     constructor ( scraper : TheTVDB ) {
         this.scraper = scraper;
     }
 
-    createTvShowMediaRecordArt ( art : ArtRecord[] ) : MediaRecordArt {
-        const poster = art.sort( ( a, b ) => sortBy( '-score' ) ).find( art => art.kind == 'poster' && typeof art.season != 'number' );
-        const background = art.sort( ( a, b ) => sortBy( '-score' ) ).find( art => art.kind == 'background' && typeof art.season != 'number' );
-        const banner = art.sort( ( a, b ) => sortBy( '-score' ) ).find( art => art.kind == 'banner' && typeof art.season != 'number' );
+    public createTvShowMediaRecordArt ( art : ArtRecord[] ) : MediaRecordArt {
+        const poster = art.sort( sortBy( '-score' ) ).find( art => art.kind == 'poster' && typeof art.season != 'number' );
+        const background = art.sort( sortBy( '-score' ) ).find( art => art.kind == 'background' && typeof art.season != 'number' );
+        const banner = art.sort( sortBy( '-score' ) ).find( art => art.kind == 'banner' && typeof art.season != 'number' );
 
         return {
             poster: poster ? poster.url : null,
@@ -91,7 +97,7 @@ export class MediaRecordFactory {
         };
     }
 
-    createTvShowMediaRecord ( show : TvDbShow, summary : any, art : ArtRecord[] ) : TvShowMediaRecord {
+    public createTvShowMediaRecord ( show : TvDbShow, summary : any, art : ArtRecord[] ) : TvShowMediaRecord {
         const year = show.firstAired
             ? +show.firstAired.split( '-' )[ 0 ]
             : null;
@@ -116,13 +122,13 @@ export class MediaRecordFactory {
             rating: show.siteRating,
             plot: show.overview,
             year: year,
-            
+
             art: this.createTvShowMediaRecordArt( art ),
             seasonsCount: summary.airedSeasons.filter( season => season != '0' ).length
         } as any;
     }
 
-    createTvSeasonMediaRecord ( show : TvShowMediaRecord, number : number, poster : string ) : TvSeasonMediaRecord {
+    public createTvSeasonMediaRecord ( show : TvShowMediaRecord, number : number, poster : string ) : TvSeasonMediaRecord {
         return {
             kind: MediaKind.TvSeason,
             art: {
@@ -135,6 +141,7 @@ export class MediaRecordFactory {
 
             id: '' + show.id + 'S' + number,
             internalId: null,
+            scraper: this.scraper.name,
 
             title: `${show.title} Season ${ number }`,
             number: +number,
@@ -145,8 +152,10 @@ export class MediaRecordFactory {
         } as any;
     }
     
-    createTvEpisodeMediaRecord ( show : TvShowMediaRecord, episode : TvDbEpisode ) : TvEpisodeMediaRecord {
-        const thumbnail = `https://www.thetvdb.com/banners/${ episode.filename }`;
+    public createTvEpisodeMediaRecord ( show : TvShowMediaRecord, episode : TvDbEpisode ) : TvEpisodeMediaRecord {
+        const thumbnail = stringNotEmpty( episode.filename ) 
+            ?  this.baseImageUrl + episode.filename
+            : null;
 
         return {
             kind: MediaKind.TvEpisode,
@@ -155,13 +164,14 @@ export class MediaRecordFactory {
                 background: null,
                 banner: null,
                 poster: null,
-                thumbnail: episode.filename ? thumbnail : null,
+                thumbnail: thumbnail,
                 tvshow: show.art 
             },
             external: { imdb: episode.imdbId, tvdb: '' + episode.id },
             
             id: '' + episode.id,
             internalId: null,
+            scraper: this.scraper.name,
 
             number: +episode.airedEpisodeNumber,
             rating: +episode.siteRating,
@@ -177,7 +187,7 @@ export class MediaRecordFactory {
         } as any;
     }
 
-    createArtRecord ( art : any ) : ArtRecord {
+    public createArtRecord ( art : any ) : ArtRecord {
         const [ width, heigth ] = art.resolution.split( 'x' );
 
         const mapping = {
@@ -188,7 +198,9 @@ export class MediaRecordFactory {
             "series": "banner"
         }
 
-        const url = `https://www.thetvdb.com/banners/${ art.fileName }`;
+        const url = stringNotEmpty( art.fileName ) 
+            ? this.baseImageUrl + art.fileName
+            : null;
         
         return {
             id: url,
@@ -198,6 +210,29 @@ export class MediaRecordFactory {
             kind: mapping[ art.keyType ],
             season: art.keyType == 'season' || art.keyType == 'seasonwide' ? +art.subKey : null,
             score: art.ratingsInfo.average || 0
+        };
+    }
+
+    public createActorRoleRecord ( actor : any ) : RoleRecord {
+        const url = stringNotEmpty( actor.image ) 
+            ? this.baseImageUrl + actor.image 
+            : null;
+
+        return {
+            art: {
+                poster: url,
+                thumbnail: null,
+                background: null,
+                banner: null
+            },
+            biography: null,
+            birthday: null,
+            deathday: null,
+            internalId: actor.id,
+            name: actor.name.trim(),
+            naturalFrom: null,
+            role: actor.role.trim(),
+            order: actor.sortOrder
         };
     }
 }

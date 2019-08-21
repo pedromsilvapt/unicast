@@ -1,5 +1,5 @@
 import * as r from 'rethinkdb';
-import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord } from "../MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord, PersonRecord, MediaCastRecord } from "../MediaRecord";
 import { Semaphore } from 'data-semaphore';
 import { Config } from "../Config";
 import { IDatabaseLocalSubtitle } from '../Subtitles/SubtitlesRepository';
@@ -151,6 +151,10 @@ export class DatabaseTables {
 
     collectionsMedia : CollectionMediaTable;
 
+    people : PeopleTable;
+
+    mediaCast : MediaCastTable;
+
     subtitles : SubtitlesTable;
 
     jobsQueue : PersistentQueueTable<JobRecord>;
@@ -173,6 +177,10 @@ export class DatabaseTables {
         this.collections = new CollectionsTable( pool );
 
         this.collectionsMedia = new CollectionMediaTable( pool );
+
+        this.people = new PeopleTable( pool );
+
+        this.mediaCast = new MediaCastTable( pool );
 
         this.subtitles = new SubtitlesTable( pool );
 
@@ -197,6 +205,10 @@ export class DatabaseTables {
         await this.collections.install();
 
         await this.collectionsMedia.install();
+
+        await this.people.install();
+
+        await this.mediaCast.install();
 
         await this.subtitles.install();
 
@@ -472,6 +484,20 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
+    async run<T> ( query ?: ( query : r.Sequence ) => r.Expression<T> ) : Promise<T> {
+        const connection = await this.pool.acquire();
+
+        try {
+            let table = this.query();
+            
+            let sequence : r.Expression<T> = query( table );
+    
+            return await sequence.run( connection );
+        } finally {
+            await this.pool.release( connection );
+        }
+    }
+
     async find<T = R> ( query ?: ( query : r.Sequence ) => r.Sequence ) : Promise<T[]> {
         return toArray( this.findStream<T>( query ) );
     }
@@ -514,6 +540,16 @@ export abstract class BaseTable<R extends { id ?: string }> {
         const results = await this.find<T>( subQuery => query ? query( subQuery ).limit( 1 ) : subQuery.limit( 1 ) );
 
         return results[ 0 ];
+    }
+
+    async count ( query ?: ( query : r.Sequence ) => r.Sequence ) : Promise<number> {
+        return this.run( sequence => {
+            if ( query != null ) {
+                sequence = query( sequence );
+            }
+
+            return sequence.count();
+        } );
     }
 
     async create ( record : R ) : Promise<R> {
@@ -664,6 +700,54 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
+    async deleteKeys ( keys : any[], opts : { index ?: string, query ?: ( query : r.Sequence ) => r.Sequence } = {} ) : Promise<number> {
+        if ( keys.length === 0 ) {
+            return 0;
+        }
+        
+        const connection = await this.pool.acquire();
+
+        try {
+            let table = opts.index 
+                ? this.query().getAll( ( r as any ).args( keys ), { index: opts.index } ) 
+                : this.query().getAll( ( r as any ).args( keys ) );
+    
+            if ( opts.query ) {
+                table = opts.query( table );
+            }
+
+            let operation : r.WriteResult;
+
+            if ( this.onDelete.isSubscribed() ) {
+                const records : R[] = await table.run( connection )
+                    .then( async cursor => {
+                        const array = await cursor.toArray();
+
+                        cursor.close();
+                        
+                        return array;
+                    } );
+
+                const ids : string[] = records.map( r => r.id )
+
+                operation = await this.query().getAll( ...ids ).delete().run( connection );
+        
+                Promise.resolve( records ).then( async records => {
+                    for ( let record of records ) {
+                        await this.onDelete.notify( record );
+                    }
+                } );
+            } else {
+                operation = await table.delete().run( connection );
+            }
+    
+            return operation.deleted;
+        } finally {
+            await this.pool.release( connection );
+        }
+    }
+
+
     async deleteMany ( predicate : RethinkPredicate, limit : number = Infinity ) : Promise<number> {
         const connection = await this.pool.acquire();
         
@@ -678,7 +762,13 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
             if ( this.onDelete.isSubscribed() ) {
                 const records : R[] = await query.run( connection )
-                    .then( cursor => cursor.toArray() );
+                    .then( async cursor => {
+                        const array = await cursor.toArray();
+
+                        cursor.close();
+                        
+                        return array;
+                    } );
 
                 const ids : string[] = records.map( r => r.id )
 
@@ -743,9 +833,23 @@ export interface MediaTableForeignKeys {
 }
 
 export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
+    protected readonly abstract kind : MediaKind;
+
     baseline : Partial<R> = {};
 
     foreignMediaKeys : MediaTableForeignKeys = {};
+
+    relations : {
+        collections: ManyToManyRelation<R, CollectionRecord>,
+        cast: ManyToManyRelation<R, PersonRecord>
+    };
+
+    installRelations ( tables : DatabaseTables ) {
+        return {
+            collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', this.kind ),
+            cast: new ManyToManyRelation( 'cast', tables.mediaCast, tables.people, 'mediaId', 'personId' ).savePivot( 'cast' ).pivotIndexedBy( 'reference' ).poly( 'mediaKind', this.kind )
+        };
+    }
 
     async repair ( records : string[] = null ) {
         if ( !records ) {
@@ -778,6 +882,8 @@ export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
 export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
     readonly tableName : string = 'media_movies';
 
+    readonly kind : MediaKind = MediaKind.Movie;
+
     indexesSchema : IndexSchema[] = [ 
         { name: 'internalId' },
         { name: 'title' },
@@ -792,15 +898,10 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
     dateFields = [ 'addedAt', 'lastPlayed' ];
 
     relations : {
-        collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>
+        collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>,
+        cast: ManyToManyRelation<MovieMediaRecord, PersonRecord>
     };
     
-    installRelations ( tables : DatabaseTables ) {
-        return {
-            collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', 'movie' )
-        };
-    }
-
     baseline : Partial<MovieMediaRecord> = {
         watched: false,
         lastPlayed: null,
@@ -811,6 +912,8 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
 
 export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     readonly tableName : string = 'media_tvshows';
+
+    readonly kind : MediaKind = MediaKind.TvShow;
 
     dateFields = [ 'addedAt', 'lastPlayed' ];
 
@@ -836,17 +939,18 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     
     relations : {
         collections: ManyToManyRelation<TvShowMediaRecord, CollectionRecord>,
+        cast: ManyToManyRelation<TvShowMediaRecord, PersonRecord>,
         seasons: HasManyRelation<TvShowMediaRecord, TvSeasonMediaRecord>
     };
     
     installRelations ( tables : DatabaseTables ) {
         return {
-            collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', 'show' ),
+            ...super.installRelations( tables ),
             seasons: new HasManyRelation( 'seasons', tables.seasons, 'tvShowId' ).indexBy( 'tvShowId' ).orderBy( 'number' )
         };
     }
 
-    async updateEpisodesCount ( show : string | TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
+    async repairEpisodesCount ( show : string | TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
         if ( typeof show === 'string' ) {
             show = await this.get( show );
         }
@@ -879,13 +983,15 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
             
             await this.database.tables.seasons.repair( seasons.map( season => season.id ) )
 
-            await this.updateEpisodesCount( show );
+            await this.repairEpisodesCount( show );
         } ) );
     }
 }
 
 export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
     readonly tableName : string = 'media_tvseasons';
+
+    readonly kind : MediaKind = MediaKind.TvSeason;
 
     baseline : Partial<TvSeasonMediaRecord> = {
         watchedEpisodesCount: 0,
@@ -904,18 +1010,21 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
     ];
     
     relations : {
+        collections: ManyToManyRelation<TvSeasonMediaRecord, CollectionRecord>,
+        cast: ManyToManyRelation<TvSeasonMediaRecord, PersonRecord>,
         show: BelongsToOneRelation<TvSeasonMediaRecord, TvShowMediaRecord>,
-        episodes: HasManyRelation<TvSeasonMediaRecord, TvEpisodeMediaRecord>
+        episodes: HasManyRelation<TvSeasonMediaRecord, TvEpisodeMediaRecord>,
     };
     
     installRelations ( tables : DatabaseTables ) {
         return {
+            ...super.installRelations( tables ),
             show: new BelongsToOneRelation( 'tvShow', tables.shows, 'tvShowId', 'tvShowId' ),
-            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' ).indexBy( 'tvSeasonId' ).orderBy( 'number' )
+            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' ).indexBy( 'tvSeasonId' ).orderBy( 'number' ),
         };
     }
 
-    async updateEpisodesCount ( season : string | TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
+    async repairEpisodesCount ( season : string | TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
         if ( typeof season === 'string' ) {
             season = await this.get( season );
         }
@@ -933,6 +1042,25 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         } );
     }
 
+    async repairTvShowArt ( season : string | TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
+        if ( typeof season === 'string' ) {
+            season = await this.get( season );
+        }
+
+        const show = await this.database.tables.shows.get( season.tvShowId );
+
+        if ( !show ) {
+            return season;
+        }
+
+        return this.updateIfChanged( season, {
+            art: {
+                ...season.art,
+                tvshow: show.art
+            }
+        } );
+    }
+
     async repair ( seasons : string[] = null ) {
         if ( !seasons ) {
             seasons = ( await this.find() ).map( season => season.id );
@@ -947,13 +1075,17 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
 
             await this.database.tables.episodes.repair( episodes.map( episode => episode.id ) )
 
-            await this.updateEpisodesCount( season );
+            await this.repairEpisodesCount( season );
+
+            await this.repairTvShowArt( season );
         } ) );
     }
 }
 
 export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     readonly tableName : string = 'media_tvepisodes';
+
+    readonly kind : MediaKind = MediaKind.TvEpisode;
     
     dateFields = [ 'addedAt', 'airedAt', 'lastPlayed' ];
 
@@ -978,18 +1110,62 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     }
     
     relations : {
-        season: BelongsToOneRelation<TvEpisodeMediaRecord, TvSeasonMediaRecord>
+        season: BelongsToOneRelation<TvEpisodeMediaRecord, TvSeasonMediaRecord>,
+        collections: ManyToManyRelation<TvEpisodeMediaRecord, CollectionRecord>,
+        cast: ManyToManyRelation<TvEpisodeMediaRecord, PersonRecord>
     };
     
     installRelations ( tables : DatabaseTables ) {
         return {
+            ...super.installRelations( tables ),
             season: new BelongsToOneRelation( 'tvSeason', tables.seasons, 'tvSeasonId' ),
         };
+    }
+
+    async repairTvShowArt ( episode : string | TvEpisodeMediaRecord ) : Promise<TvEpisodeMediaRecord> {
+        if ( typeof episode === 'string' ) {
+            episode = await this.get( episode );
+        }
+
+        const season = await this.database.tables.seasons.get( episode.tvSeasonId );
+
+        if ( !season ) {
+            return episode;
+        }
+
+        const show = await this.database.tables.shows.get( season.tvShowId );
+
+        if ( !show ) {
+            return episode;
+        }
+
+        return this.updateIfChanged( episode, {
+            art: {
+                ...episode.art,
+                tvshow: show.art
+            }
+        } );
+    }
+
+    async repair ( episodes : string[] = null ) {
+        if ( !episodes ) {
+            episodes = ( await this.find() ).map( episode => episode.id );
+        }
+
+        await super.repair( episodes );
+
+        await Promise.all( episodes.map( async episodeId => {
+            const episode = await this.get( episodeId );
+
+            await this.repairTvShowArt( episode );
+        } ) );
     }
 }
 
 export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
     readonly tableName : string = 'media_custom';
+
+    readonly kind : MediaKind = MediaKind.Custom;
 
     dateFields = [ 'addedAt', 'lastPlayed' ];
 
@@ -1097,6 +1273,54 @@ export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {
 
 export class PersistentQueueTable<R extends JobRecord> extends BaseTable<R> {
     tableName : string = 'job_queue';
+}
+
+export class PeopleTable extends BaseTable<PersonRecord> {
+    tableName : string = 'people';
+
+    dateFields = [ 'createdAt', 'updatedAt' ];
+    
+    indexesSchema : IndexSchema[] = [ 
+        { name: 'internalId' },
+        { name: 'name' }
+    ];
+
+    relations: {
+        credits: ManyToManyPolyRelation<PersonRecord, MediaRecord>;
+    };
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            credits: new ManyToManyPolyRelation( 'credits', map, tables.mediaCast, 'personId', 'mediaKind', 'mediaId' ).savePivot( 'role' ),
+        };
+    }
+}
+
+export class MediaCastTable extends BaseTable<MediaCastRecord> {
+    tableName : string = 'media_cast';
+
+    dateFields = [ 'createdAt', 'updatedAt' ];
+
+    indexesSchema : IndexSchema[] = [ 
+        { name: 'personId' },
+        { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
+    ];
+    
+    relations: {
+        record: BelongsToOnePolyRelation<MediaCastRecord, MediaRecord>;
+        person : BelongsToOneRelation<MediaCastRecord, PersonRecord>;
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            record: new BelongsToOnePolyRelation( 'record', map, 'kind', 'id' ),
+            person: new BelongsToOneRelation( 'person', tables.people, 'personId', 'personId' )
+        };
+    }
 }
 
 export class DatabaseDaemon {

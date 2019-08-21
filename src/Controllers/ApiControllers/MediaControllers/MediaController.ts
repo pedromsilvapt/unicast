@@ -1,7 +1,7 @@
 import { BaseTableController } from "../../BaseTableController";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
-import { MediaRecord, ArtRecord, isPlayableRecord } from "../../../MediaRecord";
+import { MediaRecord, ArtRecord, isPlayableRecord, PersonRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
 import { MediaTable } from "../../../Database/Database";
@@ -78,6 +78,24 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         return query;
     }
 
+    async transformAll ( req : Request, res : Response, records : R[] ) : Promise<any> {
+        records = await super.transformAll( req, res, records );
+
+        if ( req.query.cast == 'true' ) {
+            await this.table.relations.cast.applyAll( records );
+
+            const url = this.server.getMatchingUrl( req );
+
+            for ( let record of records ) {
+                for ( let person of ( record as any ).cast ) {
+                    ( person as any ).cachedArtwork = this.server.artwork.getCachedRemoteObject( url, record.art );
+                }
+            }
+        }
+
+        return records;
+    }
+
     @Route( 'get', '/:id/artwork' )
     async listArtwork ( req : Request, res : Response ) : Promise<ArtRecord[]> {
         const media : MediaRecord = await this.table.get( req.params.id );
@@ -85,7 +103,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
-        
+
         const url = this.server.getMatchingUrl( req );
         
         const images = await this.server.scrapers.getAllMediaArtork( media.kind, media.external, { readCache: false } );
@@ -130,6 +148,10 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
     async triggers ( req : Request, res : Response ) : Promise<MediaTrigger[]> {
         const media : MediaRecord = await this.table.get( req.params.id );
         
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+        
         const triggers = await this.server.triggerdb.queryMediaRecord( media );
 
         return triggers;
@@ -139,6 +161,10 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
     async streams ( req : Request, res : Response ) {
         const media = await this.table.get( req.params.id );
 
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+        
         if ( !isPlayableRecord( media ) ) {
             throw new InvalidArgumentError( 'Media is not playable.' );
         }
@@ -149,6 +175,25 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
             ...s.toJSON(),
             path: this.server.streams.getUrlFor( media.kind, media.id, s.id )
         } ) );
+    }
+
+    @Route( 'get', '/:id/cast' )
+    async cast ( req : Request, res : Response ) : Promise<PersonRecord[]> {
+        const media : MediaRecord = await this.table.get( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+        
+        const cast = await this.server.media.getCast( media );
+
+        const url = this.server.getMatchingUrl( req );
+
+        for ( let record of cast ) {
+            ( record as any ).cachedArtwork = this.server.artwork.getCachedRemoteObject( url, record.art );
+        }
+
+        return cast;
     }
 
     @Route( 'post', '/:id/watch/:status' )

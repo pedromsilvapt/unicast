@@ -13,6 +13,7 @@ import { LazyValue } from "../../../ES2017/LazyValue";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import { MediaRecordFiltersContainer } from '../../../MediaRepositories/ScanConditions';
 import { MediaSyncSnapshot } from '../../../MediaSync';
+import { LoggerInterface } from 'clui-logger';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
     if ( obj == null ) {
@@ -111,6 +112,8 @@ export class FileSystemScanner {
 
     snapshot : MediaSyncSnapshot;
 
+    logger : LoggerInterface;
+
     refreshConditions : MediaRecordFiltersContainer = new MediaRecordFiltersContainer();
 
     protected showsByName : Map<string, TvShowMediaRecord> = new Map();
@@ -120,20 +123,26 @@ export class FileSystemScanner {
     protected episodesFound : Set<string> = new Set();
 
 
-    constructor ( server : UnicastServer, config : FileSystemScannerConfig, settings : Settings ) {
+    constructor ( server : UnicastServer, config : FileSystemScannerConfig, settings : Settings, logger ?: LoggerInterface ) {
         this.server = server;
 
         this.config = config;
 
         this.settings = settings;
+
+        this.logger = logger;
     }
 
     async logScanError ( file : string, error : any ) {
-        // console.error( file, error );
+        if ( this.logger != null ) {
+            // this.logger.error( file + ' ' + error );
+        }
     }
 
     async logScanInfo ( ...info : any[] ) {
-        // console.log( ...info );
+        if ( this.logger != null ) {
+            // this.logger.info( info.join( ' ' ) );
+        }
     }
 
     protected removeIgnore ( kind : MediaKind, id : string ) {

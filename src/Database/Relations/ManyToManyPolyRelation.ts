@@ -16,6 +16,8 @@ export class ManyToManyPolyRelation<M extends Record, R extends Record> extends 
     middleTable : string | BaseTable<any>;
 
     middleKey : string;
+    
+    public pivotField : string = null;
 
     constructor ( member : string, typesMap : PolyRelationMap<R>, middleTable : string | BaseTable<any>, middleKey : string, foreignType : string, foreignKey : string ) {
         super( member, typesMap );
@@ -25,6 +27,12 @@ export class ManyToManyPolyRelation<M extends Record, R extends Record> extends 
 
         this.foreignType = foreignType;
         this.foreignKey = foreignKey;
+    }
+
+    savePivot ( pivotField : string ) : this {
+        this.pivotField = pivotField;
+        
+        return this;
     }
 
     async loadRelatedLinks ( items : M[] ) : Promise<any[]> {
@@ -48,7 +56,7 @@ export class ManyToManyPolyRelation<M extends Record, R extends Record> extends 
     }
 
     buildRelatedCache ( middleTableItems : any[], related : Map<string, Map<string, R>> ) : ManyToManyPolyCache<R> {
-        const links = itt( middleTableItems ).groupBy( item => item[ this.middleKey ] as string );
+        const links : Map<string, any[]> = itt( middleTableItems ).groupBy( item => item[ this.middleKey ] as string );
         
         return { links, related: related };
     }
@@ -93,7 +101,13 @@ export class ManyToManyPolyRelation<M extends Record, R extends Record> extends 
                 if ( relatedEntries ) {
                     const key = link[ this.foreignKey ];
         
-                    return relatedEntries.get( key );
+                    const related = relatedEntries.get( key );
+
+                    if ( this.pivotField != null ) {
+                        related[ this.pivotField ] = link;
+                    }
+
+                    return related;
                 }
             } );
         }
