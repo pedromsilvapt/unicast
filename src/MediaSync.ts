@@ -9,9 +9,10 @@ import { CacheOptions } from './MediaScrapers/ScraperCache';
 import { SharedLogger, Logger } from 'clui-logger';
 import { MediaRecordFilter, TvMediaFilter, MediaSetFilter } from './MediaRepositories/ScanConditions';
 import { ScrapersManager } from './MediaScrapers/ScrapersManager';
-import { collect, groupingBy, first } from 'data-collectors';
+import { collect, groupingBy, first, mapping, distinct, filtering } from 'data-collectors';
 import { ProvidersController } from './Controllers/ApiControllers/MediaControllers/ProvidersController';
 import { AsyncStream } from 'data-async-iterators';
+import { SemaphorePool } from 'data-semaphore';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -35,6 +36,9 @@ export class MediaSync {
 
     logger : Logger;
 
+    /** Prevents multiple movies/tv shows with the same person that might be updating their cast concurrently to change the same person at the same time */
+    protected castPersonLock : SemaphorePool<string> = new SemaphorePool( 1, true );
+    
     constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, scrapers : ScrapersManager, logger : SharedLogger ) {
         this.media = media;
         this.database = db;
@@ -155,7 +159,7 @@ export class MediaSync {
                 ...media as any,
                 createdAt: now,
                 updatedAt: now
-            } );
+            }, { durability: 'soft' } );
         } else {
             media.id = media.internalId;
         }
@@ -180,7 +184,7 @@ export class MediaSync {
             delete newRecord[ key ];
         }
 
-        if ( !dryRun ) newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() } );
+        if ( !dryRun ) newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
             
         if ( table.isChanged( oldRecord, newRecord ) ) this.logger.info( 'UPDATE ' + oldRecord.id + ' ' + this.print( newRecord ) + ' ' + JSON.stringify( table.getLocalChanges( oldRecord, newRecord ) ) );
 
@@ -196,13 +200,17 @@ export class MediaSync {
         if ( !dryRun ) {
             const table = this.media.getTable( record.kind );
 
-            await table.delete( record.id );
+            await table.delete( record.id, { durability: 'soft' } );
         }
 
         this.logger.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
     }
 
     async runCast<R extends MediaRecord> ( media : R, dryRun : boolean = false, cache ?: CacheOptions ) {
+        let existingPeopleCount = 0;
+        
+        let createdPeopleCount = 0;
+
         const peopleTable = this.database.tables.people;
 
         const table = this.media.getTable( media.kind );
@@ -241,79 +249,110 @@ export class MediaSync {
             groupingBy( role => role.cast.internalId, first() )
         );
 
+        // This will contain the internalIds of the new roles that don't
+        // have anyone on the database associated with them for this media record
+        const newPeopleRolesId = newRoles.map( role => role.internalId ).filter( id => id && !existingRoles.has( id ) );
+
+        // And we will search OTHER media records for the same person and see what we find
+        const newPeopleRoles : MediaCastRecord[] = collect( 
+            await this.database.tables.mediaCast.findAll( newPeopleRolesId, { index: 'internalId' } ), 
+            filtering( p => p.personId != null, distinct( p => p.internalId ) )
+        );
+
+        // Load the people related to those records
+        await this.database.tables.mediaCast.relations.person.applyAll( newPeopleRoles );
+
+        const newPeople = collect( 
+            newPeopleRoles,
+            filtering( role => role.person != null, groupingBy( role => role.internalId, mapping( person => ( {
+                ...person.person,
+                cast: person
+            } ), first<PersonRecord>() ) ) )
+        );
+        
         // We will iterate over the new roles we found to check if they are already present
         // on the database or if they are new. 
         // When we find one that is already in  the database, we remove it so that in the end
         // we can check which ones are stale (exist in the local database but not in scraper anymore)
         await new AsyncStream( newRoles ).parallel( async role => {
-            let person : PersonRecord = null;
+            await this.castPersonLock.acquire( role.internalId );
+
+            try {
+                let person : PersonRecord = null;
             
-            const matchRole = existingRoles.get( role.internalId );
-
-            if ( matchRole != null ) {
-                existingRoles.delete( role.internalId );
-
-                person = matchRole;
-            }
-
-            // Just because there was no match found for this person on the database
-            // as being part of the cast, the person's record might already exist 
-            // (associated to other media records) and as such we should reuse it
-            if ( person == null ) {
-                person = ( await peopleTable.findAll( [ role.internalId ], { index: 'internalId' } ) )[ 0 ];
-            }
-
-            if ( person != null ) {
-                if ( !dryRun ) {
-                    person = await peopleTable.updateIfChanged( person, {
-                        name: role.name,
-                        biography: role.biography || person.biography,
-                        birthday: role.birthday || person.birthday,
-                        deathday: role.deathday || person.deathday,
-                        naturalFrom: role.naturalFrom || person.naturalFrom,
-                        art: role.art || person.art
-                    } );
+                const matchRole = existingRoles.get( role.internalId );
+    
+                if ( matchRole != null ) {
+                    existingRoles.delete( role.internalId );
+    
+                    person = matchRole;
                 }
-            } else {
-                person = {
-                    art: role.art,
-                    biography: role.biography,
-                    birthday: role.birthday,
-                    deathday: role.deathday,
-                    name: role.name,
-                    naturalFrom: role.naturalFrom
+    
+                // Just because there was no match found for this person on the database
+                // as being part of the cast, the person's record might already exist 
+                // (associated to other media records) and as such we should reuse it
+                if ( person == null ) {
+                    person = newPeople.get( role.internalId );
+                }
+    
+                if ( person != null ) {
+                    if ( !dryRun ) {
+                        person = await peopleTable.updateIfChanged( person, {
+                            name: role.name,
+                            biography: role.biography || person.biography,
+                            birthday: role.birthday || person.birthday,
+                            deathday: role.deathday || person.deathday,
+                            naturalFrom: role.naturalFrom || person.naturalFrom,
+                            art: role.art || person.art
+                        }, null, { durability: 'soft' } );
+                    }
+    
+                    existingPeopleCount++;
+                } else {
+                    person = {
+                        art: role.art,
+                        biography: role.biography,
+                        birthday: role.birthday,
+                        deathday: role.deathday,
+                        name: role.name,
+                        naturalFrom: role.naturalFrom
+                    };
+    
+                    if ( !dryRun ) {
+                        person = await peopleTable.create( person, { durability: 'soft' } );
+                    }
+    
+                    createdPeopleCount++;
+                }
+    
+                const cast : Partial<MediaCastRecord> = {
+                    internalId: role.internalId,
+                    external: {},
+                    mediaId: media.id,
+                    mediaKind: media.kind,
+                    order: role.order,
+                    role: role.role,
+                    scraper: media.scraper,
+                    personId: person.id,
                 };
 
                 if ( !dryRun ) {
-                    person = await peopleTable.create( person );
+                    if ( matchRole != null ) {
+                        await this.database.tables.mediaCast.updateIfChanged( matchRole.cast, cast, {
+                            updatedAt: new Date()
+                        }, { durability: 'soft' } );
+                    } else {
+                        await this.database.tables.mediaCast.create( {
+                            ...cast as any,
+                            updatedAt: new Date(),
+                            createdAt: new Date(),
+                        }, { durability: 'soft' } );
+                    }
                 }
+            } finally {
+                this.castPersonLock.release( role.internalId );
             }
-
-            const cast : Partial<MediaCastRecord> = {
-                internalId: role.internalId,
-                external: {},
-                mediaId: media.id,
-                mediaKind: media.kind,
-                order: role.order,
-                role: role.role,
-                scraper: media.scraper,
-                personId: person.id,
-            };
-
-            if ( !dryRun ) {
-                if ( matchRole != null ) {
-                    await this.database.tables.mediaCast.updateIfChanged( matchRole.cast, cast, {
-                        updatedAt: new Date()
-                    } );
-                } else {
-                    await this.database.tables.mediaCast.create( {
-                        ...cast as any,
-                        updatedAt: new Date(),
-                        createdAt: new Date(),
-                    } );
-                }
-            }
-        }, 30 ).last();
+        }, 100 ).last();
 
         // When updating the roles in the loop above, we remove from the `existingRoles` map
         // all roles that already exist in the database. As such, whatever is left is stale data that
@@ -321,7 +360,9 @@ export class MediaSync {
         // by removing them in our database as well
         const toBeRemovedIds = Array.from( existingRoles.values() ).map( role => role.id );
 
-        await this.database.tables.mediaCast.deleteKeys( toBeRemovedIds );
+        const deletedCastCount = await this.database.tables.mediaCast.deleteKeys( toBeRemovedIds );
+
+        return { createdPeopleCount, existingPeopleCount, deletedCastCount };
     }
 
     async findRepositoryRecordsMap ( repository : IMediaRepository ) : Promise<RecordsMap<MediaRecord>> {

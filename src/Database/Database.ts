@@ -552,7 +552,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         } );
     }
 
-    async create ( record : R ) : Promise<R> {
+    async create ( record : R, options : Partial<r.OperationOptions> = {} ) : Promise<R> {
         const connection = await this.pool.acquire();
 
         try {
@@ -562,7 +562,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
                 }
             }
     
-            const res = await this.query().insert( record ).run( connection );
+            const res = await this.query().insert( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
             record.id = res.generated_keys[ 0 ];
             
@@ -574,7 +574,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    async createMany ( recordsIter : Iterable<R> ) : Promise<R[]> {
+    async createMany ( recordsIter : Iterable<R>, options : Partial<r.OperationOptions> = {} ) : Promise<R[]> {
         const connection = await this.pool.acquire();
 
         const records = Array.from( recordsIter );
@@ -588,7 +588,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
                 }
             }
     
-            const res = await this.query().insert( records ).run( connection );
+            const res = await this.query().insert( records ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
             let index = 0;
 
@@ -606,11 +606,11 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    async update ( id : string, record : any ) : Promise<R> {
+    async update ( id : string, record : any, options : Partial<r.OperationOptions> = {} ) : Promise<R> {
         const connection = await this.pool.acquire();
 
         try {
-            await this.query().get( id ).update( record ).run( connection );
+            await this.query().get( id ).update( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
             if ( this.onUpdate.isSubscribed() ) {
                 this.get( id ).then( updated => this.onUpdate.notify( updated ) );
@@ -630,19 +630,19 @@ export abstract class BaseTable<R extends { id ?: string }> {
         return Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) );
     }
 
-    async updateIfChanged ( baseRecord : object, changes : object, conditionalChanges : object = null ) : Promise<R> {
+    async updateIfChanged ( baseRecord : object, changes : object, conditionalChanges : object = null, options : Partial<r.OperationOptions> = {} ) : Promise<R> {
         if ( this.isChanged( baseRecord, changes ) ) {
             if ( conditionalChanges && typeof conditionalChanges == 'object' ) {
                 changes = { ...changes, ...conditionalChanges };
             }
 
-            return this.update( baseRecord[ "id" ], changes );
+            await this.update( baseRecord[ "id" ], changes, options );
         }
 
         return baseRecord as R;
     }
 
-    async updateMany ( predicate : RethinkPredicate, update : any, limit : number = Infinity ) : Promise<number> {
+    async updateMany ( predicate : RethinkPredicate, update : any, limit : number = Infinity, options : Partial<r.OperationOptions> = {} ) : Promise<number> {
         const connection = await this.pool.acquire();
 
         try {
@@ -659,7 +659,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
                     .then( cursor => cursor.toArray() )
                     .then( records => records.map( r => r.id ) );
 
-                operation = await this.query().getAll( ...ids ).update( update ).run( connection );
+                operation = await this.query().getAll( ...ids ).update( update ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
             
                 this.query().getAll( ...ids ).run( connection )
                     .then<R[]>( cursor => cursor.toArray() )
@@ -678,7 +678,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    async delete ( id : string ) : Promise<boolean> {
+    async delete ( id : string, options : Partial<r.OperationOptions> = {} ) : Promise<boolean> {
         const connection = await this.pool.acquire();
 
         try {
@@ -688,7 +688,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
                 record = await this.get( id );
             }
 
-            const operation = await this.query().get( id ).delete().run( connection );
+            const operation = await this.query().get( id ).delete().run( connection, { durability: "hard", ...options } as r.OperationOptions );
     
             if ( record != null ) {
                 this.onDelete.notify( record );
@@ -700,7 +700,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    async deleteKeys ( keys : any[], opts : { index ?: string, query ?: ( query : r.Sequence ) => r.Sequence } = {} ) : Promise<number> {
+    async deleteKeys ( keys : any[], opts : { index ?: string, query ?: ( query : r.Sequence ) => r.Sequence } = {}, options : Partial<r.OperationOptions> = {} ) : Promise<number> {
         if ( keys.length === 0 ) {
             return 0;
         }
@@ -730,7 +730,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
                 const ids : string[] = records.map( r => r.id )
 
-                operation = await this.query().getAll( ...ids ).delete().run( connection );
+                operation = await this.query().getAll( ...ids ).delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
         
                 Promise.resolve( records ).then( async records => {
                     for ( let record of records ) {
@@ -738,7 +738,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
                     }
                 } );
             } else {
-                operation = await table.delete().run( connection );
+                operation = await table.delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
             }
     
             return operation.deleted;
@@ -748,7 +748,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
     }
 
 
-    async deleteMany ( predicate : RethinkPredicate, limit : number = Infinity ) : Promise<number> {
+    async deleteMany ( predicate : RethinkPredicate, limit : number = Infinity, options : Partial<r.OperationOptions> = {} ) : Promise<number> {
         const connection = await this.pool.acquire();
         
         try {
@@ -772,7 +772,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
                 const ids : string[] = records.map( r => r.id )
 
-                operation = await this.query().getAll( ...ids ).delete().run( connection );
+                operation = await this.query().getAll( ...ids ).delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
         
                 Promise.resolve( records ).then( async records => {
                     for ( let record of records ) {
@@ -780,7 +780,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
                     }
                 } );
             } else {
-                operation = await query.delete().run( connection );
+                operation = await query.delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
             }
     
             return operation.deleted;
@@ -789,11 +789,11 @@ export abstract class BaseTable<R extends { id ?: string }> {
         }
     }
 
-    async deleteAll ( limit : number = Infinity ) : Promise<number> {
+    async deleteAll ( limit : number = Infinity, options : Partial<r.OperationOptions> = {} ) : Promise<number> {
         const connection = await this.pool.acquire();
 
         try {
-            const res = await this.query().delete().run( connection );
+            const res = await this.query().delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
             return res.deleted;
         } finally {
@@ -1304,6 +1304,7 @@ export class MediaCastTable extends BaseTable<MediaCastRecord> {
     dateFields = [ 'createdAt', 'updatedAt' ];
 
     indexesSchema : IndexSchema[] = [ 
+        { name: 'internalId' },
         { name: 'personId' },
         { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
     ];

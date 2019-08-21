@@ -46,7 +46,7 @@ export class BelongsToOneRelation<M extends Record, R extends Record> extends On
 
         const related = await this.relatedTable.findAll( keys, { query: this.runQuery.bind( this ) } );
 
-        return itt( related ).keyBy( rel => rel[ this.foreignKey ] );
+        return itt( related ).keyBy( rel => rel[ "id" ] );
     }
 
     findRelated ( item : M, related : Map<string, R> ) : R {

@@ -4,6 +4,8 @@ import { Request, Response } from "restify";
 import { BaseTableController } from '../../BaseTableController';
 
 export class PeopleController extends BaseTableController<PersonRecord> {
+    searchFields : string[] = [ 'name' ];
+
     defaultSortField : string = 'name';
     
     sortingFields : string[] = [ 'name' ]

@@ -95,6 +95,9 @@ export interface MediaCastRecord extends EntityRecord {
     order : number;
     createdAt : Date;
     updatedAt : Date;
+
+    person ?: PersonRecord;
+    record ?: MediaRecord;
 }
 
 export interface MediaRecord extends EntityRecord {

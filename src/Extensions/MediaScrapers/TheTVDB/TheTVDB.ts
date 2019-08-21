@@ -1,6 +1,6 @@
 import { IScraper } from "../../../MediaScrapers/IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/ScraperCache";
-import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaRecord, MediaKind, ExternalReferences } from "../../../MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaRecord, MediaKind, ExternalReferences, MediaCastRecord, RoleRecord } from "../../../MediaRecord";
 import * as TVDB from 'node-tvdb';
 import { MediaRecordFactory } from "./MediaRecordFactory";
 import { UnicastServer } from "../../../UnicastServer";
@@ -310,6 +310,45 @@ export class TheTVDB implements IScraper {
             return this.getTvSeasonArt( id, kind, cache );
         } else if ( record.kind === MediaKind.TvEpisode ) {
             return this.getTvEpisodeArt( id, kind, cache );
+        }
+    }
+
+    /* Get Media Cast */
+    getMovieCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return Promise.resolve( [] );
+    }
+
+    getTvShowCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return this.runCachedTask<RoleRecord[]>( 'getTvShowCast', id, async () => {
+            const actors : any[] = await this.tvdb.getActors( id );
+
+            return actors.map( actor => this.factory.createActorRoleRecord( actor ) );
+        }, cache );
+    }
+
+    getTvSeasonCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return Promise.resolve( [] );
+    }
+
+    getTvEpisodeCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return Promise.resolve( [] );
+    }
+
+    getMediaCast ( record : MediaRecord, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        const id = record.external.tvdb;
+
+        if ( !id ) {
+            return Promise.resolve( [] );
+        }
+
+        if ( record.kind === MediaKind.Movie ) {
+            return this.getMovieCast( id, cache );
+        } else if ( record.kind === MediaKind.TvShow ) {
+            return this.getTvShowCast( id, cache );
+        } else if ( record.kind === MediaKind.TvSeason ) {
+            return this.getTvSeasonCast( id, cache );
+        } else if ( record.kind === MediaKind.TvEpisode ) {
+            return this.getTvEpisodeCast( id, cache );
         }
     }
 
