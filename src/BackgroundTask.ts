@@ -1,6 +1,7 @@
 import * as uid from 'uid';
 import { CancelToken } from 'data-cancel-token'
 import { EventEmitter } from 'events';
+import { distanceInWordsToNow } from 'date-fns';
 
 export function getTimeStatistics ( elapsed : number, done : number, total : number ) : number {
     if ( done === 0 || total === 0 || total === Infinity || elapsed === 0 ) {
@@ -46,6 +47,8 @@ export class BackgroundTask extends EventEmitter {
     total : number = 0;
     
     errors : any[] = [];
+
+    startedAt : Date = null;
 
     metrics : BackgroundTaskMetric<any>[] = [];
 
@@ -93,6 +96,8 @@ export class BackgroundTask extends EventEmitter {
 
     setStateStart () : this {
         if ( this.state === BackgroundTaskState.Unstarted ) {
+            this.startedAt = new Date();
+
             this.stopwatch.resume();
 
             this.state = BackgroundTaskState.Running;
@@ -249,16 +254,23 @@ export class BackgroundTask extends EventEmitter {
         return null;
     }
 
+    getMetadata () : any {
+        return {};
+    }
+
     toJSON () {
         return {
             id: this.id,
             state: this.state,
+            startedAt: this.startedAt != null ? this.startedAt.getTime() : null,
+            startedAtHuman: this.startedAt != null ? distanceInWordsToNow( this.startedAt, { addSuffix: false, includeSeconds: true } ) : null,
+            metadata: this.getMetadata(),
             done: this.done,
             total: this.total,
             elapsedTime: this.elapsedTime,
             remainingTime: this.remainingTime,
             errors: this.errors,
-            metrics: this.metrics,
+            metrics: this.metrics.map( m => m.toJSON() ),
             cancelable: this.cancelable,
             pausable: this.pausable
         };
@@ -419,7 +431,7 @@ export abstract class BackgroundTaskMetric<V, T extends BackgroundTask = Backgro
     abstract valueToString ( value : V ) : string;
 
     toJSON () {
-        const lastPoint = this.getOldestPoint();
+        const lastPoint = this.getNewestPoint();
 
         return {
             name: this.name,

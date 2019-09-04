@@ -1,6 +1,6 @@
 import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord } from "./MediaRecord";
+import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord } from "./MediaRecord";
 import { Database, BaseTable, CollectionRecord, MediaTable } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
@@ -10,6 +10,7 @@ import * as internalIp from 'internal-ip';
 import * as corsMiddleware from 'restify-cors-middleware';
 import { ApiController } from "./Controllers/ApiControllers/ApiController";
 import * as chalk from 'chalk';
+import * as sortBy from 'sort-by';
 import { ResourceNotFoundError } from 'restify-errors';
 import { BackgroundTasksManager, Stopwatch } from "./BackgroundTask";
 import { Storage } from "./Storage";
@@ -238,7 +239,7 @@ export class UnicastServer {
             try {
                 await this.tools.run( tool, options );
             } catch ( error ) {
-                tool.logger.error( error );
+                tool.logger.error( error.message + '\n' + error.stack );
             }
         }
     }
@@ -667,6 +668,14 @@ export class MediaManager {
         const seasons = await this.getEpisodesBySeason( show );
 
         return Array.from( seasons.values() ).map( season => season.episodes ).reduce( ( a, b ) => a.concat( b ), [] );
+    }
+
+    async getCast ( media : MediaRecord ) : Promise<PersonRecord[]> {
+        const table = this.getTable( media.kind );
+
+        const cast = await table.relations.cast.load( media );
+
+        return cast.sort( sortBy( 'cast.order' ) );
     }
 
     store ( record : MediaRecord ) : Promise<MediaRecord> {
