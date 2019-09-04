@@ -73,7 +73,13 @@ export abstract class Relation<M extends Record, R> {
     }
 
     async loadAll ( items : M[] ) : Promise<R[]> {
-        const related = await this.loadRelated( items );
+        let itemsToLoad = items;
+        
+        if ( itemsToLoad.some( model => !model.id ) ) {
+            itemsToLoad = itemsToLoad.filter( model => !!model.id );
+        }
+
+        const related = await this.loadRelated( itemsToLoad );
 
         const results : R[] = [];
 
@@ -89,6 +95,10 @@ export abstract class Relation<M extends Record, R> {
     }
 
     async applyAll ( items : M[] ) : Promise<M[]> {
+        if ( items.some( model => !model.id ) ) {
+            items = items.filter( model => !!model.id );
+        }
+
         const related = await this.loadRelated( items );
 
         for ( let item of items ) {

@@ -456,6 +456,10 @@ export abstract class BaseTable<R extends { id ?: string }> {
     }
 
     async findAll ( keys : any[], opts : { index ?: string, query ?: ( query : r.Sequence ) => r.Sequence } = {} ) : Promise<R[]> {
+        if ( keys.some( key => key === void 0 ) ) {
+            keys = keys.filter( key => key !== void 0 );
+        }
+
         if ( keys.length === 0 ) {
             return [];
         }
@@ -463,8 +467,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
         const connection = await this.pool.acquire();
 
         try {
-            let table = 
-            opts.index ? 
+            let table = opts.index ? 
                 this.query().getAll( ( r as any ).args( keys ), { index: opts.index } ) :
                 this.query().getAll( ( r as any ).args( keys ) );
     
@@ -479,6 +482,8 @@ export abstract class BaseTable<R extends { id ?: string }> {
             await cursor.close();
     
             return items;
+        } catch ( err ) {
+            throw new Error( JSON.stringify( keys ) );
         } finally {
             await this.pool.release( connection );
         }

@@ -108,7 +108,7 @@ export class MediaSync {
         // WARNING MUST BE BEFORE ANY AWAIT
         snapshot.touched.get( media.kind ).add( media.internalId );
 
-        let match = ( await table.findAll( [ media.internalId ], { index: 'internalId', query : query => query.filter( { repository: media.repository } ).limit( 1 ) } ) ) [ 0 ]
+        let match = ( await table.findAll( [ media.internalId ], { index: 'internalId', query : query => query.filter( { repository: media.repository } ).limit( 1 ) } ) ) [ 0 ];
 
         if ( match ) {
             snapshot.scanBarrier.ready();

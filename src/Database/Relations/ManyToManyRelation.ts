@@ -128,7 +128,7 @@ export class ManyToManyRelation<M extends Record, R extends Record> extends Rela
 
         const related = this.pivotIndexOut != null
             ? await this.relatedTable.findAll( middleKeys, { index: this.pivotIndexOut } )
-            : await this.relatedTable.findAll( middleKeys ); // await this.relatedTable.find( query => this.runQuery( query.filter( row => r.expr( middleKeys ).contains( row( 'id' ) as any ) ) ) );
+            : await this.relatedTable.findAll( middleKeys );
         
         return this.buildRelatedCache( middleTableItems, related );
     }
