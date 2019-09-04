@@ -11,7 +11,6 @@ import { SubtitlesMediaStream } from '../../../MediaProviders/MediaStreams/Subti
 import { InvalidArgumentError } from 'restify-errors';
 import { UnicastMpv } from 'unicast-mpv';
 import { Config } from '../../../Config';
-import { MpvHlsTranscoder } from './MpvHlsTranscoder';
 import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord } from '../../../MediaRecord';
 import { LoadOptions } from 'unicast-mpv/lib/Player';
 import * as objectPath from 'object-path';

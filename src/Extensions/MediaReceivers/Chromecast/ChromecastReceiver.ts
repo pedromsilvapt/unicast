@@ -69,7 +69,7 @@ export class ChromecastReceiver extends BaseReceiver {
             ...this.getDefaultSubtitlesStyle(),
             ...this.config.subtitles.style.default
         }, this.config.subtitles.style.custom || [ {
-            backgroundColor: '#00000000',
+            backgroundColor: '#00000001',
         }, {
             backgroundColor: '#00000055',
         }, {

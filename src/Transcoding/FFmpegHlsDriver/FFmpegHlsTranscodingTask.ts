@@ -20,8 +20,6 @@ export interface TranscodingTaskProgressReport {
 }
 
 export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
-    record : MediaRecord;
-
     input : VideoMediaStream;
 
     driver : FFmpegHlsDriver;
@@ -37,9 +35,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     protected averageMetric : AverageBackgroundMetric<number>;
 
     constructor ( record : MediaRecord, input : VideoMediaStream, driver : FFmpegHlsDriver, destination : string ) {
-        super();
-
-        this.record = record;
+        super( record );
 
         this.input = input;
 

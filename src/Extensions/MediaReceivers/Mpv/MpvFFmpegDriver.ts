@@ -1,13 +1,12 @@
 import { FFmpegDriver } from '../../../Transcoding/FFmpegDriver/FFmpegDriver';
 import { MediaTrigger } from '../../../TriggerDb';
 import { UnicastServer } from '../../../UnicastServer';
-import { TrackMediaMetadata, MediaMetadata } from '../../../MediaTools';
-import { OutputStream, compile, Compiler, filters } from 'composable';
-import { StaticStream } from 'composable/lib/Stream';
+import { TrackMediaMetadata } from '../../../MediaTools';
+import { Compiler } from 'composable';
 
 export class MpvFFmpegDriver extends FFmpegDriver {
     public static getFilterGraph ( server : UnicastServer, triggers : MediaTrigger[], videoMetadata : TrackMediaMetadata ) {
-        const driver = new MpvFFMpegDriver( server );
+        const driver = new MpvFFmpegDriver( server );
 
         driver.setMap( 'vid1', 'aid1' );
 

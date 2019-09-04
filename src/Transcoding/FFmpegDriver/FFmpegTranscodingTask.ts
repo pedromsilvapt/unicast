@@ -28,8 +28,6 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
         return task;
     }
 
-    record : MediaRecord;
-
     input : VideoMediaStream;
 
     driver : FFmpegDriver;
@@ -41,9 +39,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
     protected averageMetric : AverageBackgroundMetric<number>;
 
     constructor ( record : MediaRecord, input : VideoMediaStream, driver : FFmpegDriver, destination : string ) {
-        super();
-
-        this.record = record;
+        super( record );
 
         this.input = input;
 

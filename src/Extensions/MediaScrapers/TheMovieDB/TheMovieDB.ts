@@ -16,7 +16,7 @@ export class TheMovieDB implements IScraper {
 
     cache : AsyncCache<any> = new AsyncCache();
 
-    protected factory : MediaRecordFactory;
+    factory : MediaRecordFactory;
 
     protected moviedb : MovieDB;
 
