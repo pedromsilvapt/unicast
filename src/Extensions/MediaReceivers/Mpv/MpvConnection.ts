@@ -129,6 +129,10 @@ export class MpvConnection {
         return this.call( 'subtitleScale', scale );
     }
 
+    setMultipleProperties ( properties : any ) : Promise<void> {
+        return this.call( 'setMultipleProperties', properties );
+    }
+
     showProgress () {
         return this.call( 'showProgress' );
     }

@@ -56,8 +56,8 @@ export abstract class EntityManager<E extends IEntity, K = E> extends EventEmitt
         return this.entities.find( e => this.getEntityKey( e ) === this.getEntityKey( entity ) ) != null;
     }
 
-    get ( entity : K ) : E {
-        return this.entities.find( e => this.getEntityKey( e ) === entity );
+    get<TEntity extends E = E> ( entity : K ) : TEntity {
+        return this.entities.find( e => this.getEntityKey( e ) === entity ) as TEntity;
     }
 
     destroy () {

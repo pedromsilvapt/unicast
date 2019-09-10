@@ -1,4 +1,4 @@
-import { BaseReceiver } from "../../../Receivers/BaseReceiver/BaseReceiver";
+import { BaseReceiver, ReceiverSubtitlesStyles } from "../../../Receivers/BaseReceiver/BaseReceiver";
 import { ChromecastPlayOptions } from "./Remotes/General";
 import DefaultMediaRemote from "./Remotes/DefaultMedia";
 import { MediaPlayOptions, ReceiverStatus, ReceiverStatusState, ReceiverTranscodingStatus } from "../../../Receivers/BaseReceiver/IMediaReceiver";
@@ -447,64 +447,33 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 }
 
-export class ChromecastSubtitlesStyles {
+export class ChromecastSubtitlesStyles extends ReceiverSubtitlesStyles {
     defaultStyles : any;
 
     customStyles : any[];
 
     customStyleIndex : number;
     
-    fontScale : number = 1;
-
     style : any;
 
-    constructor ( defaultStyles : any, customStyles : any[] = [] ) {
-        this.defaultStyles = defaultStyles;
+    constructor ( defaultStyles : any, customStyles : any[] = [], customGlobalProperties : any = {} ) {
+        super( defaultStyles, customStyles, {
+            fontScale: defaultStyles.fontScale || 1,
+            ...customGlobalProperties
+        } );
+    }
 
-        this.customStyles = customStyles;
+    get fontScale () : number {
+        return this.getCustomGlobalProperty( 'fontScale', 1 );
+    }
 
-        this.customStyleIndex = 0;
-
-        this.fontScale = this.defaultStyles.fontScale || 1;
-
-        this.cacheStyle();
+    set fontScale ( value : number ) {
+        this.setCustomGlobalProperty( 'fontScale', value );
     }
 
     setFontScale ( scale : number ) : this {
-        if ( scale != this.fontScale ) {
-            this.fontScale = scale;
-
-            this.cacheStyle();
-        }
-
+        this.fontScale = scale;
+        
         return this;
-    }
-
-    setCustomStyleIndex ( index : number ) : this {
-        if ( index != this.customStyleIndex ) {
-            this.customStyleIndex = index;
-
-            this.cacheStyle();
-        }
-
-        return this;
-    }
-
-    cycleCustomStyles () : this {
-        if ( this.customStyles.length > 0 ) {
-            this.setCustomStyleIndex( ( this.customStyleIndex + 1 ) % this.customStyles.length );
-        }
-
-        return this;
-    }
-
-    protected cacheStyle () {
-        let temp = { ...this.defaultStyles, fontScale: this.fontScale };
-
-        if ( this.customStyles.length > this.customStyleIndex ) {
-            temp = { ...temp, ...this.customStyles[ this.customStyleIndex ] };
-        }
-
-        this.style = temp;
     }
 }

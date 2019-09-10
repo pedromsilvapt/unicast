@@ -91,7 +91,7 @@ export class ChromecastReceiverFactory extends ReceiverFactory<ChromecastReceive
 
                 // TODO Allow to associate configurations with devices names on the config file, without an IP address
                 // So that when a new device is discovered, the config file is searched for any device with such name 
-                yield new ChromecastReceiver( this.server, device.name, device.address, ChromecastConfigTemplate.run( config ) );
+                yield new ChromecastReceiver( this.server, device.name, device.address, config );
             }
         }
     }

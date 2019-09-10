@@ -61,3 +61,75 @@ export abstract class BaseReceiver extends EventEmitter implements IMediaReceive
 
     abstract toJSON();
 }
+
+
+export class ReceiverSubtitlesStyles<T = any> {
+    defaultStyles : any;
+
+    customGlobalProperties : any = {};
+
+    customStyles : T[];
+
+    customStyleIndex : number;
+    
+    currentStyle : any;
+
+    constructor ( defaultStyles : any, customStyles : T[] = [], customGlobalProperties : any = {} ) {
+        this.defaultStyles = defaultStyles;
+
+        this.customStyles = customStyles;
+
+        this.customGlobalProperties = customGlobalProperties || {};
+
+        this.customStyleIndex = 0;
+
+        this.cacheCurrentStyle();
+    }
+
+    public setCustomGlobalProperty ( property : string, value : any ) {
+        const lastValue = this.getCustomGlobalProperty( property );
+
+        if ( lastValue != value ) {
+            this.customGlobalProperties[ property ] = value;
+
+            this.cacheCurrentStyle();
+        }
+    }
+
+    public getCustomGlobalProperty<T = any> ( property : string, defaultValue : T = void 0 ) : T {
+        if ( property in this.customGlobalProperties ) {
+            return this.customGlobalProperties[ property ];
+        }
+
+        return defaultValue;
+    }
+
+    public setCustomStyleIndex ( index : number ) : this {
+        if ( index != this.customStyleIndex ) {
+            this.customStyleIndex = index;
+
+            this.cacheCurrentStyle();
+        }
+
+        return this;
+    }
+
+    public cycleCustomStyles () : this {
+        if ( this.customStyles.length > 0 ) {
+            this.setCustomStyleIndex( ( this.customStyleIndex + 1 ) % this.customStyles.length );
+        }
+
+        return this;
+    }
+
+    protected cacheCurrentStyle () {
+        let temp = { ...this.defaultStyles, ...this.customGlobalProperties };
+
+        if ( this.customStyles.length > this.customStyleIndex ) {
+            temp = { ...temp, ...this.customStyles[ this.customStyleIndex ] };
+        }
+
+        console.log( temp );
+        this.currentStyle = temp;
+    }
+}

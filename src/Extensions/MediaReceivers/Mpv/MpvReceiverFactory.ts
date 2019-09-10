@@ -1,21 +1,17 @@
 import { ReceiverFactory } from '../../../Receivers/BaseReceiver/ReceiverFactory';
-import { MpvReceiver } from './MpvReceiver';
+import { MpvReceiver, MpvConfig } from './MpvReceiver';
 import { CancelToken } from 'data-cancel-token';
+import { ObjectTypeSchema, OptionalTypeSchema, AnyTypeSchema } from '../../../Config';
 
-// export var ChromecastConfigTemplate = new ObjectTypeSchema( {
-//     subtitles: new OptionalTypeSchema( {
-//         lineFilters: new OptionalTypeSchema( [ new AnyTypeSchema() ], [] ),
-//         delay: new OptionalTypeSchema( {
-//             preloadCount: new OptionalTypeSchema( Number, 0 ),
-//             duration: new OptionalTypeSchema( Number, 250 ),
-//             rollback: new OptionalTypeSchema( Number, 2 )
-//         }, {} ),
-//         style: new OptionalTypeSchema( {
-//             default: new OptionalTypeSchema( {}, {} ),
-//             custom: new OptionalTypeSchema( [], null )
-//         }, {} )
-//     }, {} )
-// } );
+export var MpvConfigTemplate = new ObjectTypeSchema( {
+    subtitles: new OptionalTypeSchema( {
+        lineFilters: new OptionalTypeSchema( [ new AnyTypeSchema() ], [] ),
+        style: new OptionalTypeSchema( {
+            default: new OptionalTypeSchema( {}, {} ),
+            custom: new OptionalTypeSchema( [], null )
+        }, {} )
+    }, {} )
+} );
 
 export class MpvReceiverFactory extends ReceiverFactory<MpvReceiver> {
     type: string = 'mpv';
@@ -54,6 +50,20 @@ export class MpvReceiverFactory extends ReceiverFactory<MpvReceiver> {
         return config;
     }
 
+    runTemplate ( config : any ) : MpvConfig {
+        let errors = MpvConfigTemplate.validate( config );
+
+        if ( errors !== null ) {
+            if ( !( errors instanceof Array ) ) {
+                errors = [ errors ];
+            }
+
+            throw new Error( `Could not validate config for a device.\n${ errors.map( err => err.message ).join( '\n' ) }` );
+        }
+
+        return MpvConfigTemplate.run( config );
+    }
+
     async * entitiesFromScan ( existingDevices : MpvReceiver[], cancel : CancelToken ) : AsyncIterable<MpvReceiver> {
         
     }
@@ -61,6 +71,8 @@ export class MpvReceiverFactory extends ReceiverFactory<MpvReceiver> {
     async createFromConfig ( config : any ) : Promise<MpvReceiver> {
         config = this.inheritConfig( config );
 
-        return new MpvReceiver( this.server, config.name, config.address, config.port || 2019, config );
+        config = this.runTemplate( config );
+
+        return new MpvReceiver( this.server, config.name, config.address, config.port || 2019,  config );
     }
 }

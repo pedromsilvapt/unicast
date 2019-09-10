@@ -1,4 +1,4 @@
-import { BaseReceiver } from '../../../Receivers/BaseReceiver/BaseReceiver';
+import { BaseReceiver, ReceiverSubtitlesStyles } from '../../../Receivers/BaseReceiver/BaseReceiver';
 import { MediaPlayOptions, ReceiverStatus, ReceiverStatusState } from '../../../Receivers/BaseReceiver/IMediaReceiver';
 import { MpvConnection } from './MpvConnection';
 import { UnicastServer } from '../../../UnicastServer';
@@ -25,10 +25,29 @@ export interface MpvConfig {
 
 export interface MpvSubtitlesConfig {
     lineFilters ?: (string | RegExp)[]
-    delay: {
-        duration : number;
-        rollback : number;
+    style ?: {
+        custom ?: any;
+        default ?: any[];
     }
+}
+
+interface SubtitleConfigProperties {
+    subFixTiming ?: boolean;
+    subVisibility ?: boolean;
+    subFontSize ?: number;
+    subBackColor ?: string;
+    subBold ?: boolean;
+    subItalic ?: boolean;
+    subBorderSize ?: number;
+    subColor ?: string;
+    subMarginX ?: number;
+    subMarginY ?: number;
+    subAlignX ?: 'left' | 'center' | 'right';
+    subAlignY ?: 'top' | 'center' | 'bottom';
+    subJustify ?: 'auto' | 'left' | 'center' | 'right';
+    subShadowOffset ?: number;
+    subShadowColor ?: string;
+    subSpacing ?: number;
 }
 
 export class MpvReceiver extends BaseReceiver {
@@ -42,6 +61,8 @@ export class MpvReceiver extends BaseReceiver {
 
     protected instance : UnicastMpv = null;
 
+    subtitlesStyle : MpvSubtitlesStyles;
+    
     sender : HttpSender;
     
     config : MpvConfig;
@@ -57,7 +78,16 @@ export class MpvReceiver extends BaseReceiver {
 
         this.logger = this.server.logger.service( `Receivers/${ this.type }/${ this.name }` );
 
-        // this.transcoder = new MpvHlsTranscoder( this );
+        this.subtitlesStyle = new MpvSubtitlesStyles( {
+            ...this.getDefaultSubtitlesStyle(),
+            ...this.config.subtitles.style.default,
+        }, this.config.subtitles.style.custom || [ {
+            subBackColor: '0.0/0.0/0.0/0.0',
+        }, {
+            subBackColor: '0.0/0.0/0.0/0.33',
+        }, {
+            subBackColor: '0.0/0.0/0.0/0.66',
+        } ] );
 
         this.port = port;
 
@@ -127,6 +157,13 @@ export class MpvReceiver extends BaseReceiver {
         return this.status();
     }
 
+    getDefaultSubtitlesStyle () : SubtitleConfigProperties {
+        return {
+            subBackColor: '0.0/0.0/0.0/0.0',
+            subShadowOffset: 5
+        };
+    }
+
     protected getStreamUrl ( session : string, stream : MediaStream ) : string {
         return this.sender.host() + this.sender.getUrlFor( session, stream.id );
     }
@@ -184,7 +221,10 @@ export class MpvReceiver extends BaseReceiver {
             const videoUrl = this.getStreamUrl( id, video );
             const subtitlesUrl = subtitles ? this.getStreamUrl( id, subtitles ) : null;
 
-            await this.connection.play( videoUrl, subtitlesUrl, options );
+            await this.connection.play( videoUrl, subtitlesUrl, {
+                options,
+                ...this.subtitlesStyle.currentStyle
+            } );
     
             this.sessions.current = id;
     
@@ -389,14 +429,14 @@ export class MpvReceiver extends BaseReceiver {
     }
 
     async changeSubtitlesStyle ( index : number ) : Promise<ReceiverStatus> {
-        // TODO Implement subtitle styles 
-        // await this.client.changeSubtitlesStyle( this.subtitlesStyle.setCustomStyleIndex( index ).style );
+        await this.connection.setMultipleProperties ( this.subtitlesStyle.setCustomStyleIndex( index ).currentStyle );
+
 
         return this.status();
     }
 
     async cycleSubtitlesStyle () : Promise<ReceiverStatus> {
-        // await this.client.changeSubtitlesStyle( this.subtitlesStyle.cycleCustomStyles().style );
+        await this.connection.setMultipleProperties ( this.subtitlesStyle.cycleCustomStyles().currentStyle );
 
         return this.status();
     }
@@ -410,3 +450,5 @@ export class MpvReceiver extends BaseReceiver {
         };
     }
 }
+
+export class MpvSubtitlesStyles extends ReceiverSubtitlesStyles<SubtitleConfigProperties> { }
