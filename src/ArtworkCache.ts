@@ -9,6 +9,7 @@ import * as path from 'path';
 
 export interface ArtworkCacheOptions {
     width ?: number;
+    readCache ?: boolean
 }
 
 export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.WritableStream | string ) : Promise<void> {
@@ -129,11 +130,15 @@ export class ArtworkCache {
     }
 
     @Singleton( ( url : string ) => url )
-    async readOriginal ( url : string ) : Promise<string> {
+    async readOriginal ( url : string, readCache : boolean = true ) : Promise<string> {
         let cached;
         
         if ( ( cached = this.getCached( url ) ) && await fs.exists( cached ) ) {
-            return cached;
+            if ( readCache ) {
+                return cached;
+            } else {
+                await fs.unlink( cached );
+            }
         }
         
         const cachePath = await this.server.storage.getRandomFile( '', 'jpg', 'cache/artwork/original' );
@@ -175,11 +180,17 @@ export class ArtworkCache {
     async readTransformed ( url : string, options : ArtworkCacheOptions ) : Promise<string> {
         let cached;
         
+        const readCache = options.readCache === void 0 || options.readCache;
+        
         if ( ( cached = this.getCached( url, options ) ) && await fs.exists( cached ) ) {
-            return cached;
+            if ( readCache ) {
+                return cached;
+            } else {
+                await fs.unlink( cached );
+            }
         }
 
-        let cachePath = await this.readOriginal( url );
+        let cachePath = await this.readOriginal( url, readCache );
 
         if ( this.areOptionsEmpty( options ) ) {
             return cachePath;

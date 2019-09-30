@@ -74,6 +74,10 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
                 } );
             }
         }
+        
+        if ( req.query.sample ) {
+            query = query.sample( +req.query.sample );
+        }
 
         return query;
     }

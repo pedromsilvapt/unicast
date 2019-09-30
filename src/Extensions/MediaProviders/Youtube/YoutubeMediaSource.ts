@@ -84,7 +84,7 @@ export class YoutubeMediaSource extends MediaSource {
             return this.details.record;
         }
 
-        let runtime : number = Math.round( +this.videoInfo.length_seconds / 60 );
+        let runtime : number = Math.round( +this.videoInfo.player_response.videoDetails.lengthSeconds / 60 );
 
         let quality : PlayableQualityRecord = {
             codec: this.format.encoding,

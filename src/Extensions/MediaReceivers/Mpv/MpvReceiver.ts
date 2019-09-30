@@ -85,8 +85,10 @@ export class MpvReceiver extends BaseReceiver {
             subBackColor: '0.0/0.0/0.0/0.0',
         }, {
             subBackColor: '0.0/0.0/0.0/0.33',
+            subShadowOffset: 5
         }, {
             subBackColor: '0.0/0.0/0.0/0.66',
+            subShadowOffset: 5
         } ] );
 
         this.port = port;
@@ -159,8 +161,7 @@ export class MpvReceiver extends BaseReceiver {
 
     getDefaultSubtitlesStyle () : SubtitleConfigProperties {
         return {
-            subBackColor: '0.0/0.0/0.0/0.0',
-            subShadowOffset: 5
+            subBackColor: '0.0/0.0/0.0/0.0'
         };
     }
 

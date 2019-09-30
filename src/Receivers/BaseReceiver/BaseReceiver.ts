@@ -129,7 +129,6 @@ export class ReceiverSubtitlesStyles<T = any> {
             temp = { ...temp, ...this.customStyles[ this.customStyleIndex ] };
         }
 
-        console.log( temp );
         this.currentStyle = temp;
     }
 }

@@ -11,7 +11,6 @@ import * as corsMiddleware from 'restify-cors-middleware';
 import { ApiController } from "./Controllers/ApiControllers/ApiController";
 import * as chalk from 'chalk';
 import * as sortBy from 'sort-by';
-import { ResourceNotFoundError } from 'restify-errors';
 import { BackgroundTasksManager, Stopwatch } from "./BackgroundTask";
 import { Storage } from "./Storage";
 import { TranscodingManager } from "./Transcoding/TranscodingManager";
@@ -32,7 +31,7 @@ import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
 import { Tool } from './Tools/Tool';
 import { Journal } from './Journal';
-import { LiveLogger, Logger, ConsoleBackend, SharedLogger } from 'clui-logger';
+import { LiveLogger, Logger, ConsoleBackend, SharedLogger, FilterBackend } from 'clui-logger';
 import { CommandsHistory } from './Receivers/CommandsHistory';
 
 export class UnicastServer {
@@ -72,6 +71,8 @@ export class UnicastServer {
 
     readonly transcoding : TranscodingManager;
 
+    readonly loggerBackend : FilterBackend;
+
     readonly logger : SharedLogger;
 
     readonly journal : Journal;
@@ -97,7 +98,9 @@ export class UnicastServer {
 
         this.storage = new Storage( this );
         
-        this.logger = new SharedLogger( new ConsoleBackend() );
+        this.loggerBackend = new FilterBackend( new ConsoleBackend() );
+
+        this.logger = new SharedLogger( this.loggerBackend );
 
         this.database = new Database( this );
 
@@ -123,7 +126,10 @@ export class UnicastServer {
         
         this.transcoding = new TranscodingManager( this );
 
-        this.http = new MultiServer( [ restify.createServer() ] );
+        this.http = new MultiServer( [ restify.createServer( {
+            ignoreTrailingSlash: true,
+            // handleUpgrades: true
+        } as any ) ] );
 
         this.streams = new HttpRawMediaServer( this );
 
@@ -183,7 +189,7 @@ export class UnicastServer {
 
         this.http.use( httpLogger.before() );
         this.http.on( 'after', httpLogger.after() );
-
+        
         httpLogger.registerHighFrequencyPattern( 
             /\/media\/send\/(\w+)\/([\w\-_ ]+)\/session\/([\w\-_ ]+)\/stream\//, 
             match => match[ 1 ] + '/' + match[ 2 ] + '/' + match[ 3 ]
@@ -192,6 +198,9 @@ export class UnicastServer {
         this.onError.subscribe( error => {
             this.logger.error( 'unhandled', error.message + error.stack, error );
         } );
+
+        // Quick fix
+        this.http.servers.forEach( server => server.server.removeAllListeners( 'upgrade' ) );
     }
 
     get name () {
@@ -235,7 +244,7 @@ export class UnicastServer {
     }
 
     async runTools ( toolsToRun : [Tool, any][] ) : Promise<void> {
-        for( let [ tool, options ] of toolsToRun ) {
+        for ( let [ tool, options ] of toolsToRun ) {
             try {
                 await this.tools.run( tool, options );
             } catch ( error ) {
@@ -250,15 +259,9 @@ export class UnicastServer {
         const sslPort : number = this.getSecurePort();
     
         // Attach all api controllers
+        this.streams.initialize();
+
         new ApiController( this, '/api' ).install();
-
-        this.http.use( ( req, _res, next ) => {
-            if ( req.url.startsWith( '/api/' ) ) {
-                next( new ResourceNotFoundError( `Could not find the resource "${ req.url }"` ) );
-            }
-
-            next();
-        } );
 
         // Start the static server
         routes( this.getUrl(), this.getUrl( '/api' ) ).applyRoutes( this.http.servers[ 0 ] );
@@ -285,13 +288,19 @@ export class UnicastServer {
     async run ( args ?: string[] ) : Promise<void> {
         const toolsToRun = this.tools.parse( args );
 
-        await this.bootstrap();
-
+        
         if ( toolsToRun.length > 0 ) {
+            this.loggerBackend.addPredicate( '>=error', true );
+            this.loggerBackend.addPredicate( '[Tools/]', true );
+
+            await this.bootstrap();
+
             await this.runTools( toolsToRun );
 
             await this.close();
         } else {
+            await this.bootstrap();
+
             await this.listen();
 
             return new Promise<void>( () => {} );
@@ -462,8 +471,6 @@ export class HttpRawMediaServer {
 
     constructor ( server : UnicastServer ) {
         this.server = server;
-
-        this.server.http.get( this.getUrlPattern(), this.serve.bind( this ) );
     }
 
     host () : string {
@@ -476,6 +483,11 @@ export class HttpRawMediaServer {
 
     getUrlPattern () : string {
         return this.getUrlFor( ':kind', ':id', ':stream' );
+    }
+
+    initialize () {
+        this.server.http.get( '/api' + this.getUrlPattern(), this.serve.bind( this ) );
+        this.server.http.head( '/api' + this.getUrlPattern(), this.serve.bind( this ) );
     }
 
     async serve ( req : restify.Request, res : restify.Response, next : restify.Next ) : Promise<void> {
@@ -496,13 +508,11 @@ export class HttpRawMediaServer {
             
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
             
-            reader.on( 'error', () => {
-                if ( reader ) {
-                    stream.close( reader );
-                }
-            } );
-            
             if ( reader ) {
+                reader.on( 'error', () => {
+                    stream.close( reader );
+                } );
+
                 req.on( 'close', () => stream.close( reader ) );
             }
 
@@ -510,9 +520,9 @@ export class HttpRawMediaServer {
         } catch ( error ) {
             this.server.onError.notify( error );
            
-           res.send( 500, { error: true } );
+            res.send( 500, { error: true } );
 
-           next();
+            next();
         }
     }
 }
