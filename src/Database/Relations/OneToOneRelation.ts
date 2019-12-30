@@ -2,7 +2,7 @@ import { Record, Relation } from "./Relation";
 import { BaseTable } from "../Database";
 import * as itt from "itt";
 
-export abstract class OneToOneRelation<M extends Record, R extends Record> extends Relation<M, R> {
+export abstract class OneToOneRelation<M extends Record, R extends Record, E = {}> extends Relation<M, R, E> {
     public relatedTable : BaseTable<R>;
 
     public foreignKey : string;
@@ -40,7 +40,7 @@ export class HasOneRelation<M extends Record, R extends Record> extends OneToOne
 }
 
 // The foreign key is stored in this record
-export class BelongsToOneRelation<M extends Record, R extends Record> extends OneToOneRelation<M, R> {
+export class BelongsToOneRelation<M extends Record, R extends Record, E = {}> extends OneToOneRelation<M, R, E> {
     async loadRelated ( items : M[] ) : Promise<Map<string, R>> {
         const keys : string[] = items.map( item => item[ this.foreignKey ] );
 

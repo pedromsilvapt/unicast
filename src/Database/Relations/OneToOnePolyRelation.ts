@@ -2,7 +2,7 @@ import { Record, PropertyAccessor, createPropertyAccessor } from "./Relation";
 import { PolyRelationMap, PolyRelation } from "./PolyRelation";
 import * as itt from 'itt';
 
-export class BelongsToOnePolyRelation<M extends Record, R extends Record> extends PolyRelation<M, R, R> {
+export class BelongsToOnePolyRelation<M extends Record, R extends Record, E = {}> extends PolyRelation<M, R, R, E> {
     typesMap : PolyRelationMap<R>;
 
     foreignType : PropertyAccessor<M, string>;

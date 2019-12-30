@@ -4,6 +4,7 @@ import { MediaKind, ExternalReferences, ArtRecord, RoleRecord } from "../../../M
 import { InvalidArgumentError } from "restify-errors";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { CacheOptions } from "../../../MediaScrapers/ScraperCache";
+import * as parseTorrentName from 'parse-torrent-name';
 
 export class ScrapersController extends BaseController {
     protected parseCacheOptions ( input : any ) : CacheOptions {
@@ -38,6 +39,15 @@ export class ScrapersController extends BaseController {
         }
         
         return options;
+    }
+
+    @Route( 'get', '/parse' )
+    async parse ( req : Request, res : Response ) : Promise<any> {
+        if ( req.query.name instanceof Array ) {
+            return req.query.name.map( name => parseTorrentName( name ) || {} );
+        } else {
+            return parseTorrentName( req.query.name ) || {};
+        }
     }
 
     /**

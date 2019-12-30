@@ -108,6 +108,10 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         return Promise.all( item.map( each => this.transform( req, res, each ) ) );
     }
 
+    public createQuery ( req : Request, res : Response, query : ( query : r.Sequence ) => r.Sequence ) : Promise<R[]> {
+        return this.table.find( query );
+    }
+
     @Route( 'get', '/' )
     async list ( req : Request, res : Response ) : Promise<R[]> {
         if ( !this.allowedActions.includes( 'list' ) ) {
@@ -116,7 +120,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
 
         await this.transformQuery( req );
 
-        const list = await this.table.find( query => this.getPagination( req, res, this.getQuery( req, res, query ) ) );
+        const list = await this.createQuery( req, res, query => this.getPagination( req, res, this.getQuery( req, res, query ) ) );
 
         return this.runTransforms( req, res, list );
     }

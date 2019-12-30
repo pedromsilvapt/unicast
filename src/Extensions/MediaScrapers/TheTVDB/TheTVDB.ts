@@ -50,7 +50,11 @@ export class TheTVDB implements IScraper {
             return cached;
         }
 
-        return this.cache.set<T>( key, runner(), options );
+        return this.cache.set<T>( key, runner(), options ).catch( err => {
+            this.logger.error( method  + ' ' + id );
+
+            return Promise.reject( err );
+        } );
     }
 
     protected getExternalCacheKey ( external : ExternalReferences ) : string {
@@ -113,29 +117,24 @@ export class TheTVDB implements IScraper {
     getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
         const externalString = this.getExternalCacheKey( external );
 
-        const keysMapper : { [ key : string ] : [boolean, Function] } = { 
-            'tvdb': [ false, this.getTvShow.bind( this ) ],
-            'imdb': [ true, this.tvdb.getSeriesByImdbId.bind( this.tvdb ) ],
-            'zap2it': [ true, this.tvdb.getSeriesByZap2ItId.bind( this.tvdb ) ],
+        const keysMapper : { [ key : string ] : Function } = {
+            'imdb': this.tvdb.getSeriesByImdbId.bind( this.tvdb ),
+            'zap2it': this.tvdb.getSeriesByZap2ItId.bind( this.tvdb ),
         };
 
         return this.runCachedTask<TvShowMediaRecord>( 'getTvShowExternal', externalString, async () => {
-            for ( let source of Object.keys( external ) ) {
-                if ( source in keysMapper ) {
-                    const [ isNative, fetcher ] = keysMapper[ source ];
+            if ( external[ 'tvdb' ] ) {
+                return await this.getTvShow( external[ 'tvdb' ], cache );
+            }
 
-                    if ( isNative )  {
-                        const results = await fetcher( external[ source ] );
-    
-                        if ( results.length > 0 ) {
-                            return this.getTvShow( results[ 0 ].id, cache );
-                        }
-                    } else {
-                        const result = await fetcher( external[ source ], cache );
-    
-                        if ( result ) {
-                            return result;
-                        }
+            for ( let source of Object.keys( external ) ) {
+                if ( external[ source ] && source in keysMapper ) {
+                    const fetcher = keysMapper[ source ];
+
+                    const results = await fetcher( external[ source ] );
+
+                    if ( results.length > 0 ) {
+                        return this.getTvShow( results[ 0 ].id, cache );
                     }
                 }
             }

@@ -1,5 +1,5 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
-import { MediaKind, AllMediaKinds, PlayableQualityRecord } from "../MediaRecord";
+import { MediaKind, AllMediaKinds, PlayableQualityRecord, MediaRecordArt } from "../MediaRecord";
 import * as parseTorrentName from 'parse-torrent-name';
 import { MediaTools } from "../MediaTools";
 import * as path from 'path';
@@ -21,14 +21,19 @@ export interface AddCustomOptions {
     title ?: string;
     device ?: string;
     playlist ?: string;
+
+    background ?: string;
+    thumbnail ?: string;
+    banner ?: string;
+    poster ?: string;
 }
 
 export class AddCustomTool extends Tool<AddCustomOptions> {
     getParameters () {
         return [
             new ToolOption( 'video' ).setRequired(),
-            new ToolOption( 'mediaKind' ).setAllowedValues( AllMediaKinds ).setRequired(),
-            new ToolOption( 'mediaId' ).setRequired()
+            new ToolOption( 'mediaKind' ).setAllowedValues( AllMediaKinds ).setRequired( false ),
+            new ToolOption( 'mediaId' ).setRequired( false )
         ];
     }
 
@@ -38,6 +43,11 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
             new ToolOption( 'title' ),
             new ToolOption( 'device' ),
             new ToolOption( 'playlist' ),
+
+            new ToolOption( 'background' ),
+            new ToolOption( 'thumbnail' ),
+            new ToolOption( 'poster' ),
+            new ToolOption( 'banner' ),
         ];
     }
     
@@ -87,16 +97,32 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
     }
 
     async run ( options : AddCustomOptions ) {
-        const parent = await this.server.media.get( options.mediaKind, options.mediaId );
+        let art : MediaRecordArt = {
+            background: null,
+            banner: null,
+            poster: null,
+            thumbnail: null
+        };
 
-        if ( !parent ) {
-            this.logger.error( `Parent media item not found: [${ options.mediaKind }, ${ options.mediaId }]` );
-        }
+        if ( options.mediaKind != null && options.mediaId != null ) {
+            const parent = await this.server.media.get( options.mediaKind, options.mediaId );
+    
+            if ( !parent ) {
+                this.logger.error( `Parent media item not found: [${ options.mediaKind }, ${ options.mediaId }]` );
+            } else {
+                Object.assign( art, parent.art );
+            }
+        } 
+        
+        if ( options.background != null ) art.background = options.background;
+        if ( options.thumbnail != null ) art.thumbnail = options.thumbnail;
+        if ( options.poster != null ) art.poster = options.poster;
+        if ( options.banner != null ) art.banner = options.banner;
 
         const [ runtime, quality ] = await this.getVideoMetadata( options.video );
 
         let record = await this.server.database.tables.custom.create( {
-            "art": parent.art,
+            "art": art,
             "external": { },
             "internalId": null,
             "kind": MediaKind.Custom,

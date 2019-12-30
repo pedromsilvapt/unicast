@@ -258,7 +258,7 @@ export class FileSystemScanner {
 
         const id = shorthash.unique( showName );
 
-        if ( !show ) {            
+        if ( !show ) {
             // In case the option `refetchExisting` is false, the existing media records stored in the database are accessible in the 
             // `ignore` variable. We try to retrieve the record (show can therefore be null or not)
             show = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.TvShow ).get( id ) as TvShowMediaRecord ) );
@@ -314,10 +314,14 @@ export class FileSystemScanner {
 
             // TODO: findTvShowFor is already called somewhere up above; see if both calls cannot be merged into one to avoid
             // duplicate calls to the scraper when the cache reads are turned off
-            return wrap( clone( await this.findTvShowFor( scraper, showName, cache ) ), id );
+            return wrap( clone( await scraper.getTvShowExternal( show.external, cache ) ), id );
         } );
 
-        let remoteShowInternalId = remoteShow.map( show => show.internalId );
+        let remoteShowInternalId = remoteShow.map( show => show.internalId ).catch( err => {
+            err.message = showName + ' ' + err.message;
+
+            return Promise.reject( err );
+        } );
 
         const details = parseTorrentName( path.basename( videoFile ) );
 

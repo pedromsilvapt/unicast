@@ -184,9 +184,12 @@ export class MediaSync {
             delete newRecord[ key ];
         }
 
+        const changed = table.isChanged( oldRecord, newRecord );
+        const changes = table.getLocalChanges( oldRecord, newRecord );
+
         if ( !dryRun ) newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
             
-        if ( table.isChanged( oldRecord, newRecord ) ) this.logger.info( 'UPDATE ' + oldRecord.id + ' ' + this.print( newRecord ) + ' ' + JSON.stringify( table.getLocalChanges( oldRecord, newRecord ) ) );
+        if ( changed ) this.logger.info( 'UPDATE ' + oldRecord.id + ' ' + this.print( newRecord ) + ' ' + JSON.stringify( changes ) );
 
         await this.runCast( newRecord, dryRun, cache );
     }
@@ -385,11 +388,11 @@ export class MediaSync {
 
     async findIncompleteRecords ( repository : IMediaRepository ) : Promise<MediaRecordFilter[]> {
         const episodes = await this.database.tables.episodes.findStream( query => query.filter( { repository: repository.name } ) )
-            .filter( ep => ep.art.thumbnail == null || ep.plot == null )
+            .filter( ep => ep.art.thumbnail == null || ep.plot == null || !ep.external )
             .toArray();
 
         const seasons = await this.database.tables.seasons.findStream( query => query.filter( { repository: repository.name } ) )
-            .filter( ep => ep.art.poster == null )
+            .filter( se => se.art.poster == null )
             .toArray();
 
         return [ await MediaSetFilter.list( [...episodes, ...seasons], this.media ) ];
@@ -607,7 +610,7 @@ export class MediaSyncSnapshot {
     }
 
     public addAllExternal ( external : any, record : MediaRecord ) {
-        for ( let key of Object.keys( external ) ) {
+        for ( let key of Object.keys( external || {} ) ) {
             if ( external[ key ] ) {
                 this.addExternal( key, external[ key ], record );
             }
@@ -615,7 +618,7 @@ export class MediaSyncSnapshot {
     }
 
     public getAnyExternal ( external : any ) : MediaRecord {
-        for ( let key of Object.keys( external ) ) {
+        for ( let key of Object.keys( external || {} ) ) {
             const records = this.getExternal( key, external[ key ] );
 
             if ( records && records.length > 0 ) {
@@ -625,7 +628,7 @@ export class MediaSyncSnapshot {
     }
 
     public deleteExternalRecord ( record : MediaRecord ) {
-        for ( let key of Object.keys( record.external ) ) {
+        for ( let key of Object.keys( record.external || {} ) ) {
             if ( record[ key ] != null ) {
                 const dictionary = this.externals.get( key );
 
@@ -651,7 +654,7 @@ export class MediaSyncSnapshot {
     }
 
     public popDuplicated ( record : MediaRecord ) : MediaRecord {
-        const ext = record.external;
+        const ext = record.external || {};
 
         const extKeys = Object.keys( ext ).filter( key => ext[ key ] != null );
 

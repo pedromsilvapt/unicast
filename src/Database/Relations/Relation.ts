@@ -27,7 +27,7 @@ export function createPropertyAccessor<O = any, V = any> ( property : string | P
     }
 }
 
-export abstract class Relation<M extends Record, R> {
+export abstract class Relation<M extends Record, R, E = {}> {
     member : string;
 
     queryClauses ?: ( query : r.Sequence ) => r.Sequence
@@ -90,11 +90,11 @@ export abstract class Relation<M extends Record, R> {
         return results;
     }
 
-    async apply ( record : M ) : Promise<M> {
+    async apply<ME extends M = M> ( record : ME ) : Promise<ME & E> {
         return ( await this.applyAll( [ record ] ) )[ 0 ];
     }
 
-    async applyAll ( items : M[] ) : Promise<M[]> {
+    async applyAll<ME extends M = M> ( items : ME[] ) : Promise<(ME & E)[]> {
         if ( items.some( model => !model.id ) ) {
             items = items.filter( model => !!model.id );
         }
@@ -105,6 +105,6 @@ export abstract class Relation<M extends Record, R> {
             item[ this.member ] = this.findRelated( item, related );
         }
 
-        return items;
+        return items as (ME & E)[];
     }
 }

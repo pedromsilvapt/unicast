@@ -164,8 +164,7 @@ export class MediaRecordFactory {
                 background: null,
                 banner: null,
                 poster: null,
-                thumbnail: thumbnail,
-                tvshow: show.art 
+                thumbnail: thumbnail
             },
             external: { imdb: episode.imdbId, tvdb: '' + episode.id },
             

@@ -688,6 +688,16 @@ export class MediaManager {
         return cast.sort( sortBy( 'cast.order' ) );
     }
 
+    async getPlayables ( kind : MediaKind, id : string ) : Promise<PlayableMediaRecord[]> {
+        if ( kind == MediaKind.TvShow ) {
+            return await this.getEpisodes( id );
+        } else if ( kind == MediaKind.TvSeason ) {
+            return await this.getSeasonEpisodes( id );
+        } else {
+            return [ await this.get<PlayableMediaRecord>( kind, id ) ];
+        }
+    }
+
     store ( record : MediaRecord ) : Promise<MediaRecord> {
         let table : BaseTable<MediaRecord> = this.getTable( record.kind );
 

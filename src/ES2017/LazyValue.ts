@@ -33,4 +33,8 @@ export class LazyValue<T> {
             return mapper( await this.get() );
         }, () => this.clear() );
     }
+
+    catch<U = T> ( handler : ( error : any ) => U | Promise<U> ) : LazyValue<U | T> {
+        return new LazyValue<U | T>( () => this.get().catch( handler ), () => this.clear() );
+    }
 }

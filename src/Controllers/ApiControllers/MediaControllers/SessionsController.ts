@@ -2,6 +2,9 @@ import { BaseTableController } from "../../BaseTableController";
 import { BaseTable, HistoryRecord } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
+import * as r from 'rethinkdb';
+import { MediaKind } from '../../../MediaRecord';
+import { AsyncStream } from 'data-async-iterators';
 
 export class SessionsController extends BaseTableController<HistoryRecord> {
     defaultSortField : string = 'createdAt';
@@ -32,6 +35,31 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
         }
 
         return history;
+    }
+
+    async transformQuery ( req : Request ) {
+        if ( req.query.media ) {
+            const media : [ MediaKind, string ][] = req.query.media.map( id => id.split( ',' ) );
+
+            const playables = await AsyncStream.from( media )
+                .flatMapConcurrent( ( [ kind, id ] ) => this.server.media.getPlayables( kind, id ), 10 )
+                .map( rec => rec.kind + ',' + rec.id )
+                .toArray();
+
+            req.query.playableMedia = playables;
+        }
+    }
+
+    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
+        query = super.getQuery( req, res, query );
+
+        if ( req.query.playableMedia ) {
+            const media : string[] = req.query.playableMedia;
+            
+            return query.filter( row => r.expr( media ).contains( ( row( 'reference' )( 'kind' ) as any ).add(',').add( row( 'reference' )( 'id' ) ) ) );
+        }
+
+        return query;
     }
 
     get table () : BaseTable<HistoryRecord> {

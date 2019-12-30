@@ -94,7 +94,7 @@ export class YoutubeMediaSource extends MediaSource {
         };
 
         let art : MediaRecordArt = {
-            thumbnail: this.getVideoThumbnail( ( this.videoInfo.player_response as any ).videoDetails.thumbnail.thumbnails ),
+            thumbnail: this.getVideoThumbnail( this.videoInfo.player_response.videoDetails.thumbnail.thumbnails ),
             background: null,
             banner: null,
             poster: null
@@ -104,19 +104,19 @@ export class YoutubeMediaSource extends MediaSource {
             art: art,
             addedAt: new Date(),
             external: {},
-            internalId: this.videoInfo.vid,
+            internalId: this.videoInfo.player_response.videoDetails.videoId,
             kind: MediaKind.Custom,
             lastPlayed: null,
             playCount: 0,
             quality: quality,
             repository: null,
             runtime: runtime,
-            title: this.videoInfo.title,
+            title: this.videoInfo.player_response.videoDetails.title,
             watched: false,
             plot: this.videoInfo.description,
             // TODO since this.videoInfo.author.name for now appears to just return undefined
             // replace it with this.videoInfo.media.category
-            subtitle: this.videoInfo.media.category,
+            subtitle: this.videoInfo.player_response.videoDetails.author + ' (in ' + this.videoInfo.media.category + ')',
         } as CustomMediaRecord;
     }
 }

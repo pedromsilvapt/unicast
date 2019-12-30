@@ -45,6 +45,8 @@ export class Debounce {
 }
 
 export class Database {
+    server : UnicastServer;
+
     config : Config;
 
     connections : ConnectionPool;
@@ -59,10 +61,14 @@ export class Database {
 
     onInstall : Hook<void>;
 
-    constructor ( server : UnicastServer ) {
-        this.onInstall = server.hooks.create<void>( 'database/install' );
+    constructor ( server : UnicastServer, config : Config = null ) {
+        this.server = server;
 
-        this.config = server.config;
+        if ( !server.hooks.has( 'database/install' ) ) {
+            this.onInstall = server.hooks.create<void>( 'database/install' );
+        }
+
+        this.config = config || server.config;
 
         this.connections = new ConnectionPool( this );
 
@@ -98,7 +104,9 @@ export class Database {
 
                 await this.tables.install();
 
-                await this.onInstall.notify();
+                if ( this.onInstall != null ) {
+                    await this.onInstall.notify();
+                }
 
                 await ( r.db( databaseName ) as any ).wait().run( conn );
             } finally {
@@ -129,6 +137,15 @@ export class Database {
         await task.run( 'history', () => this.tables.history.repair() );
 
         return task;
+    }
+
+    for ( dbname : string ) : Database {
+        const newConfig = Config.merge( [
+            this.config.clone(),
+            Config.create( { database: { db: dbname, autostart: { enable: false } } } ),
+        ] );
+
+        return new Database( this.server, newConfig );
     }
 }
 
@@ -1175,7 +1192,10 @@ export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
     dateFields = [ 'addedAt', 'lastPlayed' ];
 
     indexesSchema : IndexSchema[] = [
-        { name: 'internalId' }
+        { name: 'internalId' },
+        { name: 'title' },
+        { name: 'lastPlayed' },
+        { name: 'addedAt' }
     ];
 }
 
@@ -1209,7 +1229,7 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
 
     indexesSchema : IndexSchema[] = [ 
         { name: 'createdAt' },
-        { name: 'reference', expression: [ r.row( 'reference' )( 'mediaKind' ), r.row( 'reference' )( 'mediaId' ) ] }
+        { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];
     
     relations: {
@@ -1254,6 +1274,48 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
         { name: 'collectionId' },
         { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
     ];
+
+    relations: {
+        record: BelongsToOnePolyRelation<CollectionMediaRecord, MediaRecord, { record : MediaRecord }>;
+        collection: BelongsToOneRelation<CollectionMediaRecord, CollectionRecord, { collection : CollectionRecord }>;
+    }
+
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            record: new BelongsToOnePolyRelation( 'record', map, 'mediaKind', 'mediaId' ),
+            collection: new BelongsToOneRelation( 'collection', tables.collections, 'collectionId', 'collectionId' )
+        };
+    }
+
+    async repair ( records : string[] = null ) {
+        if ( !records ) {
+            records = ( await this.find() ).map( record => record.id );
+        }
+
+        await super.repair( records );
+
+        await Promise.all( records.map( async recordId => {
+            const record = await this.get( recordId );
+
+            if ( !record ) return;
+
+            const media = await this.relations.record.load( record );
+
+            if ( !media ) {
+                await this.delete( recordId );
+            } else {
+                await this.deleteMany( 
+                    query => query( 'mediaKind' ).eq( media.kind )
+                        .and( query( 'mediaId' ).eq( media.id ) )
+                        .and( query( 'collectionId' ).eq( record.collectionId ) )
+                        .and( query( 'id' ).eq( record.id ).not() )
+                );
+            }
+
+        } ) );
+    }
 }
 
 export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {

@@ -1,11 +1,13 @@
 import { MediaKind, AllMediaKinds } from "../MediaRecord";
-import { Tool, ToolOption } from "./Tool";
+import { Tool, ToolOption, ToolValueType } from "./Tool";
+import * as shorthash from 'shorthash';
 
 export interface SetAssociationOptions {
     repository : string;
     kind : MediaKind;
     name : string;
     id : string;
+    hash : boolean;
 }
 
 export class SetAssociationTool extends Tool<SetAssociationOptions> {
@@ -18,6 +20,12 @@ export class SetAssociationTool extends Tool<SetAssociationOptions> {
         ];
     }
 
+    getOptions () {
+        return [
+            new ToolOption( 'Hash' ).setType( ToolValueType.Boolean ).setRequired( false ).setDefaultValue( false )
+        ];
+    }
+
     async run ( options : SetAssociationOptions ) {
         const repository = this.server.repositories.get( options.repository );
 
@@ -25,6 +33,10 @@ export class SetAssociationTool extends Tool<SetAssociationOptions> {
             throw new Error( `Repository named ${options.repository} not found.` );
         }
 
-        repository.setPreferredMedia( options.kind, options.name, options.id );
+        const name = options.hash ? shorthash.unique( options.name ) : options.name;
+
+        repository.setPreferredMedia( options.kind, name, options.id );
+
+        await new Promise<void>( resolve => setTimeout( resolve, 1000 ) );
     }
 }

@@ -22,8 +22,8 @@ export class ProvidersController extends BaseController {
                 refetchIncomplete: req.query.refetchIncomplete == 'true',
                 updateMoved: req.query.updateMoved == 'true' || true,
                 cache: {
-                    readCache: req.query[ 'cache[read]' ] != 'false',
-                    writeCache: req.query[ 'cache[write]' ] != 'false'
+                    readCache: !req.query.cache || req.query.cache.read != 'false',
+                    writeCache: !req.query.cache || req.query.cache.write != 'false'
                 }
             };
 

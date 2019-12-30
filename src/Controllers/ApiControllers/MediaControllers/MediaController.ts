@@ -9,7 +9,13 @@ import { ResourceNotFoundError, InvalidArgumentError } from 'restify-errors';
 
 export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
     getTransientQuery ( req : Request, query : r.Sequence ) : r.Sequence {
-        return ( query.filter as any )( doc => doc( 'transient' ).eq( false ), { default: true } );
+        if ( req.query.transient == 'include' ) {
+            return ( query.filter as any )( doc => doc( 'transient' ).eq( true ), { default: true } );
+        } else if ( req.query.transient == 'exclude' || !req.query.transient ) {
+            return ( query.filter as any )( doc => doc( 'transient' ).eq( false ), { default: true } );
+        } else {
+            return query;
+        }
     }
 
     getWatchedQuery ( req : Request, query : r.Sequence ) : r.Sequence {

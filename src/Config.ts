@@ -212,6 +212,12 @@ export class Config {
     slice ( path : string ) : Config {
         return Config.create( this.get( path, {} ) );
     }
+
+    clone () : Config {
+        const data = JSON.parse( JSON.stringify( this.data ) );
+
+        return Config.create( data );
+    }
 }
 
 export interface ConfigInstanceOptions {

@@ -4,6 +4,7 @@ import { TvShowsController } from "./MediaControllers/TvShowsController";
 import { PlayerController } from "./PlayerController";
 import { TvSeasonsController } from "./MediaControllers/TvSeasonsController";
 import { TvEpisodesController } from "./MediaControllers/TvEpisodesController";
+import { CustomController } from './MediaControllers/CustomController';
 import { CollectionsController } from "./MediaControllers/CollectionsController";
 import { ArtworkController } from "./MediaControllers/ArtworkController";
 import { ProvidersController } from "./MediaControllers/ProvidersController";
@@ -32,6 +33,9 @@ export class ApiController extends BaseController {
 
     @Controller( TvEpisodesController, '/media/episode' )
     episodes : TvEpisodesController;
+
+    @Controller( CustomController, '/media/custom' )
+    custom : CustomController;
 
     @Controller( PeopleController, '/media/people' )
     people : PeopleController;
