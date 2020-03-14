@@ -1,4 +1,4 @@
-import { BaseController, Controller, Route } from "../BaseController";
+import { BaseController, Controller, Route, BinaryResponse } from "../BaseController";
 import { MoviesController } from "./MediaControllers/MoviesController";
 import { TvShowsController } from "./MediaControllers/TvShowsController";
 import { PlayerController } from "./PlayerController";
@@ -13,6 +13,7 @@ import { SubtitlesController } from "./MediaControllers/SubtitlesController";
 import { SessionsController } from "./MediaControllers/SessionsController";
 import { ScrapersController } from "./MediaControllers/ScrapersController";
 import { PeopleController } from './MediaControllers/PeopleController';
+import { RandomStream } from '../../ES2017/RandomStream';
 import * as sortBy from 'sort-by';
 
 export class ApiController extends BaseController {
@@ -61,6 +62,11 @@ export class ApiController extends BaseController {
     @Route( 'get', '/ping' )
     ping () {
         return { alive: true, now: Date.now() };
+    }
+
+    @Route( 'get', '/speedtest', BinaryResponse )
+    speedtest () {
+        return { data: new RandomStream() };
     }
 
     @Route( 'get', '/sitemap' )

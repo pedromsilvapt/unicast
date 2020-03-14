@@ -101,18 +101,18 @@ export function JsonResponse ( controller : { server : UnicastServer, logger : L
 export function BinaryResponse ( controller : any, method : any ) {
     return async function ( req : Request, res : Response, next : Next ) {
         try {
-            const file : FileInfo = await controller[ method ]( req, res );
+            let file : FileInfo = await controller[ method ]( req, res );
 
             if ( file ) {
                 res.statusCode = 200;
                 
-                res.set( 'Content-Type', file.mime );
+                res.set( 'Content-Type', file.mime || 'application/octet-stream' );
 
                 if ( typeof file.length !== 'number' && !file.length ) {
                     res.set( 'Content-Length', '' + file.length );
                 }
                 
-                ( res as any ).writeHead( 200, res.headers() );
+                ( res as any ).writeHead( 200 );
 
                 if ( Buffer.isBuffer( file.data ) ) {
                     res.write( file.data );
@@ -130,7 +130,7 @@ export function BinaryResponse ( controller : any, method : any ) {
 }
 
 export interface FileInfo {
-    mime : string;
+    mime ?: string;
     length ?: number;
     data : NodeJS.ReadableStream | Buffer;
 }

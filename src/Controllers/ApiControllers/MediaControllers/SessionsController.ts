@@ -56,7 +56,15 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
         if ( req.query.playableMedia ) {
             const media : string[] = req.query.playableMedia;
             
-            return query.filter( row => r.expr( media ).contains( ( row( 'reference' )( 'kind' ) as any ).add(',').add( row( 'reference' )( 'id' ) ) ) );
+            query = query.filter( row => r.expr( media ).contains( ( row( 'reference' )( 'kind' ) as any ).add(',').add( row( 'reference' )( 'id' ) ) ) );
+        }
+
+        if ( req.query.dateStart ) {
+            query = query.filter( row => row( 'createdAt' ).gt( +req.query.dateStart ) );
+        }
+
+        if ( req.query.dateEnd ) {
+            query = query.filter( row => row( 'createdAt' ).lt( +req.query.dateEnd ) );
         }
 
         return query;
