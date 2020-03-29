@@ -123,7 +123,7 @@ export class UnicastServer {
         this.artwork = new ArtworkCache( this );
 
         this.triggerdb = new TriggerDb( this );
-        
+
         this.transcoding = new TranscodingManager( this );
 
         this.http = new MultiServer( [ restify.createServer( {
@@ -181,7 +181,7 @@ export class UnicastServer {
                 console.log( err );
                 next( err );
             }
-        } )
+        } );
 
         const httpLogger = new HttpRequestLogger( this, req => {
             return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );

@@ -22,7 +22,7 @@ export class SetAssociationTool extends Tool<SetAssociationOptions> {
 
     getOptions () {
         return [
-            new ToolOption( 'Hash' ).setType( ToolValueType.Boolean ).setRequired( false ).setDefaultValue( false )
+            new ToolOption( 'hash' ).setType( ToolValueType.Boolean ).setRequired( false ).setDefaultValue( true )
         ];
     }
 

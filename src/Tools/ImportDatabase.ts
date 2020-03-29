@@ -104,16 +104,25 @@ export class ImportDatabaseTool extends Tool<ExportDatabaseOptions> {
             }
 
             this.log( `Table ${ tableName }: ${ lines.length }` );
-
+            this.log( table.dateFields );
+            
             if ( !options.dryRun ) {
-                table.deleteAll();
-    
+                await table.deleteAll();
+
                 if ( options.batchSize > 1 ) {
                     let sum = 0;
 
                     for ( let chunks of chunk( lines, options.batchSize ) ) {
                         this.log( `Creating ${ sum + chunks.length }/${ lines.length }...` );
-
+                        
+                        for ( let field of table.dateFields ) {
+                            for ( let row of chunks ) {
+                                if ( field in row && row[ field ] != void 0 ) {
+                                    row[ field ] = new Date( row[ field ] );
+                                }
+                            }
+                        }
+                        
                         if ( options.print ) {
                             for ( let line of chunks ) {
                                 this.print( tableName, line );

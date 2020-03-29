@@ -38,33 +38,33 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
     }
 
     async transformQuery ( req : Request ) {
-        if ( req.query.media ) {
-            const media : [ MediaKind, string ][] = req.query.media.map( id => id.split( ',' ) );
+        if ( req.query.filterMedia ) {
+            const media : [ MediaKind, string ][] = req.query.filterMedia.map( id => id.split( ',' ) );
 
             const playables = await AsyncStream.from( media )
                 .flatMapConcurrent( ( [ kind, id ] ) => this.server.media.getPlayables( kind, id ), 10 )
                 .map( rec => rec.kind + ',' + rec.id )
                 .toArray();
 
-            req.query.playableMedia = playables;
+            req.query.filterPlayableMedia = playables;
         }
     }
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
         query = super.getQuery( req, res, query );
 
-        if ( req.query.playableMedia ) {
-            const media : string[] = req.query.playableMedia;
+        if ( req.query.filterPlayableMedia ) {
+            const media : string[] = req.query.filterPlayableMedia;
             
             query = query.filter( row => r.expr( media ).contains( ( row( 'reference' )( 'kind' ) as any ).add(',').add( row( 'reference' )( 'id' ) ) ) );
         }
 
-        if ( req.query.dateStart ) {
-            query = query.filter( row => row( 'createdAt' ).gt( +req.query.dateStart ) );
+        if ( req.query.filterDateStart ) {
+            query = query.filter( row => row( 'createdAt' ).gt( new Date( +req.query.filterDateStart ) ) );
         }
 
-        if ( req.query.dateEnd ) {
-            query = query.filter( row => row( 'createdAt' ).lt( +req.query.dateEnd ) );
+        if ( req.query.filterDateEnd ) {
+            query = query.filter( row => row( 'createdAt' ).lt( new Date( +req.query.filterDateEnd ) ) );
         }
 
         return query;

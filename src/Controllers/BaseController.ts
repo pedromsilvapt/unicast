@@ -39,6 +39,10 @@ export abstract class BaseController implements Annotated {
 
             for ( let [ methods, url, action, transform ] of routes ) {
                 for ( let method of methods ) {
+                    if ( typeof( router[ method ] ) !== 'function' ) {
+                        throw new Error( `Method ${ method } is not an HTTP verb.` );
+                    }
+
                     router[ method ]( url, ( transform || JsonResponse )( this, action ) );
                 }
             }

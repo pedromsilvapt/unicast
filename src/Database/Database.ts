@@ -176,6 +176,8 @@ export class DatabaseTables {
 
     jobsQueue : PersistentQueueTable<JobRecord>;
 
+    storage : StorageTable;
+
     constructor ( pool : ConnectionPool ) {
         this.movies = new MoviesMediaTable( pool );
 
@@ -202,6 +204,8 @@ export class DatabaseTables {
         this.subtitles = new SubtitlesTable( pool );
 
         this.jobsQueue = new PersistentQueueTable( pool );
+
+        this.storage = new StorageTable( pool );
     }
 
     async install () {
@@ -230,6 +234,8 @@ export class DatabaseTables {
         await this.subtitles.install();
 
         await this.jobsQueue.install();
+
+        await this.storage.install();
     }
 }
 
@@ -632,6 +638,12 @@ export abstract class BaseTable<R extends { id ?: string }> {
         const connection = await this.pool.acquire();
 
         try {
+            if ( record[ "id" ] != void 0 && id != record[ "id" ] ) {
+                this.database.server.logger.error( 'database/' + this.tableName, 'TRYING TO CHANGE ID FFS OF RECORD ' + JSON.stringify( { ...record, id } ) + ' TO ' + record[ "id" ] );
+                
+                delete record[ "id" ];
+            }
+
             await this.query().get( id ).update( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
             if ( this.onUpdate.isSubscribed() ) {
@@ -656,6 +668,12 @@ export abstract class BaseTable<R extends { id ?: string }> {
         if ( this.isChanged( baseRecord, changes ) ) {
             if ( conditionalChanges && typeof conditionalChanges == 'object' ) {
                 changes = { ...changes, ...conditionalChanges };
+            }
+
+            if ( changes[ "id" ] != void 0 && baseRecord[ "id" ] != changes[ "id" ] ) {
+                this.database.server.logger.error( 'database/' + this.tableName, 'TRYING TO CHANGE ID FFS OF RECORD ' + JSON.stringify( baseRecord ) + ' TO ' + changes[ "id" ] );
+                
+                delete changes[ "id" ];
             }
 
             await this.update( baseRecord[ "id" ], changes, options );
@@ -1391,6 +1409,16 @@ export class MediaCastTable extends BaseTable<MediaCastRecord> {
     }
 }
 
+export class StorageTable extends BaseTable<StorageRecord> {
+    tableName : string = 'storage';
+
+    dateFields = [ 'createdAt', 'updatedAt' ];
+
+    indexesSchema : IndexSchema[] = [ 
+        { name: 'key' }
+    ];
+}
+
 export class DatabaseDaemon {
     server : UnicastServer;
 
@@ -1542,6 +1570,14 @@ export interface JobRecord<P = any> {
     createdAt : Date;
     updatedAt : Date;
     attemptedAt : Date;
+}
+
+export interface StorageRecord<V = any> {
+    id ?: string;
+    key : string;
+    value : V;
+    createdAt : Date;
+    updatedAt : Date;
 }
 
 export interface SubtitleMediaRecord extends IDatabaseLocalSubtitle { }
