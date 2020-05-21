@@ -136,6 +136,9 @@ var REJECTED = 2;
 // Each history item will contain {}
 var history = [ { mode: INIT, action: NONE, direction: RIGHT, line: 0, delay: 0, range: new BinarySearch( 0, lines.length - 1 ), user: false } ];
 
+// A list of keys pressed to be able to repeat the process
+var macro = [];
+
 function mode () {
     return history[ history.length - 1 ].mode;
 }
@@ -156,11 +159,17 @@ function range () {
     return history[ history.length - 1 ].range;
 }
 
+function pushMacro ( key ) {
+    macro.push( key );
+
+    mp.utils.write_file( 'file://' + outputFile + '.macro', macro.join( ' ' ) + '\n' );
+}
+
 function pushHistory ( mode, action, direction, line, delay, range, user ) {
     var oldState = peekHistory();
 
     var state = { mode: mode, action: action, direction: direction, line: line, delay: delay, range: range, user: user };
-        
+
     history.push( state );
 
     dump( 'PUSH HISTORY', mode, action, line, oldState.mode, oldState.action, oldState.line );
@@ -220,29 +229,41 @@ function goToLine ( index ) {
         updateTimeRange();
 
         seek( timeRange.start - padd );
+
+        mp.command( 'show-progress' );
     }
 }
 
 function onNextSub () {
+    pushMacro( 'Ctrl+j' );
+
     goToLine( displayingLineIndex + 1 );
 }
 
 function onPrevSub () {
+    pushMacro( 'Ctrl+h' );
+
     goToLine( displayingLineIndex - 1 );
 }
 
 function onAcceptKey () {
+    pushMacro( 'y' );
+
     pushHistory( mode(), APPROVED, direction(), line(), delay(), range(), true );
 }
 
 function onRejectKey () {
     if ( mode() == SEEK ) {
+        pushMacro( 'n' );
+        
         pushHistory( mode(), REJECTED, direction(), line(), delay(), range(), true );
     }
 }
 
 function onDelayAdd () {
     if ( mode() == SYNC ) {
+        pushMacro( 'j' );
+
         // range.start is the index of the binary search
         delayMapping.increase( range().start, 250 );
 
@@ -252,6 +273,8 @@ function onDelayAdd () {
 
 function onDelaySub () {
     if ( mode() == SYNC ) {
+        pushMacro( 'h' );
+        
         // range.start is the index of the binary search
         delayMapping.increase( range().start, -250 );
     
@@ -260,6 +283,8 @@ function onDelaySub () {
 }
 
 function onUndo () {
+    pushMacro( 'Ctrl+z' );
+
     popHistory();
 }
 
@@ -269,6 +294,8 @@ function saveAndQuit () {
     if ( outputFile != null ) {
         mp.utils.write_file( 'file://' + outputFile, JSON.stringify( delayMapping.delays ) );
     }
+
+    mp.set_property_number( 'sub-delay', 0 );
 
     quit();
 }
@@ -366,6 +393,8 @@ function onPauseChange ( value ) {
 
 function onFileLoad () {
     hasFileLoaded = true;
+
+    mp.set_property_number( 'sub-delay', 0 );
 
     onIteration();
 }

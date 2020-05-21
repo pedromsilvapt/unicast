@@ -139,11 +139,15 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
     async update ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalFileSystemSubtitle> {
         const file = subtitle.file;
 
+        const video = this.getMediaFile( media );
+
+        const filePath = path.join( path.dirname( video ), file );
+
         if ( Buffer.isBuffer( data ) ) {
-            await fs.writeFile( file, data );
+            await fs.writeFile( filePath, data );
         } else {
             await new Promise<void>( ( resolve, reject ) =>
-                data.pipe( fs.createWriteStream( file ) ).on( 'error', reject ).on( 'finish', resolve )
+                data.on( 'error', reject ).pipe( fs.createWriteStream( filePath ) ).on( 'error', reject ).on( 'finish', resolve )
             );
         }
 

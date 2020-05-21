@@ -57,7 +57,7 @@ export class MpvPlayer {
             args.push( `--script=${ this.script }` );
         }
 
-        const process = spawn( this.program, args );
+        const process = spawn( this.program, args, { stdio: 'ignore' } );
 
         fromEvent( process, 'exit', 'error' ).then( () => this.completedFuture.resolve(), err => this.completedFuture.reject( err ) );
 

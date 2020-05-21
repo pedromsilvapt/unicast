@@ -57,21 +57,23 @@ export class MpvSynchronizerController implements IVideoPlayerController<boolean
     }
 
     fixSubtitles ( subtitles : SubLine[], fixes : { [ key : string ] : number } ) : SubLine[] {
-        fixes = { '300': 1000, '200': 500 };
+        // fixes = { '300': 1000, '200': 500 };
 
         // Sorted Accomulated Delays
         // '0' means "sort by the first index of the array"
         const sad = Object.keys( fixes ).map( key => [ +key, fixes[ key ] ] as [ number, number ] ).sort( sortBy( '0' ) );
 
-        // let acc = 0;
+        let acc = 0;
 
-        // for ( let delay of sad ) {
-        //     delay[ 1 ] -= acc;
+        for ( let delay of sad ) {
+            // delay[ 1 ] -= acc;
             
-        //     acc += delay[ 1 ];
-        // }
+            acc += delay[ 1 ];
+        }
 
         let i = -1;
+
+        console.log( sad );
 
         return subtitles.map( ( line, index ) => {
             while ( sad.length > i + 1 && sad[ i + 1 ][ 0 ] <= index ) i++;
@@ -130,13 +132,19 @@ export class MpvSynchronizerController implements IVideoPlayerController<boolean
 
         await this.run( video, subtitles, sourceFile );
 
+        if ( await fs.exists( outputFile + '.macro' ) ) {
+            console.log( 'MACRO', await fs.readFile( outputFile + '.macro', 'utf8' ) );
+        }
+
         if ( await fs.exists( outputFile ) ) {
             const fixes = JSON.parse( await fs.readFile( outputFile, 'utf8' ) );
 
+            console.log( fixes );
+
             const fixed = this.fixSubtitles( lines, fixes );
-
+            
             await this.backup( subtitles );
-
+            
             await this.setSubtitles( fixed, subtitles );
 
             return true;
