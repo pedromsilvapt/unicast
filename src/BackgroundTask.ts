@@ -16,8 +16,8 @@ export function getTimeStatistics ( elapsed : number, done : number, total : num
 }
 
 export class BackgroundTask extends EventEmitter {
-    static fromPromise<T = any> ( fn : ( task : BackgroundTask ) => Promise<T> ) : [ BackgroundTask, Promise<T> ] {
-        const task = new BackgroundTask().setStateStart();
+    static fromPromise<T = any, E = any, TE extends BackgroundTask = BackgroundTask> ( fn : ( task : TE ) => Promise<T>, taskClass : { new () : TE } = BackgroundTask as any ) : [ BackgroundTask, Promise<T> ] {
+        const task = new taskClass().setStateStart();
 
         const promise = fn( task ).then( t => {
             task.setStateFinish();

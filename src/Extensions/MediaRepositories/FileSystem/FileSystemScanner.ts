@@ -12,7 +12,7 @@ import { Settings } from "../../../MediaScrapers/Settings";
 import { LazyValue } from "../../../ES2017/LazyValue";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import { MediaRecordFiltersContainer } from '../../../MediaRepositories/ScanConditions';
-import { MediaSyncSnapshot } from '../../../MediaSync';
+import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
@@ -114,6 +114,8 @@ export class FileSystemScanner {
 
     logger : LoggerInterface;
 
+    task : MediaSyncTask;
+
     refreshConditions : MediaRecordFiltersContainer = new MediaRecordFiltersContainer();
 
     protected showsByName : Map<string, TvShowMediaRecord> = new Map();
@@ -122,18 +124,25 @@ export class FileSystemScanner {
 
     protected episodesFound : Set<string> = new Set();
 
-
-    constructor ( server : UnicastServer, config : FileSystemScannerConfig, settings : Settings, logger ?: LoggerInterface ) {
+    constructor ( server : UnicastServer, config : FileSystemScannerConfig, settings : Settings, reporter ?: MediaSyncTask | LoggerInterface ) {
         this.server = server;
 
         this.config = config;
 
         this.settings = settings;
 
-        this.logger = logger;
+        if ( reporter instanceof MediaSyncTask ) {
+            this.task = reporter;
+        } else {
+            this.logger = reporter;
+        }
     }
 
-    async logScanError ( file : string, error : any ) {
+    async logScanError ( kind : MediaKind, file : string, error : any, parent ?: MediaRecord ) {
+        if ( this.task != null ) {
+            this.task.reportError( kind, error, parent, file );
+        }
+
         if ( this.logger != null ) {
             // this.logger.error( file + ' ' + error );
         }
@@ -165,6 +174,8 @@ export class FileSystemScanner {
     }
 
     async findMovieFor ( scraper : IScraper, id : string, details : any, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
+        console.log( id, this.settings.get<string>( [ 'associations', 'movie', id ] ) );
+
         const movieId = this.settings.get<string>( [ 'associations', 'movie', id ] );
 
         if ( !movieId ) {
@@ -188,6 +199,10 @@ export class FileSystemScanner {
 
             for await ( let [ videoFile, stats ] of walker.run( folder, null, logger ).buffered( 50 ) ) {
                 try {
+                    if ( this.task != null ) {
+                        this.task.statusMessage = videoFile;
+                    }
+
                     const dirname = path.basename( path.dirname( videoFile ) );
     
                     if ( !dirname ) {
@@ -212,10 +227,11 @@ export class FileSystemScanner {
     
                     const movieCache : CacheOptions = this.refreshConditions.testMovie( id ) ? { ...cache, readTtl: 60  } : cache;
 
+                    console.log( videoFile, id );
                     movie = await this.findMovieFor( scraper, id, details, movieCache );
     
                     if ( !movie ) {
-                        this.logScanError( videoFile, 'Cannot find movie ' + id + ' ' + details.title );
+                        this.logScanError( MediaKind.Movie, videoFile, 'Cannot find movie ' + id + ' ' + details.title );
     
                         continue;
                     }
@@ -295,7 +311,7 @@ export class FileSystemScanner {
             if ( show != null ) {
                 yield show;
             } else {
-                this.logScanError( videoFile, 'Cannot find show ' + id + ' ' + showName );
+                this.logScanError( MediaKind.TvShow, videoFile, 'Cannot find show ' + id + ' ' + showName );
             }
         }
 
@@ -325,7 +341,7 @@ export class FileSystemScanner {
 
         const details = parseTorrentName( path.basename( videoFile ) );
 
-        const logError = ( err ?: any ) => this.logScanError( videoFile, `Cannot find ${ show.title } ${ details.season } ${ details.episode } ` + (err || '') );
+        const logError = ( err ?: any ) => this.logScanError( MediaKind.TvEpisode, videoFile, `Cannot find ${ show.title } ${ details.season } ${ details.episode } ` + (err || ''), show );
 
         if ( isNaN( details.season ) || isNaN( details.episode ) ) {
             return logError( 'Details isNaN' );
@@ -412,9 +428,13 @@ export class FileSystemScanner {
             try {
                 for await ( let [ videoFile, stats ] of walker.run( folder, null, logger ) ) {
                     try {
+                        if ( this.task != null ) {
+                            this.task.statusMessage = videoFile;
+                        }
+
                         yield * this.scanEpisodeVideoFile( scraper, folder, videoFile, stats, cache );
                     } catch ( error ) {
-                        this.logScanError( videoFile, error );
+                        this.logScanError( MediaKind.TvEpisode, videoFile, error );
                     }
                 }
             } finally {

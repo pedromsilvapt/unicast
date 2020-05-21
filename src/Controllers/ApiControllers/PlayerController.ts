@@ -345,13 +345,15 @@ export class PlayerController extends BaseController {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
     }
-    
-    @Route( 'post', '/:device/command/:command' )
+
+    @Route( [ 'get', 'post' ], '/:device/command/:command' )
     async command ( req : Request, res : Response ) {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
-            const status = await device.callCommand<ReceiverStatus>( Case.camel( req.params.command ), req.body.args || [] );
+            const args = req.query.args || req.body.args || [];
+
+            const status = await device.callCommand<ReceiverStatus>( Case.camel( req.params.command ), args );
     
             return this.preprocessStatus( req, status );
         } else {

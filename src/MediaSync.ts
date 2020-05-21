@@ -1,16 +1,15 @@
-import { Database, MediaTable } from "./Database/Database";
-import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord } from "./MediaRecord";
-import { BackgroundTask } from "./BackgroundTask";
-import { MediaManager } from "./UnicastServer";
-import { Future } from "@pedromsilva/data-future";
-import { IMediaRepository } from "./MediaRepositories/MediaRepository";
+import { Database, MediaTable } from './Database/Database';
+import { RepositoriesManager } from './MediaRepositories/RepositoriesManager';
+import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord } from './MediaRecord';
+import { BackgroundTask } from './BackgroundTask';
+import { MediaManager } from './UnicastServer';
+import { Future } from '@pedromsilva/data-future';
+import { IMediaRepository } from './MediaRepositories/MediaRepository';
 import { CacheOptions } from './MediaScrapers/ScraperCache';
 import { SharedLogger, Logger } from 'clui-logger';
 import { MediaRecordFilter, TvMediaFilter, MediaSetFilter } from './MediaRepositories/ScanConditions';
 import { ScrapersManager } from './MediaScrapers/ScrapersManager';
 import { collect, groupingBy, first, mapping, distinct, filtering } from 'data-collectors';
-import { ProvidersController } from './Controllers/ApiControllers/MediaControllers/ProvidersController';
 import { AsyncStream } from 'data-async-iterators';
 import { SemaphorePool } from 'data-semaphore';
 
@@ -47,16 +46,6 @@ export class MediaSync {
         this.logger = logger.service( 'media/sync' );
     }
 
-    print ( record : MediaRecord ) : string {
-        if ( isTvEpisodeRecord( record ) ) {
-            return record.title + ' ' + ( record as PlayableMediaRecord ).sources[ 0 ].id;
-        } else if ( isMovieRecord( record ) ) {
-            return `${ record.title } (${ record.year }) ${ record.sources[ 0 ].id }`;
-        } else {
-            return record.title;
-        }
-    }
-
     async runRecordForeigns ( table : MediaTable<any>, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
         for ( let property of Object.keys( table.foreignMediaKeys ) ) {
             if ( media[ property ] ) {
@@ -68,13 +57,11 @@ export class MediaSync {
     }
 
     /**
-     * 
-     * 
      * @param task 
      * @param media 
      * @param snapshot 
      */
-    async runRecord ( task : BackgroundTask, media : MediaRecord, snapshot : MediaSyncSnapshot, cache ?: CacheOptions ) {
+    async runRecord ( task : MediaSyncTask, media : MediaRecord, snapshot : MediaSyncSnapshot, cache ?: CacheOptions ) {
         // !! IMPORTANT !! This function must always, at some point, call snapshot.scanBarrier.ready();
         snapshot.scanBarrier.increase();
 
@@ -117,7 +104,7 @@ export class MediaSync {
 
             await this.runRecordForeigns( table, media, snapshot );
 
-            await this.updateRecord( task, match, media, snapshot.options.dryRun, cache );
+            await this.updateRecord( task, match, media, snapshot.options.dryRun, true, cache );
         } else {
             const existingMatch = snapshot.getAnyExternal( media.external );
             
@@ -137,7 +124,7 @@ export class MediaSync {
         }
     }
 
-    async runDuplicate ( task : BackgroundTask, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
+    async runDuplicate ( task : MediaSyncTask, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
         const table = this.media.getTable( media.kind );
 
         await this.runRecordForeigns( table, media, snapshot );
@@ -147,7 +134,7 @@ export class MediaSync {
         snapshot.association.get( media.kind ).get( media.internalId ).resolve( media.id );
     }
 
-    async createRecord ( task : BackgroundTask, media : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) : Promise<MediaRecord> {
+    async createRecord ( task : MediaSyncTask, media : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) : Promise<MediaRecord> {
         // Create
         if ( !dryRun ) {
             const table = this.media.getTable( media.kind );
@@ -164,14 +151,14 @@ export class MediaSync {
             media.id = media.internalId;
         }
 
-        this.logger.info( 'CREATE ' + this.print( media ) );
+        task.reportCreate( media );
         
-        await this.runCast( media, dryRun, cache );
+        await this.runCast( task, media, dryRun, cache );
         
         return media;
     }
 
-    async updateRecord ( task : BackgroundTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) {
+    async updateRecord ( task : MediaSyncTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false, reportChanges : boolean = true, cache ?: CacheOptions ) {
         const table = this.media.getTable( newRecord.kind );
         
         newRecord = { ...newRecord };
@@ -185,31 +172,35 @@ export class MediaSync {
         }
 
         const changed = table.isChanged( oldRecord, newRecord );
-        const changes = table.getLocalChanges( oldRecord, newRecord );
-
+        
         if ( !dryRun ) newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
             
-        if ( changed ) this.logger.info( 'UPDATE ' + oldRecord.id + ' ' + this.print( newRecord ) + ' ' + JSON.stringify( changes ) );
+        if ( changed && reportChanges ) {
+            const changes = table.getLocalChanges( oldRecord, newRecord );
 
-        await this.runCast( newRecord, dryRun, cache );
+            task.reportUpdate( oldRecord, newRecord, changes );
+        } 
+
+        await this.runCast( task, newRecord, dryRun, cache );
     }
 
-    async moveRecord ( task : BackgroundTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false ) {
-        this.logger.info( 'MOVE ' + oldRecord.id + ' ' + this.print( oldRecord ) + ' ' + newRecord.id + ' ' + this.print( newRecord ) );
-        await this.updateRecord( task, oldRecord, newRecord, dryRun );
+    async moveRecord ( task : MediaSyncTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) {
+        await this.updateRecord( task, oldRecord, newRecord, dryRun, false, cache );
+
+        task.reportMove( oldRecord, newRecord );
     }
 
-    async deleteRecord ( task : BackgroundTask, record : MediaRecord, dryRun : boolean = false ) {
+    async deleteRecord ( task : MediaSyncTask, record : MediaRecord, dryRun : boolean = false ) {
         if ( !dryRun ) {
             const table = this.media.getTable( record.kind );
 
             await table.delete( record.id, { durability: 'soft' } );
         }
 
-        this.logger.info( 'DELETE ' + record.id + ' ' + this.print( record ) );
+        task.reportRemove( record );
     }
 
-    async runCast<R extends MediaRecord> ( media : R, dryRun : boolean = false, cache ?: CacheOptions ) {
+    async runCast<R extends MediaRecord> ( task : MediaSyncTask, media : R, dryRun : boolean = false, cache ?: CacheOptions ) {
         let existingPeopleCount = 0;
         
         let createdPeopleCount = 0;
@@ -219,14 +210,14 @@ export class MediaSync {
         const table = this.media.getTable( media.kind );
 
         if ( !media.scraper ) {
-            this.logger.error( `[${ media.kind } ${this.print( media )}] Has no scraper defined. Could not get cast.` );
+            task.reportError( media.kind, `Has no scraper defined. Could not get cast.`, media );
 
             return;
         }
         
         if ( !this.scrapers.hasKeyed( media.scraper ) ) {
-            this.logger.error( `[${ media.kind } ${this.print( media )}] Could not find scraper "${ media.scraper }". Could not get cast.` );
-
+            task.reportError( media.kind, `Could not find scraper "${ media.scraper }". Could not get cast.`, media );
+            
             return;
         }
 
@@ -235,7 +226,7 @@ export class MediaSync {
         const scraperMedia = await this.scrapers.getMediaExternal( media.scraper, media.kind, media.external, cache );
 
         if ( !scraperMedia ) {
-            this.logger.error( `[${ media.kind } ${this.print( media )}] No external media found for ${ JSON.stringify( media.external ) }. Could not get cast.` );
+            task.reportError( media.kind, `No external media found for ${ JSON.stringify( media.external ) }. Could not get cast.`, media );
 
             return;
         }
@@ -398,8 +389,8 @@ export class MediaSync {
         return [ await MediaSetFilter.list( [...episodes, ...seasons], this.media ) ];
     }
 
-    async run ( task : BackgroundTask = null, options : Partial<MediaSyncOptions> = {} ) : Promise<void> {
-        task = task || new BackgroundTask();
+    async run ( task : MediaSyncTask = null, options : Partial<MediaSyncOptions> = {} ) : Promise<void> {
+        task = task || new MediaSyncTask();
 
         task.setStateStart();
 
@@ -426,9 +417,9 @@ export class MediaSync {
 
                 snapshot.scanBarrier.freeze();
 
-                const logger = this.logger.service( repository.name );
-
-                for await ( let media of repository.scan( options.kinds, snapshot, conditions, options.cache || {}, logger ) ) {
+                task.reportsLogger = this.logger.service( repository.name )
+                
+                for await ( let media of repository.scan( options.kinds, snapshot, conditions, options.cache || {}, task ) ) {
                     task.addTotal( 1 );
                     
                     media = { ...media };
@@ -489,11 +480,13 @@ export class MediaSync {
                     await task.do( Promise.all( updating ), 1 );
     
                     await task.do( Promise.all( deleting ), 1 );
-                }
 
-                task.setStateFinish();
+                    await task.do( Promise.all( moving ), 1 );
+                }
             }
         }
+        
+        task.setStateFinish();
     }
 }
 
@@ -743,3 +736,76 @@ export class Barrier {
         this.flush();
     }
 }
+
+export class MediaSyncTask extends BackgroundTask {
+    reports : MediaSyncReport[] = [];
+
+    statusMessage : string;
+
+    reportsLogger : Logger;
+
+    protected recordToString ( record : MediaRecord ) : string {
+        if ( record == null ) {
+            return '<none>';
+        }
+
+        if ( isTvEpisodeRecord( record ) ) {
+            return record.title + ' ' + ( record as PlayableMediaRecord ).sources[ 0 ].id;
+        } else if ( isMovieRecord( record ) ) {
+            return `${ record.title } (${ record.year }) ${ record.sources[ 0 ].id }`;
+        } else {
+            return record.title;
+        }
+    }
+
+    reportError ( kind : MediaKind, label : string, media : MediaRecord = null, file : string = null ) {
+        this.reports.push( { type: 'error', kind, label, media, file, new: true } );
+
+        if ( this.reportsLogger != null ) {
+            this.reportsLogger.error( `[${ kind } ${this.recordToString( media )}] ${ label }` );
+        }
+    }
+
+    reportCreate ( record : MediaRecord ) {
+        this.reports.push( { type: 'create', record } );
+
+        if ( this.reportsLogger != null ) {
+            this.reportsLogger.info( 'CREATE ' + this.recordToString( record ) );
+        }
+    }
+
+    reportUpdate ( oldRecord : MediaRecord, newRecord : MediaRecord, changes : any ) {
+        this.reports.push( { type: 'update', oldRecord, newRecord, changes } );
+
+        if ( this.reportsLogger != null ) {
+            this.reportsLogger.info( 'UPDATE ' + oldRecord.id + ' ' + this.recordToString( newRecord ) + ' ' + JSON.stringify( changes ) );
+        }
+    }
+
+    reportMove ( oldRecord : MediaRecord, newRecord : MediaRecord ) {
+        this.reports.push( { type: 'move', oldRecord, newRecord } );
+
+        if ( this.reportsLogger != null ) {
+            this.reportsLogger.info( 'MOVE ' + oldRecord.id + ' ' + this.recordToString( oldRecord ) + ' ' + newRecord.id + ' ' + this.recordToString( newRecord ) );
+        }
+    }
+
+    reportRemove ( record : MediaRecord ) {
+        this.reports.push( { type: 'remove', record } );
+
+        if ( this.reportsLogger != null ) {
+            this.reportsLogger.info( 'DELETE ' + record.id + ' ' + this.recordToString( record ) );
+        }
+    }
+
+    toJSON () {
+        return { ...super.toJSON(), statusMessage: this.statusMessage, reports: this.reports };
+    }
+}
+
+export type MediaSyncReport = 
+      { type: 'error', kind : MediaKind, label : string, file ?: string, media ?: MediaRecord, new : boolean }
+    | { type: 'create', record : MediaRecord }
+    | { type: 'update', oldRecord : MediaRecord, newRecord : MediaRecord, changes : any }
+    | { type: 'move', oldRecord : MediaRecord, newRecord : MediaRecord }
+    | { type: 'remove', record : MediaRecord };

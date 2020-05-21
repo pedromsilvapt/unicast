@@ -1,10 +1,10 @@
 import { IEntity } from "../EntityFactory";
 import { UnicastServer } from "../UnicastServer";
-import { MediaKind, MediaRecord, RecordsMap } from "../MediaRecord";
+import { MediaKind, MediaRecord } from "../MediaRecord";
 import { ISubtitlesRepository } from "../Subtitles/SubtitlesRepository";
 import { CacheOptions } from '../MediaScrapers/ScraperCache';
 import { MediaRecordFilter } from './ScanConditions';
-import { MediaSyncSnapshot } from '../MediaSync';
+import { MediaSyncSnapshot, MediaSyncTask } from '../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 
 // Why an Interface and an abstract class, I hear you asking?
@@ -25,7 +25,7 @@ export interface IMediaRepository {
 
     available () : Promise<boolean>;
 
-    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, logger ?: LoggerInterface ) : AsyncIterable<T>;
+    scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, reporter ?: MediaSyncTask | LoggerInterface ) : AsyncIterable<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
     
@@ -63,7 +63,7 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
         return Promise.resolve( true );
     }
 
-    abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, logger ?: LoggerInterface ) : AsyncIterable<T>;
+    abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, reporter ?: MediaSyncTask | LoggerInterface ) : AsyncIterable<T>;
 
     abstract search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
 

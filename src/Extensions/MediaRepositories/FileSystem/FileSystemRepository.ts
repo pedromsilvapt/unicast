@@ -7,7 +7,7 @@ import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import * as fs from 'mz/fs';
 import { MediaRecordFilter } from '../../../MediaRepositories/ScanConditions';
-import { MediaSyncSnapshot } from '../../../MediaSync';
+import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 
 export class FileSystemRepository extends MediaRepository {
@@ -79,8 +79,8 @@ export class FileSystemRepository extends MediaRepository {
         this.server.onStart.subscribe( () => this.settings.load() );
     }
 
-    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, snapshot : MediaSyncSnapshot, refreshConditions : MediaRecordFilter[] = [], cache : CacheOptions = {}, logger : LoggerInterface = null ) : AsyncIterable<T> {
-        const scanner = new FileSystemScanner( this.server, this.config, this.settings, logger );
+    scan<T extends MediaRecord>( filterKind : MediaKind[] = null, snapshot : MediaSyncSnapshot, refreshConditions : MediaRecordFilter[] = [], cache : CacheOptions = {}, reporter : MediaSyncTask | LoggerInterface = null ) : AsyncIterable<T> {
+        const scanner = new FileSystemScanner( this.server, this.config, this.settings, reporter );
 
         scanner.snapshot = snapshot;
 

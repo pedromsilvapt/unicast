@@ -271,7 +271,7 @@ export class TheMovieDB implements IScraper {
     /* Searching Media */
     searchMovie ( name : string, limit : number = 5, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]> {
         return this.runCachedTask<MovieMediaRecord[]>( 'searchMovie', '' + limit + '|' + name, async () => {
-            const yearMatch = name.match( /(\(?((?:19[0-9]|20[01])[0-9])\))$/i );
+            const yearMatch = name.match( /(\(?((?:19[0-9]|20[0-2])[0-9])\)?)$/i );
 
             const year = yearMatch ? +yearMatch[ 2 ] : void 0;
 
