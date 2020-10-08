@@ -2,8 +2,17 @@ import { UnicastServer } from "../UnicastServer";
 import { Router } from 'restify-router';
 import { Request, Response, Next } from "restify";
 import { Logger } from 'clui-logger';
+import { AccessIdentity, IpCredential, ScopeRule } from '../AccessControl';
+import { InvalidCredentialsError  } from 'restify-errors';
 
-export type RoutesDeclarations = [ string[], string, string, RouteTransform, boolean ][];
+export type RoutesDeclarations = { 
+    methods: string[], 
+    path: string, 
+    propertyKey: string, 
+    handler: RouteTransform, 
+    appendLast: boolean,
+    authScope: string
+}[];
 
 export abstract class BaseController implements Annotated {
     annotations : Annotation[];
@@ -37,13 +46,13 @@ export abstract class BaseController implements Annotated {
 
             const routes = [ ...firsts, ...lasts ];
 
-            for ( let [ methods, url, action, transform ] of routes ) {
+            for ( let { methods, path, propertyKey, handler, authScope } of routes ) {
                 for ( let method of methods ) {
                     if ( typeof( router[ method ] ) !== 'function' ) {
                         throw new Error( `Method ${ method } is not an HTTP verb.` );
                     }
 
-                    router[ method ]( url, ( transform || JsonResponse )( this, action ) );
+                    router[ method ]( path, AuthenticationMiddleware( this, authScope ), ( handler || JsonResponse )( this, propertyKey ) );
                 }
             }
         }
@@ -80,6 +89,20 @@ export abstract class BaseController implements Annotated {
     install () {
         this.router().applyRoutes( this.server.http );
     }
+}
+
+export function AuthenticationMiddleware ( controller : { server : UnicastServer, logger : Logger }, authScope : string ) {
+    return async function ( req : Request, res : Response, next : Next ) {
+        const ip = req.connection.remoteAddress;
+
+        const identity = new AccessIdentity( [ new IpCredential( ip ) ] );
+
+        if ( controller.server.accessControl.authenticate( identity, new ScopeRule( authScope ) ) ) {
+            return next();
+        } else {
+            return next( new InvalidCredentialsError( "IP Address " + ip + " not atuhorized for scope: " + authScope ) );
+        }
+    };
 }
 
 export function JsonResponse ( controller : { server : UnicastServer, logger : Logger }, method : string ) {
@@ -155,7 +178,32 @@ export function Route ( method : string | string[], path : string, handler : Rou
 
         target.routes = target.routes || [];
 
-        target.routes.push( [ methods, path, propertyKey, handler, appendLast ] );
+        let authScope = 'read';
+
+        if ( methods.includes( 'post' ) 
+          || methods.includes( 'put' ) 
+          || methods.includes( 'patch' ) 
+          || methods.includes( 'delete' ) ) {
+            authScope = 'write';
+        }
+
+        target.routes.push( { 
+            methods, path, propertyKey, handler, appendLast, authScope 
+        } );
+
+        return descriptor;
+    };
+}
+
+export function AuthScope ( scope : string ) {
+    return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
+        const route = target.routes.find( ( { propertyKey: p } ) => propertyKey == p );
+
+        if ( route == null ) {
+            throw new Error( `Could not find a route defined to set the auth scope of: "${ propertyKey }"` );
+        }
+
+        route.authScope = scope;
 
         return descriptor;
     };

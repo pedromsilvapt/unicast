@@ -22,7 +22,6 @@ export class MediaTools {
             }
         }
 
-        // console.log( tracks );
         return tracks.map<TrackMediaMetadata>( track => ( {
             index: track.index,
             typeIndex: track.typeIndex,

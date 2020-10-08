@@ -47,6 +47,8 @@ export class UnicastServer {
 
     readonly config : Config;
 
+    readonly accessControl : AccessControl;
+
     readonly database : Database;
 
     readonly scrapers : ScrapersManager;
@@ -108,6 +110,8 @@ export class UnicastServer {
 
         this.tasks = new BackgroundTasksManager();
 
+        this.accessControl = AccessControl.fromServer( this );
+
         this.scrapers = new ScrapersManager( this );
 
         this.receivers = new ReceiversManager( this );
@@ -151,6 +155,9 @@ export class UnicastServer {
             }
 
             this.http.servers.push( restify.createServer( {
+                ignoreTrailingSlash: true,
+                maxParamLength: 200,
+
                 key: fs.readFileSync( keyFile ),
                 certificate: fs.readFileSync( certFile ),
                 passphrase: passphrase
