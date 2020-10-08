@@ -16,8 +16,9 @@ import { BelongsToOnePolyRelation } from './Relations/OneToOnePolyRelation';
 import { Hook } from '../Hookable';
 import * as equals from 'fast-deep-equal';
 import { toArray, AsyncStream } from 'data-async-iterators';
-import { collect, groupingBy, first } from 'data-collectors';
+import { collect, groupingBy, first, mapping, toSet } from 'data-collectors';
 import { ComposedTask } from '../BackgroundTask';
+import { child_process } from 'mz';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -1272,15 +1273,73 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
     
     relations: {
         records: ManyToManyPolyRelation<CollectionRecord, MediaRecord>;
+        parent: BelongsToOneRelation<HistoryRecord, HistoryRecord>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
     
         return {
-            records: new ManyToManyPolyRelation( 'records', map, tables.collectionsMedia, 'collectionId', 'mediaKind', 'mediaId' )
+            records: new ManyToManyPolyRelation( 'records', map, tables.collectionsMedia, 'collectionId', 'mediaKind', 'mediaId' ),
+            parent: new BelongsToOneRelation( 'parent', this, 'parentId' ),
         };
     }
+
+    protected static buildTreeNode ( record : CollectionTreeRecord, collectionsDictionary : Map<string, CollectionTreeRecord[]> ) : CollectionTreeRecord {
+        if ( record.children != null ) {
+            return record;
+        }
+
+        record.children = collectionsDictionary.get( record.id ) || [];
+
+        for ( let child of record.children ) {
+            this.buildTreeNode( child, collectionsDictionary );
+        }
+
+        return record;
+    }
+
+    public static buildTree ( collections: CollectionRecord[] ) : CollectionTreeRecord[] {
+        const collectionsDictionary = collect( collections, groupingBy( item => item.parentId ) );
+        const collectionsSet = collect( collections, mapping( col => col.id, toSet() ) );
+
+        return collections
+            .filter( record => record.parentId == null || !collectionsSet.has( record.parentId ) )
+            .map( record => CollectionsTable.buildTreeNode( record, collectionsDictionary ) );
+    }
+
+    public static findInTrees ( collections: CollectionTreeRecord[], predicate : ( col: CollectionTreeRecord ) => boolean ) : CollectionTreeRecord {
+        let result : CollectionTreeRecord = null;
+
+        for ( let node of collections ) {
+            if ( predicate( node ) ) {
+                return node;
+            }
+            
+            if ( result = this.findInTrees( node.children, predicate ) ) {
+                return result;
+            }
+        }
+    }
+
+    public static * iterateTrees ( collections: CollectionTreeRecord[], order : TreeIterationOrder = TreeIterationOrder.TopDown ) : IterableIterator<CollectionTreeRecord> {
+        for ( let node of collections ) {
+            if ( order == TreeIterationOrder.BottomUp && node.children.length > 0 ) {
+                yield * this.iterateTrees( node.children );
+            }
+
+            yield node;
+
+            if ( order == TreeIterationOrder.TopDown && node.children.length > 0 ) {
+                yield * this.iterateTrees( node.children );
+            }
+        }
+    }
+}
+
+export enum TreeIterationOrder {
+    TopDown,
+    BottomUp,
 }
 
 export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
@@ -1415,7 +1474,8 @@ export class StorageTable extends BaseTable<StorageRecord> {
     dateFields = [ 'createdAt', 'updatedAt' ];
 
     indexesSchema : IndexSchema[] = [ 
-        { name: 'key' }
+        { name: 'key' },
+        { name: 'tags', options: { multi: true } }
     ];
 }
 
@@ -1543,10 +1603,15 @@ export interface HistoryRecord {
 
 export interface CollectionRecord {
     id ?: string;
+    parentId ?: string;
     title : string;
     color : string;
     kinds : string[];
     primary : boolean;
+}
+
+export interface CollectionTreeRecord extends CollectionRecord {
+    children ?: CollectionTreeRecord[];
 }
 
 export interface CollectionMediaRecord {
@@ -1575,6 +1640,7 @@ export interface JobRecord<P = any> {
 export interface StorageRecord<V = any> {
     id ?: string;
     key : string;
+    tags : string[];
     value : V;
     createdAt : Date;
     updatedAt : Date;

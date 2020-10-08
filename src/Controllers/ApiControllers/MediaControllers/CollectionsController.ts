@@ -1,5 +1,5 @@
 import { BaseTableController } from "../../BaseTableController";
-import { CollectionRecord, BaseTable } from "../../../Database/Database";
+import { CollectionRecord, CollectionTreeRecord, BaseTable, CollectionsTable, TreeIterationOrder } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { Route } from "../../BaseController";
@@ -20,6 +20,10 @@ export class CollectionsController extends BaseTableController<CollectionRecord>
 
         if ( req.query.items === 'true' ) {
             await this.server.database.tables.collections.relations.records.applyAll( collections );
+        }
+
+        if ( req.query.tree === 'true' ) {
+            return CollectionsTable.buildTree( collections );
         }
 
         return collections;
@@ -64,21 +68,28 @@ export class CollectionsController extends BaseTableController<CollectionRecord>
     async removeKind ( req : Request, res : Response ) : Promise<void> {
         const { id, kind } = req.params;
 
-        const collection = await this.table.get( id );
+        const collections = CollectionsTable.buildTree( await this.table.find() );
 
-        collection.kinds = collection.kinds.filter( eachKind => eachKind != kind );
+        const collection = CollectionsTable.findInTrees( collections, col => col.id == id );
 
-        if ( collection.kinds.length === 0 ) {
-            await this.server.database.tables.collectionsMedia.deleteMany( { collectionId: id } );
+        const order = TreeIterationOrder.BottomUp;
+        
+        // TODO Parallelize the requests/batch them when possible
+        for ( let child of CollectionsTable.iterateTrees( [ collection ], order ) ) {
+            child.kinds = child.kinds.filter( eachKind => eachKind != kind );
 
-            await this.table.delete( id );
-        } else {
-            await this.server.database.tables.collectionsMedia.deleteMany( {
-                collectionId: id,
-                mediaKind: kind,
-            } );
+            if ( child.kinds.length == 0 ) {
+                await this.server.database.tables.collectionsMedia.deleteMany( { collectionId: child.id } );
 
-            await this.table.update( id, collection );
+                await this.table.delete( child.id );
+            } else {
+                await this.server.database.tables.collectionsMedia.deleteMany( {
+                    collectionId: child.id,
+                    mediaKind: kind,
+                } );
+    
+                await this.table.update( child.id, { kinds: child.kinds } );
+            }
         }
     }
 }

@@ -414,7 +414,7 @@ export class FFmpegDriver implements TranscodingDriver {
             args.push( '-ss', '' + this.startTime );
         }
         
-        const url = this.server.getUrl( this.server.streams.getUrlFor( record.kind, record.id, stream.id ) );
+        const url = this.server.getUrl( '/api' + this.server.streams.getUrlFor( record.kind, record.id, stream.id ) );
 
         if ( this.scenes && this.scenes.length > 0 ) {
             for ( let scene of this.scenes ) {
