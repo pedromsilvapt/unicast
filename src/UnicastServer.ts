@@ -132,6 +132,7 @@ export class UnicastServer {
 
         this.http = new MultiServer( [ restify.createServer( {
             ignoreTrailingSlash: true,
+            maxParamLength: 200
             // handleUpgrades: true
         } as any ) ] );
 

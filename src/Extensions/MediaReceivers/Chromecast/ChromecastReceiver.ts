@@ -329,19 +329,19 @@ export class ChromecastReceiver extends BaseReceiver {
     }
 
     async changeSubtitlesSize ( size : number ) : Promise<ReceiverStatus> {
-        await this.client.changeSubtitlesStyle( this.subtitlesStyle.setFontScale( size ).style );
+        await this.client.changeSubtitlesStyle( this.subtitlesStyle.setFontScale( size ).currentStyle );
 
         return this.status();
     }
 
     async changeSubtitlesStyle ( index : number ) : Promise<ReceiverStatus> {
-        await this.client.changeSubtitlesStyle( this.subtitlesStyle.setCustomStyleIndex( index ).style );
+        await this.client.changeSubtitlesStyle( this.subtitlesStyle.setCustomStyleIndex( index ).currentStyle );
 
         return this.status();
     }
 
     async cycleSubtitlesStyle () : Promise<ReceiverStatus> {
-        await this.client.changeSubtitlesStyle( this.subtitlesStyle.cycleCustomStyles().style );
+        await this.client.changeSubtitlesStyle( this.subtitlesStyle.cycleCustomStyles().currentStyle );
 
         return this.status();
     }

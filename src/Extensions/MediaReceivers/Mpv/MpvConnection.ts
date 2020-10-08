@@ -31,7 +31,6 @@ export class MpvConnection {
         await new Promise( ( resolve, reject ) => {
             openLifetime.bindEvent( client, 'open', resolve );
             openLifetime.bindEvent( client, 'error', reject );
-
         } );
         
         this.client = client;

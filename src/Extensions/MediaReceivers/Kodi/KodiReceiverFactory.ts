@@ -6,6 +6,7 @@ import { ObjectTypeSchema, OptionalTypeSchema, AnyTypeSchema, StringTypeSchema }
 export var KodiConfigTemplate = new ObjectTypeSchema( {
     username: new OptionalTypeSchema( new StringTypeSchema() ),
     password: new OptionalTypeSchema( new StringTypeSchema() ),
+    fallback: new OptionalTypeSchema( new StringTypeSchema() ),
     subtitles: new OptionalTypeSchema( {
         lineFilters: new OptionalTypeSchema( [ new AnyTypeSchema() ], [] ),
         style: new OptionalTypeSchema( {

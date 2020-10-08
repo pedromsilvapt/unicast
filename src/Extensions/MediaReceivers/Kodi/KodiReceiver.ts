@@ -4,23 +4,20 @@ import { KodiConnection } from './KodiConnection';
 import { UnicastServer } from '../../../UnicastServer';
 import { Synchronized } from 'data-semaphore';
 import { Logger } from 'clui-logger';
-import { VideoMediaStream } from '../../../MediaProviders/MediaStreams/VideoStream';
-import { MediaStreamType, MediaStream } from '../../../MediaProviders/MediaStreams/MediaStream';
+import { MediaStream } from '../../../MediaProviders/MediaStreams/MediaStream';
 import { HttpSender } from '../../../Receivers/BaseReceiver/HttpSender';
-import { SubtitlesMediaStream } from '../../../MediaProviders/MediaStreams/SubtitlesStream';
 import { InvalidArgumentError } from 'restify-errors';
 import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord, isPlayableRecord } from '../../../MediaRecord';
 import { LoadOptions } from 'unicast-mpv/lib/Player';
-import * as objectPath from 'object-path';
 import { KodiHttpSender } from './KodiHttpSender';
-import { MediaTrigger } from '../../../TriggerDb';
-import { KodiFFmpegDriver } from './KodiFFmpegDriver';
+import { NoMediaFound } from '../../../Controllers/ApiControllers/PlayerController';
   
 // create a client
 export interface KodiConfig {
     username ?: string;
     password ?: string;
     subtitles ?: KodiSubtitlesConfig;
+    fallback ?: string;
 }
 
 export interface KodiSubtitlesConfig {
@@ -48,6 +45,53 @@ interface SubtitleConfigProperties {
     subShadowOffset ?: number;
     subShadowColor ?: string;
     subSpacing ?: number;
+}
+
+function fork ( fn : () => Promise<unknown>, onError ?: ( error : string ) => unknown ) : void {
+    onError = onError || ( e => console.error( e ) );
+
+    fn().catch( onError );
+}
+
+function delay ( milliseconds : number ) {
+    return new Promise<void>( resolve => setTimeout( resolve, milliseconds ) );
+}
+
+async function retry<T> ( fn : () => Promise<T> | T, base : number = 200, timeout : number = 60000, maxDelay : number = 0, multiplier = 4, additive = 0 ) : Promise<T> {
+    const start = Date.now();
+    
+    while ( true ) {
+        try {
+            return await fn();
+        } catch ( err ) {
+            base *= multiplier;
+            base += additive;
+
+            if ( maxDelay > 0 && base > maxDelay ) {
+                base = maxDelay;
+            }
+
+            const now = Date.now();
+
+            if ( timeout > 0 && now + base > start + timeout ) {
+                base = start + timeout - now;
+
+                if ( base <= 0 ) {
+                    return Promise.reject( err );
+                }
+
+                break;
+            }
+
+            await delay( base );
+        }
+    }
+
+    if ( base > 0 ) {
+        await delay( base );
+    
+        return await fn();
+    }
 }
 
 export class KodiReceiver extends BaseReceiver {
@@ -93,7 +137,7 @@ export class KodiReceiver extends BaseReceiver {
 
         this.address = address;
 
-        this.connection = new KodiConnection( this.address, this.port, config.username, config.password );
+        this.connection = new KodiConnection( this.address, this.port, config.username, config.password, config.fallback );
     }
 
     get connected () : boolean {
@@ -163,6 +207,88 @@ export class KodiReceiver extends BaseReceiver {
         }
     }
 
+    protected checkOrThrow ( predicate : boolean, error : string | Error | ( () => Error ) ) {
+        if ( !predicate ) {
+            if ( typeof( error ) == 'string' ) {
+                throw new Error( error );
+            } else if ( error instanceof Error ) {
+                throw error;
+            } else {
+                throw error();
+            }
+        }
+    }
+
+    protected async checkStatusState ( states : ReceiverStatusState | ReceiverStatusState[], error : string | Error | ( () => Error ) ) {
+        const status = await this.status(); 
+        
+        const predicate = states instanceof Array
+            ? states.some( state => status.state == state )
+            : status.state == states;
+
+        this.checkOrThrow( predicate, error );
+    }
+
+    protected async checkStatusNotState ( states : ReceiverStatusState | ReceiverStatusState[], error : string | Error | ( () => Error ) ) {
+        const status = await this.status(); 
+               
+        const predicate = states instanceof Array
+            ? states.every( state => status.state != state )
+            : status.state != states;
+
+        this.checkOrThrow( predicate, error );
+    }
+
+    protected async checkStatusPlaying ( session, error : string ) {
+        const status = await this.status(); 
+
+        const predicate = status.state == ReceiverStatusState.Stopped || !status.media.session || status.media.session.id != session;
+
+        this.checkOrThrow( predicate, error )
+    }
+
+    async createPlaySession ( kind : MediaKind, id : string, timeout : number = 60000 ) {
+        const record = await this.server.media.get( kind, id );
+
+        if ( record == null ) {
+            throw new NoMediaFound();
+        }
+
+        const session = await this.sessions.register( record );
+
+        if ( this.sessions.current != null ) {
+            await this.sessions.release( this.sessions.current );
+        }
+
+        this.sessions.current = session;
+
+        ( async () => {
+            await retry( () => this.checkStatusNotState( ReceiverStatusState.Stopped, `No media playing` ), 200, timeout );
+
+            console.log( 'play' );
+
+            this.emit( 'play', session );
+
+            await retry( () => this.checkStatusPlaying( session, 'Stopped playing' ), 200, 0, 5000 ).catch( () => {} );
+
+            this.emit( 'stop', session );
+        } )().catch( err => this.server.onError.notify( err ) );
+
+        const history = await this.server.database.tables.history.get( session );
+
+        const { streams } = await this.sessions.get( session );
+
+        return { streams, session: history };
+    }
+
+    async getPlaySession ( session : string ) {
+        const history = await this.server.database.tables.history.get( session );
+
+        const { streams } = await this.sessions.get( session );
+
+        return { streams, session: history };
+    }
+
     async play ( id : string, customOptions ?: MediaPlayOptions): Promise<ReceiverStatus> {
         // Get the session information
         const { streams, record, options: recordPlayOptions } = await this.sessions.get( id );
@@ -184,7 +310,7 @@ export class KodiReceiver extends BaseReceiver {
                 await this.sessions.release( this.sessions.current );
             }
         
-            await this.connection.play( record, {
+            await this.connection.playSession( id, {
                 options,
                 ...this.subtitlesStyle.currentStyle
             } );
