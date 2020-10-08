@@ -9,6 +9,11 @@ export interface KodiActivePlayer {
     type: 'video';
 }
 
+export interface PlayOptions {
+    autoStart ?: boolean;
+    startTime ?: number;
+}
+
 function timeToSeconds ( time : { hours: number, minutes: number, seconds: number, milliseconds: number } ) : number {
     if ( time == null ) return 0;
 
@@ -27,15 +32,22 @@ export class KodiConnection {
 
     public readonly password : string;
 
+    public readonly fallback : string;
+
+    public usingFallback : boolean = false;
+
+    public failedAttemptsAtConnecting : number = 0;
+
     protected client : jayson.HttpClient = null;
 
     protected clientLifetime : Lifetime = null;
 
-    constructor ( address : string, port : number, username : string = null, password : string = null ) {
+    constructor ( address : string, port : number, username : string = null, password : string = null, fallback : string = null ) {
         this.address = address;
         this.port = port;
         this.username = username;
         this.password = password;
+        this.fallback = fallback;
     }
 
     public get connected () {
@@ -54,30 +66,32 @@ export class KodiConnection {
 
     @Synchronized()
     async open () {
+        const address = this.usingFallback ? this.fallback : this.address;
+        
         this.client = jayson.Client.http( {
-            hostname: this.address,
+            hostname: address,
             port: this.port,
             path: '/jsonrpc',
             headers: this.username != null ? {
                 'Authorization': 'Basic ' + Buffer.from( this.username + ':' + this.password ).toString( 'base64' )
             } : void 0
         } );
+    }
 
-        // this.clientLifetime = new Lifetime();
-        // const client = new WebSocket( `ws://${ this.address }:${ this.port }` );
-        // this.clientLifetime = new Lifetime();
+    protected useFallback ( err : any ) : boolean {
+        if ( err && ( err.code == 'ECONNREFUSED' || err.code == 'ETIMEDOUT' ) ) {
+            this.failedAttemptsAtConnecting += 1;
+            
+            if ( this.failedAttemptsAtConnecting > 1 || this.fallback == null ) {
+                return false;
+            }
+    
+            this.usingFallback = !this.usingFallback;
+    
+            return true;
+        }
 
-        // const openLifetime = this.clientLifetime.bind( new Lifetime() );
-
-        // await new Promise( ( resolve, reject ) => {
-        //     openLifetime.bindEvent( client, 'open', resolve );
-        //     openLifetime.bindEvent( client, 'error', reject );
-
-        // } );
-        
-        // this.client = client;
-        
-        // this.clientLifetime.bindEvent( client, 'close', () => this.close() );
+        return false;
     }
 
     close () {
@@ -91,18 +105,42 @@ export class KodiConnection {
     }
 
     async call <R = void>( command : string, args : any = {} ) : Promise<R> {
-        if ( !this.connected ) {
-            await this.open();
+        while ( !this.connected ) {
+            try {
+                await this.open();
+                
+                this.failedAttemptsAtConnecting = 0;
+            } catch ( err ) {
+                if ( this.useFallback( err ) ) {
+                    this.close();
+                } else {
+                    this.failedAttemptsAtConnecting = 0;
+
+                    throw err;
+                }
+            }
         }
 
         try {
-            return await this.request<R>( command, args );
+            const result = await this.request<R>( command, args );
+
+            this.failedAttemptsAtConnecting = 0;
+
+            return result;
         } catch ( err ) {
+            if ( this.useFallback( err ) ) {
+                this.close();
+
+                return this.call( command, args );
+            }
+
             if ( err && err.message && err.message.includes( 'socket not ready' ) ) {
                 this.close();
                 
                 return this.call( command, args );
             }
+
+            this.failedAttemptsAtConnecting = 0;
 
             if ( err && err.message ) {
                 throw new Error( this.address + ' ' + command + ' ' + err.message + ': ' + ( err.data || '' ) );
@@ -124,8 +162,16 @@ export class KodiConnection {
         return activePlayers.find( player => player.type === 'video' );
     }
 
-    play ( record : PlayableMediaRecord, options : any = {} ) : Promise<void> {
-        return this.call( 'Player.Open', { item: { file: `plugin://plugin.video.unicast/play/${ record.kind }/${ record.id }` } } );
+    play ( record : PlayableMediaRecord, options : PlayOptions = {} ) : Promise<void> {
+        const file = `plugin://plugin.video.unicast/play/${ record.kind }/${ record.id }`;
+        
+        return this.call( 'Player.Open', { item: { file } } );
+    }
+
+    playSession ( session : string, options : PlayOptions = {} ) : Promise<void> {
+        const file = `plugin://plugin.video.unicast/play-session/${ session }`;
+
+        return this.call( 'Player.Open', { item: { file } } );
     }
 
     async pause () : Promise<void> {
