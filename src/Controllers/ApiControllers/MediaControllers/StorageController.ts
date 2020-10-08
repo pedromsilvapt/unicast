@@ -3,24 +3,14 @@ import { Request, Response } from "restify";
 import { StorageRecord } from '../../../Database/Database';
 
 export class StorageController extends BaseController {
-    protected async getStorageRecord ( key : string ) : Promise<StorageRecord> {
-        const results = await this.server.database.tables.storage.findAll( [ key ], { index: 'key' } );
-
-        if ( results.length == 0 ) {
-            return null;
-        }
-
-        return results[ 0 ];
-    }
-
     @Route( 'get', '' )
-    async list ( req : Request, res : Response ) : Promise<any> {
-        return await this.server.database.tables.storage.find();
+    async list ( req : Request, res : Response ) : Promise<StorageRecord[]> {
+        return await this.server.dataStore.list( { prefix: req.query.prefix } );
     }
 
     @Route( 'get', '/:key' )
-    async get ( req : Request, res : Response ) : Promise<any> {
-        const record = await this.getStorageRecord( req.params.key );
+    async get ( req : Request, res : Response ) : Promise<StorageRecord> {
+        const record = await this.server.dataStore.get( req.params.key );
 
         if ( record == null ) {
             // 404 Not Found
@@ -31,37 +21,12 @@ export class StorageController extends BaseController {
     }
 
     @Route( 'post', '/:key' )
-    async store ( req : Request, res : Response ) : Promise<any> {
-        const now = new Date();
-
-        const key = req.params.key;
-        
-        const record = await this.getStorageRecord( key );
-
-        if ( record == null ) {
-            await this.server.database.tables.storage.create( {
-                key: key,
-                value: req.body,
-                createdAt: now,
-                updatedAt: now
-            } );
-        } else {
-            await this.server.database.tables.storage.update( record.id, {
-                value: req.body,
-                updatedAt: now
-            } );
-        }
+    async store ( req : Request, res : Response ) : Promise<StorageRecord> {
+        return await this.server.dataStore.store( req.params.key, req.body );
     }
 
     @Route( 'del', '/:key' )
-    async delete ( req : Request, res : Response ) : Promise<any> {
-        const record = await this.getStorageRecord( req.params.key );
-
-        if ( record == null ) {
-            // 404 Not Found
-            return null;
-        }
-
-        await this.server.database.tables.storage.delete( record.id );
+    async delete ( req : Request, res : Response ) : Promise<boolean> {
+        return await this.server.dataStore.delete( req.params.key );
     }
 }

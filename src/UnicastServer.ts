@@ -33,6 +33,8 @@ import { Tool } from './Tools/Tool';
 import { Journal } from './Journal';
 import { LiveLogger, Logger, ConsoleBackend, SharedLogger, FilterBackend } from 'clui-logger';
 import { CommandsHistory } from './Receivers/CommandsHistory';
+import { DataStore } from './DataStore';
+import { AccessControl, AccessIdentity, IpCredential, ScopeRule } from './AccessControl';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -64,6 +66,8 @@ export class UnicastServer {
     readonly tasks : BackgroundTasksManager;
 
     readonly storage : Storage;
+
+    readonly dataStore : DataStore;
 
     readonly subtitles : SubtitlesManager;
 
@@ -106,6 +110,8 @@ export class UnicastServer {
 
         this.database = new Database( this );
 
+        this.dataStore = new DataStore( this );
+        
         this.journal = Journal.fromServer( this );
 
         this.tasks = new BackgroundTasksManager();
