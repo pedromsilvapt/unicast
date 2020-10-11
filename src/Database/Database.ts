@@ -645,6 +645,12 @@ export abstract class BaseTable<R extends { id ?: string }> {
                 delete record[ "id" ];
             }
 
+            for ( let field of Object.keys( record ) ) {
+                if ( record[ field ] === void 0 ) {
+                    record[ field ] = null;
+                }
+            }
+
             await this.query().get( id ).update( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
             if ( this.onUpdate.isSubscribed() ) {

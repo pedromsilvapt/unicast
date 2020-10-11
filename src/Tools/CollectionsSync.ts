@@ -4,10 +4,12 @@ import { Database, MediaTable } from '../Database/Database';
 import { AsyncStream } from 'data-async-iterators';
 import { ExternalReferences, MediaRecord, MediaKind } from '../MediaRecord';
 import * as chalk from 'chalk';
+import { CollectionsJournalAction } from '../Journal';
 
 export interface CollectionsSyncOptions {
     target : string;
     dryRun : boolean;
+    onlyCollections: boolean;
 }
 
 export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
@@ -19,7 +21,8 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
 
     getOptions () {
         return [
-            new ToolOption( 'dryRun' ).setType( ToolValueType.Boolean ).setDefaultValue( false ).setRequired( false )
+            new ToolOption( 'dryRun' ).setType( ToolValueType.Boolean ).setDefaultValue( false ).setRequired( false ),
+            new ToolOption( 'onlyCollections' ).setType( ToolValueType.Boolean ).setDefaultValue( false ).setRequired( false )
         ];
     }
 
@@ -39,7 +42,7 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
                     logger.info( chalk.cyan( 'CREATE ' ) + collection.title );
                     
                     if ( !options.dryRun ) {
-                        await targetdb.tables.collections.create( without( collection, 'id' ) );
+                        await targetdb.tables.collections.create( without( collection, 'id', 'parentId' ) );
                     }
                 }
             },
@@ -49,16 +52,18 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
                     
                     if ( !options.dryRun ) {
                         await targetdb.tables.collections.delete( collection.id );
+
+                        await targetdb.tables.collectionsMedia.deleteMany( { collectionId: collection.id } );
                     }
                 }
             },
             async doMatched ( matched ) {
                 for ( let [ source, target ] of matched ) {
-                    if ( targetdb.tables.collections.isChanged( target, without( source, 'id' ) ) ) {
+                    if ( targetdb.tables.collections.isChanged( target, without( source, 'id', 'parentId' ) ) ) {
                         logger.info( chalk.green( 'UPDATE ' ) + source.title );
     
                         if ( !options.dryRun ) {
-                            await targetdb.tables.collections.updateIfChanged( target, without( source, 'id' ) );
+                            await targetdb.tables.collections.updateIfChanged( target, without( source, 'id', 'parentId' ) );
                         }
                     }
                 }
@@ -66,6 +71,20 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
         } );
 
         this.log( `COLLECTIONS: ${result.added.length} added, ${result.matched.length} updated, ${result.removed.length} removed.` );
+
+        sync.targets = await targetdb.tables.collections.findStream().toArray();
+
+        await sync.syncSelfRelations( "id", [ "parentId" ], async ( records ) => {
+            for ( let [ target, patch ] of records ) {
+                if ( targetdb.tables.collections.isChanged( target, patch ) ) {
+                    logger.info( chalk.green( 'UPDATE REL ' ) + target.title );
+
+                    if ( !options.dryRun ) {
+                        await targetdb.tables.collections.updateIfChanged( target, patch );
+                    }
+                }
+            }
+        } );
     }
 
     async syncCollectionsMedia ( sourcedb : Database, targetdb : Database, options : CollectionsSyncOptions ) : Promise<void> {
@@ -118,6 +137,11 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
         const result = await sync.sync( {
             async doAdded ( added ) {
                 for ( let collection of added ) {
+                    if ( !collection.collection || !collection.record ) {
+                        logger.fatal( `Dangling Record: ${ collection.mediaKind } ${ collection.mediaId }, Collection: ${collection.collectionId}` );
+                        continue;
+                    }
+
                     for ( let record of matchRecords( collection.record ) ) {
                         logger.info( chalk.cyan( 'CREATE ' ) + record.kind + ' ' + record.title + chalk.grey( ' in ' ) + collection.collection.title );
 
@@ -134,7 +158,13 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
             },
             async doRemoved ( removed ) {
                 for ( let collection of removed ) {
+                    if ( !collection.collection || !collection.record ) {
+                        logger.fatal( `Dangling Record: ${ collection.mediaKind } ${ collection.mediaId }, Collection: ${collection.collectionId}` );
+                        continue;
+                    }
+
                     for ( let record of matchRecords( collection.record ) ) {
+
                         logger.info( chalk.red( 'REMOVE ' ) + record.kind + ' ' + record.title + chalk.grey( ' in ' ) + collection.collection.title );
 
                         if ( !options.dryRun ) {
@@ -167,7 +197,10 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
         await targetdb.install();
         
         await this.syncCollections( sourcedb, targetdb, options );
-        await this.syncCollectionsMedia( sourcedb, targetdb, options );
+
+        if ( !options.onlyCollections ) {
+            await this.syncCollectionsMedia( sourcedb, targetdb, options );
+        }
     }
 }
 
@@ -244,6 +277,71 @@ export class Synchronizer<S, K, T> {
 
         return result;
     }
+
+    /**
+     * Should be called after the sync method, assumes both datasets are already synchronized.
+     * The `targets` field should however be updated with the latest data from the database
+     * 
+     * @param fieldNames 
+     */
+    async syncSelfRelations<F extends keyof S & keyof T> ( pk : F, fieldNames : F[], doUpdated : (records: [T, Partial<T>][]) => Promise<unknown> ) {
+        const sourceTable = collect( this.sources, groupingByMany( source => this.getSourceKeys( source ) ) );
+
+        const sourcePKTable = collect( this.sources, groupingBy( source => source[ pk ], first() ) );
+        
+        const targetTable = collect( this.targets, groupingByMany( target => this.getTargetKeys( target ) ) );
+
+        const updated : [T, Partial<T>][] = [];
+
+        for ( let target of this.targets ) {
+            // Here we're only taking the first match and ignoring the rest
+            const matchedSource : S = mapFind( this.getTargetKeys( target ), key => ( sourceTable.get( key ) || [] )[ 0 ] );
+
+            if ( matchedSource == null ) continue;
+            
+            let patch : Partial<S | T> = {};
+
+            for ( let fieldName of fieldNames ) {
+                const fieldValue : S[F] = matchedSource[ fieldName ];
+
+                if ( fieldValue === null || fieldValue === void 0 ) continue;
+
+                const fieldMatch : S = sourcePKTable.get( fieldValue );
+
+                const fieldMatchTarget : T = mapFind( this.getSourceKeys( fieldMatch ), key => ( targetTable.get( key ) || [] )[ 0 ] );
+
+                if ( fieldMatchTarget != null ) {
+                    patch[ fieldName ] = fieldMatchTarget[ pk ];
+                }
+            }
+
+            if ( Object.keys( patch ).length > 0 ) {
+                updated.push( [ target, patch as Partial<T> ] );
+            }
+        }
+
+        if ( updated.length > 0 ) {
+            await doUpdated( updated );
+        }
+    }
+}
+
+function notNull ( elem: unknown ) : boolean {
+    return elem !== null && elem !== void 0;
+}
+
+function mapFind<T, U> ( arr: T[], mapper: (elem: T, index: number) => U, predicate: (elem: U, index: number) => boolean = notNull ) : U {
+    if ( arr != null ) {
+        for ( let [index, elem] of arr.entries() ) {
+            const mappedElem = mapper(elem, index);
+    
+            if ( predicate( mappedElem, index ) ) {
+                return mappedElem;
+            }
+        }
+    }
+
+    return null;
 }
 
 export interface SyncResult<S, T> {
