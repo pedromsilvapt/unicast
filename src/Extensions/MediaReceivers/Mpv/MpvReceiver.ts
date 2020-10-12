@@ -277,7 +277,7 @@ export class MpvReceiver extends BaseReceiver {
 
     async status () : Promise<ReceiverStatus> {
         const status = await this.connection.status().catch( err => {
-            if ( err && ( err.errno == 'ETIMEDOUT' || err.errno == 'ECONNREFUSED' ) ) {
+            if ( err && ( err.code == 'ETIMEDOUT' || err.code == 'ECONNREFUSED' ) ) {
                 return null;
             }
 
