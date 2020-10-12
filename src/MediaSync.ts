@@ -744,7 +744,7 @@ export class MediaSyncTask extends BackgroundTask {
 
     reportsLogger : Logger;
 
-    protected recordToString ( record : MediaRecord ) : string {
+    public recordToString ( record : MediaRecord ) : string {
         if ( record == null ) {
             return '<none>';
         }

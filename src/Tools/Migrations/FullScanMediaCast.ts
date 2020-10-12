@@ -1,6 +1,6 @@
 import { Tool, ToolOption, ToolValueType } from "../Tool";
 import { MediaKind } from '../../MediaRecord';
-import { MediaSync } from '../../MediaSync';
+import { MediaSync, MediaSyncTask } from '../../MediaSync';
 import * as chalk from 'chalk';
 
 export interface FullScanMediaCastOptions {
@@ -25,11 +25,17 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
         if ( options.truncate ) {
             logger.info( 'Truncating...' );
 
-            await this.server.database.tables.mediaCast.deleteAll();
-            await this.server.database.tables.people.deleteAll();
+            if ( !options.dryRun ) {
+                await this.server.database.tables.mediaCast.deleteAll();
+                await this.server.database.tables.people.deleteAll();
+            }
         }
 
         const sync = new MediaSync( this.server.media, this.server.database, this.server.repositories, this.server.scrapers, this.logger.shared() );
+
+        const task = new MediaSyncTask();
+
+        task.reportsLogger = logger.static();
 
         for ( let kind of [ MediaKind.Movie, MediaKind.TvShow ] ) {
             let updatedPeople = 0;
@@ -48,7 +54,7 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
                 try {
                     logger.info( `[${ kind } ${record.title}] ${ doneCount }/${ total }` );
 
-                    const stats = await sync.runCast( record, options.dryRun );
+                    const stats = await sync.runCast( task, record, options.dryRun );
 
                     if ( stats ) {
                         updatedPeople += stats.existingPeopleCount;
@@ -58,10 +64,10 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
                         statsLogger.info( `${ chalk.cyan( createdPeople ) } created, ${ chalk.cyan( updatedPeople ) } updated, ${ chalk.cyan( deletedCast ) } deleted` );
                     }
                 } catch ( error ) {
-                    logger.static().error( `[${ kind } ${sync.print( record )}] ${ JSON.stringify( record.external ) } ${ error.message } ${ error.stack }` );
+                    logger.static().error( `[${ kind } ${ task.recordToString( record ) }] ${ JSON.stringify( record.external ) } ${ error.message } ${ error.stack }` );
                 } finally {
                     doneCount++;
-                }                
+                }
             }, 10 ).last();
         }
 
