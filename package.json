@@ -51,7 +51,7 @@
     "castv2-client": "^1.2.0",
     "chalk": "^2.1.0",
     "clui-live": "^0.2.1",
-    "clui-logger": "^0.1.5",
+    "clui-logger": "^0.1.6",
     "clui-progressbar": "^0.1.1",
     "composable": "^0.9.2",
     "config": "^1.26.2",
@@ -126,7 +126,7 @@
     "thinky": "^2.3.8",
     "truncate": "^2.0.0",
     "uid": "0.0.2",
-    "unicast-mpv": "^0.1.9",
+    "unicast-mpv": "^0.1.10",
     "yargs-parser": "^11.0.0",
     "yauzl": "^2.9.1",
     "ytdl-core": "^0.24.0"

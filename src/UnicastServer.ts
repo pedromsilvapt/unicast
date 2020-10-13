@@ -35,6 +35,7 @@ import { LiveLogger, Logger, ConsoleBackend, SharedLogger, FilterBackend } from 
 import { CommandsHistory } from './Receivers/CommandsHistory';
 import { DataStore } from './DataStore';
 import { AccessControl, AccessIdentity, IpCredential, ScopeRule } from './AccessControl';
+import { TIMESTAMP_SHORT } from 'clui-logger/lib/Backends/ConsoleBackend';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable();
@@ -89,6 +90,8 @@ export class UnicastServer {
 
     readonly http : MultiServer;
 
+    readonly httpLoggerMiddleware : HttpRequestLogger;
+
     readonly repositories : RepositoriesManager;
 
     readonly tools : ToolsManager;
@@ -104,7 +107,7 @@ export class UnicastServer {
 
         this.storage = new Storage( this );
         
-        this.loggerBackend = new FilterBackend( new ConsoleBackend() );
+        this.loggerBackend = new FilterBackend( new ConsoleBackend( TIMESTAMP_SHORT ) );
 
         this.logger = new SharedLogger( this.loggerBackend );
 
@@ -197,14 +200,14 @@ export class UnicastServer {
             }
         } );
 
-        const httpLogger = new HttpRequestLogger( this, req => {
+        this.httpLoggerMiddleware = new HttpRequestLogger( this, req => {
             return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );
         } );
 
-        this.http.use( httpLogger.before() );
-        this.http.on( 'after', httpLogger.after() );
+        this.http.use( this.httpLoggerMiddleware.before() );
+        this.http.on( 'after', this.httpLoggerMiddleware.after() );
         
-        httpLogger.registerHighFrequencyPattern( 
+        this.httpLoggerMiddleware.registerHighFrequencyPattern( 
             /\/media\/send\/(\w+)\/([\w\-_ ]+)\/session\/([\w\-_ ]+)\/stream\//, 
             match => match[ 1 ] + '/' + match[ 2 ] + '/' + match[ 3 ]
         );
