@@ -181,9 +181,9 @@ export class TheTVDB implements IScraper {
         const key = `${id}S${season}`;
 
         return this.runCachedTask<TvSeasonMediaRecord>( 'getTvShowSeason', key, async () => {
-            const episodes = await this.getTvShowSeasons( id );
+            const seasons = await this.getTvShowSeasons( id );
 
-            return episodes.find( ep => ep.number == season );
+            return seasons.find( ep => ep.number == season );
         }, cache );
     }
 
