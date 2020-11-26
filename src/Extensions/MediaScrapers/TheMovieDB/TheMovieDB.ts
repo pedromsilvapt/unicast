@@ -1,4 +1,4 @@
-import { IScraper } from "../../../MediaScrapers/IScraper";
+import { IScraper, IScraperQuery } from "../../../MediaScrapers/IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/ScraperCache";
 import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds, RoleRecord } from "../../../MediaRecord";
 import { UnicastServer } from "../../../UnicastServer";
@@ -45,7 +45,7 @@ export class TheMovieDB implements IScraper {
         return `${ method }|${ id }`;
     }
 
-    protected runCachedTask<T extends any> ( method : string, id : string, runner : () => Promise<T>, options : CacheOptions = {} ) {
+    protected runCachedTask<T extends any> ( method : string, id : string, query : IScraperQuery, runner : () => Promise<T>, options : CacheOptions = {} ) {
         const key = this.getCacheKey( method, id );
 
         const cached = this.cache.get<T>( key, options );
@@ -58,21 +58,20 @@ export class TheMovieDB implements IScraper {
     }
 
     protected async getConfiguration ( cache : CacheOptions = {} ) : Promise<any> {
-        return this.runCachedTask<any>( 'getConfiguration', '', () => this.moviedb.configuration(), cache );
+        return this.runCachedTask<any>( 'getConfiguration', '', {}, () => this.moviedb.configuration(), cache );
     }
 
-    protected async getArtPath ( filePath : string, width : number | string = 'original', cache : CacheOptions = {} ) : Promise<string> {
+    protected async getArtPath ( filePath : string, width : number | string = 'original' ) : Promise<string> {
         const configuration = await this.getConfiguration();
 
         return configuration.images.base_url + ( typeof width === 'number' ? `w${ width }` : width ) + filePath;
     }
 
-
     protected getExternalCacheKey ( external : ExternalReferences ) : string {
         return Object.keys( external ).sort().map( key => '' + key + '=' + external[ key ]  ).join( ',' );
     }
 
-    protected async getExternal ( external : ExternalReferences, kinds : MediaKind[] = null, cache ?: CacheOptions ) : Promise<MediaRecord> {
+    protected async getExternal ( external : ExternalReferences, kinds : MediaKind[] = null, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MediaRecord> {
         const externalString = this.getExternalCacheKey( external );
 
         const keysMapper = { 'imdb': 'imdb_id' };
@@ -93,7 +92,7 @@ export class TheMovieDB implements IScraper {
 
         if ( !kinds ) kinds = AllMediaKinds;
 
-        return this.runCachedTask<MovieMediaRecord>( 'getMovieExternal', externalString, async () => {
+        return this.runCachedTask<MovieMediaRecord>( 'getMovieExternal', externalString, query, async () => {
             for ( let source of Object.keys( external ) ) {
                 if ( source in keysMapper ) {
                     const results = await this.moviedb.find( { id: external[ source ], external_source: keysMapper[ source ] } );
@@ -110,8 +109,8 @@ export class TheMovieDB implements IScraper {
         }, cache );
     }
 
-    getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
-        return this.runCachedTask<ArtRecord[]>( 'getMovieArt', id + kind, async () => {
+    getMovieArt ( id : string, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+        return this.runCachedTask<ArtRecord[]>( 'getMovieArt', id + kind, query, async () => {
             const rawMovie = await this.moviedb.movieImages( { id: id } );
 
             const artwork : ArtRecord[] = [];
@@ -122,7 +121,7 @@ export class TheMovieDB implements IScraper {
                 const kind : ArtRecordKind = keys[ key ];
     
                 for ( let art of rawMovie[ key ] ) {
-                    const url = await this.getArtPath( art.file_path, 'original',  );
+                    const url = await this.getArtPath( art.file_path, 'original' );
                     
                     artwork.push( {
                         id: url,
@@ -143,12 +142,12 @@ export class TheMovieDB implements IScraper {
         }, cache );
     }
 
-    getMovieExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
-        return this.getExternal( external, [ MediaKind.Movie ], cache ) as Promise<MovieMediaRecord>;
+    getMovieExternal ( external : ExternalReferences, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
+        return this.getExternal( external, [ MediaKind.Movie ], query, cache ) as Promise<MovieMediaRecord>;
     }
 
-    getMovie ( id : string, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
-        return this.runCachedTask<MovieMediaRecord>( 'getMovie', id, async () => {
+    getMovie ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
+        return this.runCachedTask<MovieMediaRecord>( 'getMovie', id, query, async () => {
             const rawMovie = await this.moviedb.movie( { id: id } );
 
             const releaseDates = await this.moviedb.movieRelease_dates( { id: id } );
@@ -157,60 +156,60 @@ export class TheMovieDB implements IScraper {
         }, cache );
     }
 
-    getTvShowArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+    getTvShowArt ( id : string, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getTvShow ( id : string, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
+    getTvShow ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
         throw new Error("Method not implemented.");
     }
 
-    getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
-        return this.getExternal( external, [ MediaKind.TvShow ], cache ) as Promise<TvShowMediaRecord>;
+    getTvShowExternal ( external : ExternalReferences, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
+        return this.getExternal( external, [ MediaKind.TvShow ], query, cache ) as Promise<TvShowMediaRecord>;
     }
 
-    getTvShowSeasons ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]> {
+    getTvShowSeasons ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]> {
         throw new Error("Method not implemented.");
     }
 
-    getTvShowSeason ( id : string, season : number, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+    getTvShowSeason ( id : string, season : number, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
         throw new Error("Method not implemented.");
     }
 
-    getTvShowEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
+    getTvShowEpisodes ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
         throw new Error("Method not implemented.");
     }
 
-    getTvShowEpisode ( id : string, season : number, episode : number, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+    getTvShowEpisode ( id : string, season : number, episode : number, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
         throw new Error("Method not implemented.");
     }
 
-    getTvSeason ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+    getTvSeason ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
         throw new Error("Method not implemented.");
     }
 
-    getTvSeasonExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
-        return this.getExternal( external, [ MediaKind.TvSeason ], cache ) as Promise<TvSeasonMediaRecord>;
+    getTvSeasonExternal ( external : ExternalReferences, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+        return this.getExternal( external, [ MediaKind.TvSeason ], query, cache ) as Promise<TvSeasonMediaRecord>;
     }
 
-    getTvSeasonEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
+    getTvSeasonEpisodes ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
         throw new Error("Method not implemented.");
     }
 
-    getTvEpisode ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+    getTvEpisode ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
         throw new Error("Method not implemented.");
     }
 
-    getTvEpisodeExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
-        return this.getExternal( external, [ MediaKind.TvEpisode ], cache ) as Promise<TvEpisodeMediaRecord>;
+    getTvEpisodeExternal ( external : ExternalReferences, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+        return this.getExternal( external, [ MediaKind.TvEpisode ], query, cache ) as Promise<TvEpisodeMediaRecord>;
     }
 
 
-    async getTvSeasonArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> { return [] }
+    async getTvSeasonArt ( id : string, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> { return [] }
 
-    async getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> { return [] }
+    async getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> { return [] }
 
-    getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+    getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         const id = record.external.moviedb;
 
         if ( !id ) {
@@ -218,39 +217,39 @@ export class TheMovieDB implements IScraper {
         }
 
         if ( record.kind === MediaKind.Movie ) {
-            return this.getMovieArt( id, kind, cache );
+            return this.getMovieArt( id, kind, query, cache );
         } else if ( record.kind === MediaKind.TvShow ) {
-            return this.getTvShowArt( id, kind, cache );
+            return this.getTvShowArt( id, kind, query, cache );
         } else if ( record.kind === MediaKind.TvSeason ) {
-            return this.getTvSeasonArt( id, kind, cache );
+            return this.getTvSeasonArt( id, kind, query, cache );
         } else if ( record.kind === MediaKind.TvEpisode ) {
-            return this.getTvEpisodeArt( id, kind, cache );
+            return this.getTvEpisodeArt( id, kind, query, cache );
         }
     }
 
     
     /* Get Media Cast */
-    getMovieCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
-        return this.runCachedTask<RoleRecord[]>( 'getMovieCast', id, async () => {
+    getMovieCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return this.runCachedTask<RoleRecord[]>( 'getMovieCast', id, query, async () => {
             const actors : any = await this.moviedb.movieCredits( { id } );
 
             return actors.cast.map( actor => this.factory.createActorRoleRecord( actor ) );
         }, cache );
     }
 
-    getTvShowCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getTvShowCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getTvSeasonCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getTvSeasonCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getTvEpisodeCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getTvEpisodeCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getMediaCast ( record : MediaRecord, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getMediaCast ( record : MediaRecord, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         const id = record.external.tvdb;
 
         if ( !id ) {
@@ -258,19 +257,19 @@ export class TheMovieDB implements IScraper {
         }
 
         if ( record.kind === MediaKind.Movie ) {
-            return this.getMovieCast( id, cache );
+            return this.getMovieCast( id, query, cache );
         } else if ( record.kind === MediaKind.TvShow ) {
-            return this.getTvShowCast( id, cache );
+            return this.getTvShowCast( id, query, cache );
         } else if ( record.kind === MediaKind.TvSeason ) {
-            return this.getTvSeasonCast( id, cache );
+            return this.getTvSeasonCast( id, query, cache );
         } else if ( record.kind === MediaKind.TvEpisode ) {
-            return this.getTvEpisodeCast( id, cache );
+            return this.getTvEpisodeCast( id, query, cache );
         }
     }
 
     /* Searching Media */
-    searchMovie ( name : string, limit : number = 5, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]> {
-        return this.runCachedTask<MovieMediaRecord[]>( 'searchMovie', '' + limit + '|' + name, async () => {
+    searchMovie ( name : string, limit : number = 5, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]> {
+        return this.runCachedTask<MovieMediaRecord[]>( 'searchMovie', '' + limit + '|' + name, query, async () => {
             const yearMatch = name.match( /(\(?((?:19[0-9]|20[0-2])[0-9])\)?)$/i );
 
             const year = yearMatch ? +yearMatch[ 2 ] : void 0;
@@ -281,14 +280,14 @@ export class TheMovieDB implements IScraper {
 
             // If searching for the movie with the year parameter returns not results, try searching only with the title
             if ( rawMovie.results.length == 0 && typeof year === 'number' ) {
-                return this.searchMovie( title, limit, cache );
+                return this.searchMovie( title, limit, query, cache );
             }
 
-            return Promise.all( rawMovie.results.slice( 0, limit ).map( movie => this.getMovie( movie.id, cache ) ) as any[] );
+            return Promise.all( rawMovie.results.slice( 0, limit ).map( movie => this.getMovie( movie.id, query, cache ) ) as any[] );
         }, cache );
     }
 
-    searchTvShow ( name : string, limit ?: number, cache ?: CacheOptions ) : Promise<TvShowMediaRecord[]> {
+    searchTvShow ( name : string, limit ?: number, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvShowMediaRecord[]> {
         throw new Error("Method not implemented.");
     }
 }

@@ -1,6 +1,17 @@
 import { TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, MediaKind, ArtRecord, MediaRecordArt, RoleRecord } from "../../../MediaRecord";
 import * as sortBy from 'sort-by';
 import { TheTVDB } from './TheTVDB';
+import { IScraperQuery } from '../../../MediaScrapers/IScraper';
+
+export function getQueryBoxSet ( query : IScraperQuery, defaultBoxSet : string = 'aired' ) : string {
+    const boxSet = query?.boxSet ?? defaultBoxSet;
+
+    if ( boxSet !== 'aired' && boxSet !== 'dvd' ) {
+        throw new Error( `Invalid box set for TV show: ${ boxSet } (expected 'aired' or 'dvd').` );
+    }
+
+    return boxSet;
+}
 
 export function parseDate ( data : string ) : Date {
     if ( !data ) {
@@ -97,16 +108,18 @@ export class MediaRecordFactory {
         };
     }
 
-    public createTvShowMediaRecord ( show : TvDbShow, summary : any, art : ArtRecord[] ) : TvShowMediaRecord {
+    public createTvShowMediaRecord ( show : TvDbShow, summary : any, art : ArtRecord[], query : IScraperQuery ) : TvShowMediaRecord {
         const year = show.firstAired
             ? +show.firstAired.split( '-' )[ 0 ]
             : null;
+
+        const boxSet = getQueryBoxSet( query );
 
         return {
             scraper: this.scraper.name,
             kind: MediaKind.TvShow,
             addedAt: null,
-            episodesCount: summary.airedEpisodes,
+            episodesCount: summary[ boxSet + 'Episodes'],
             external: {
                 imdb: show.imdbId,
                 zap2it: show.zap2itId,
@@ -124,7 +137,7 @@ export class MediaRecordFactory {
             year: year,
 
             art: this.createTvShowMediaRecordArt( art ),
-            seasonsCount: summary.airedSeasons.filter( season => season != '0' ).length
+            seasonsCount: summary[ boxSet + 'Seasons' ].filter( season => season != '0' ).length
         } as any;
     }
 
@@ -152,10 +165,12 @@ export class MediaRecordFactory {
         } as any;
     }
     
-    public createTvEpisodeMediaRecord ( show : TvShowMediaRecord, episode : TvDbEpisode ) : TvEpisodeMediaRecord {
+    public createTvEpisodeMediaRecord ( show : TvShowMediaRecord, episode : TvDbEpisode, query : IScraperQuery = {} ) : TvEpisodeMediaRecord {
         const thumbnail = stringNotEmpty( episode.filename ) 
             ?  this.baseImageUrl + episode.filename
             : null;
+
+        const boxSet = getQueryBoxSet( query );
 
         return {
             kind: MediaKind.TvEpisode,
@@ -172,16 +187,16 @@ export class MediaRecordFactory {
             internalId: null,
             scraper: this.scraper.name,
 
-            number: +episode.airedEpisodeNumber,
+            number: +episode[ boxSet + 'EpisodeNumber' ],
             rating: +episode.siteRating,
             runtime: null,
-            seasonNumber: +episode.airedSeason,
+            seasonNumber: +episode[ boxSet + 'Season' ],
             title: episode.episodeName,
             plot: episode.overview,
             airedAt: parseDate( episode.firstAired ),
             sources: null,
 
-            tvSeasonId: '' + show.id + 'S' + episode.airedSeason,
+            tvSeasonId: '' + show.id + 'S' + episode[ boxSet + 'Season' ],
             quality: null
         } as any;
     }

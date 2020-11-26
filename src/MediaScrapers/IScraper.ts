@@ -2,6 +2,10 @@ import { TvEpisodeMediaRecord, TvShowMediaRecord, MovieMediaRecord, TvSeasonMedi
 import { AsyncCache, CacheOptions } from "./ScraperCache";
 import { UnicastServer } from "../UnicastServer";
 
+export interface IScraperQuery {
+    language ?: string;
+    boxSet ?: string;
+}
 
 export interface IScraper {
     readonly name : string;
@@ -10,58 +14,58 @@ export interface IScraper {
 
     cache : AsyncCache<any>;
     
-    getMovie ( id : string, cache ?: CacheOptions ) : Promise<MovieMediaRecord>;
+    getMovie ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<MovieMediaRecord>;
     
-    getMovieExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord>;
+    getMovieExternal ( external : ExternalReferences, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<MovieMediaRecord>;
 
-    getTvShow ( id : string, cache ?: CacheOptions ) : Promise<TvShowMediaRecord>;
+    getTvShow ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvShowMediaRecord>;
     
-    getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord>;
+    getTvShowExternal ( external : ExternalReferences, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvShowMediaRecord>;
 
-    getTvShowSeasons ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]>;
+    getTvShowSeasons ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]>;
 
-    getTvShowSeason ( id : string, season : number, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
+    getTvShowSeason ( id : string, season : number, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
 
-    getTvShowEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]>;
+    getTvShowEpisodes ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]>;
 
-    getTvShowEpisode ( id : string, season : number, episode : number, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
+    getTvShowEpisode ( id : string, season : number, episode : number, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
 
-    getTvSeason ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
+    getTvSeason ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
 
-    getTvSeasonExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
+    getTvSeasonExternal ( external : ExternalReferences, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord>;
 
-    getTvSeasonEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]>;
+    getTvSeasonEpisodes ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]>;
 
-    getTvEpisode ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
+    getTvEpisode ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
 
-    getTvEpisodeExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
-
-
-    getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
-
-    getTvShowArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
-
-    getTvSeasonArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
-
-    getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
-
-    getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
+    getTvEpisodeExternal ( external : ExternalReferences, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord>;
 
 
-    getMovieCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+    getMovieArt ( id : string, kind ?: ArtRecordKind, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
 
-    getTvShowCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+    getTvShowArt ( id : string, kind ?: ArtRecordKind, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
 
-    getTvSeasonCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+    getTvSeasonArt ( id : string, kind ?: ArtRecordKind, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
 
-    getTvEpisodeCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+    getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
 
-    getMediaCast ( record : MediaRecord, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+    getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<ArtRecord[]>;
 
 
-    searchMovie ( name : string, limit ?: number, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]>;
+    getMovieCast ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
 
-    searchTvShow ( name : string, limit ?: number, cache ?: CacheOptions ) : Promise<TvShowMediaRecord[]>;   
+    getTvShowCast ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+
+    getTvSeasonCast ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+
+    getTvEpisodeCast ( id : string, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+
+    getMediaCast ( record : MediaRecord, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<RoleRecord[]>;
+
+
+    searchMovie ( name : string, limit ?: number, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]>;
+
+    searchTvShow ( name : string, limit ?: number, options ?: IScraperQuery, cache ?: CacheOptions ) : Promise<TvShowMediaRecord[]>;   
 
     // searchPerson ( name : string, limit ?: number, cache ?: CacheOptions ) : Promise<PersonRecord[]>;
 }

@@ -6,7 +6,7 @@ import * as isVideo from 'is-video';
 import * as fs from 'mz/fs';
 import * as shorthash from 'shorthash';
 import { UnicastServer } from "../../../UnicastServer";
-import { IScraper } from "../../../MediaScrapers/IScraper";
+import { IScraper, IScraperQuery } from "../../../MediaScrapers/IScraper";
 import * as minimatch from 'minimatch';
 import { Settings } from "../../../MediaScrapers/Settings";
 import { LazyValue } from "../../../ES2017/LazyValue";
@@ -183,17 +183,15 @@ export class FileSystemScanner {
         };
     }
 
-    async findMovieFor ( scraper : IScraper, id : string, details : any, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
-        console.log( id, this.settings.get<string>( [ 'associations', 'movie', id ] ) );
-
+    async findMovieFor ( scraper : IScraper, id : string, details : any, query ?: IScraperQuery, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
         const movieId = this.settings.get<string>( [ 'associations', 'movie', id ] );
 
         if ( !movieId ) {
             const title = typeof details.year === 'number' ? ( details.title + ` (${ details.year })` ) : details.title;
             
-            return ( await scraper.searchMovie( title, 1, cache ) )[ 0 ];
+            return ( await scraper.searchMovie( title, 1, query, cache ) )[ 0 ];
         } else {
-            return scraper.getMovie( movieId, cache );
+            return scraper.getMovie( movieId, query, cache );
         }
     }
 
@@ -238,7 +236,7 @@ export class FileSystemScanner {
                     const movieCache : CacheOptions = this.refreshConditions.testMovie( id ) ? { ...cache, readTtl: 60  } : cache;
 
                     console.log( videoFile, id );
-                    movie = await this.findMovieFor( scraper, id, details, movieCache );
+                    movie = await this.findMovieFor( scraper, id, details, {}, movieCache );
     
                     if ( !movie ) {
                         this.logScanError( MediaKind.Movie, videoFile, 'Cannot find movie ' + id + ' ' + details.title );
@@ -265,13 +263,13 @@ export class FileSystemScanner {
         }
     }
 
-    async findTvShowFor ( scraper : IScraper, name : string, customShowId ?: string, cache : CacheOptions = {} ) : Promise<TvShowMediaRecord> {
+    async findTvShowFor ( scraper : IScraper, name : string, customShowId ?: string, query ?: IScraperQuery, cache : CacheOptions = {} ) : Promise<TvShowMediaRecord> {
         const showId = customShowId ?? this.settings.get<string>( [ 'associations', 'show', name ] );
 
         if ( !showId ) {
-            return ( await scraper.searchTvShow( name, 1, cache ) )[ 0 ];
+            return ( await scraper.searchTvShow( name, 1, query, cache ) )[ 0 ];
         } else {
-            return scraper.getTvShow( showId, cache );
+            return scraper.getTvShow( showId, query, cache );
         }
     }
 
@@ -351,7 +349,7 @@ export class FileSystemScanner {
 
                 const remoteShowId = localSettings?.show?.id?.toString();
 
-                this.showsByName.set( showName, show = clone( await this.findTvShowFor( scraper, showName, remoteShowId, showCache ) ) );
+                this.showsByName.set( showName, show = clone( await this.findTvShowFor( scraper, showName, remoteShowId, {}, showCache ) ) );
 
                 // If we found a show in the scraper
                 if ( show != null ) {
@@ -394,7 +392,7 @@ export class FileSystemScanner {
 
             // TODO: findTvShowFor is already called somewhere up above; see if both calls cannot be merged into one to avoid
             // duplicate calls to the scraper when the cache reads are turned off
-            return wrap( clone( await scraper.getTvShowExternal( show.external, cache ) ), id );
+            return wrap( clone( await scraper.getTvShowExternal( show.external, {}, cache ) ), id );
         } );
 
         let remoteShowInternalId = remoteShow.map( show => show.internalId ).catch( err => {
@@ -414,7 +412,7 @@ export class FileSystemScanner {
             ?.find( ep => isSameFile( folder, path.join( showName, ep.file ), videoFile ) );
         
         if ( localSettingsEpisode?.id != null ) {
-            var episodeInfo = await scraper.getTvEpisode( '' + localSettingsEpisode?.id );
+            var episodeInfo = await scraper.getTvEpisode( '' + localSettingsEpisode?.id, {}, cache );
             
             scraperSeasonNumber = episodeInfo.seasonNumber;
             scraperEpisodeNumber = episodeInfo.number;
@@ -445,7 +443,7 @@ export class FileSystemScanner {
             // We search for the `seasonNumber` instead of `scraperSeasonNumber`
             // because if the user has overriden the season where this episode is
             // to be stored, it makes no sense to get the other "original" season info
-            season = clone( await scraper.getTvShowSeason( await remoteShowInternalId.get(), seasonNumber, seasonCache ) );
+            season = clone( await scraper.getTvShowSeason( await remoteShowInternalId.get(), seasonNumber, {}, seasonCache ) );
 
             if ( season != null ) {
                 season.internalId = season.id;
@@ -477,10 +475,13 @@ export class FileSystemScanner {
                 ? { ...cache, readTtl: 60  } 
                 : cache;
 
+            const episodesConfig : IScraperQuery = {};
+
             // Note that here we use `scraperSeasonNumber` and `scraperEpisodeNumber`
             // to get the actual information about the episode, as opposed to what
             // we did for the season (where we searched for the `seasonNumber`)
-            episode = clone( await scraper.getTvShowEpisode( await remoteShowInternalId.get(), scraperSeasonNumber, scraperEpisodeNumber, episodeCache ).catch<TvEpisodeMediaRecord>( () => null ) );
+            episode = clone( await scraper.getTvShowEpisode( await remoteShowInternalId.get(), scraperSeasonNumber, scraperEpisodeNumber, episodesConfig, episodeCache )
+                .catch<TvEpisodeMediaRecord>( () => null ) );
         } else {
             // If episode was supposed to be ignored, we can just yield it and exit from the function
             yield episode;

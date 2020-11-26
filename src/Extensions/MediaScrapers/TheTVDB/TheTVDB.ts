@@ -1,10 +1,58 @@
-import { IScraper } from "../../../MediaScrapers/IScraper";
+import { IScraper, IScraperQuery } from "../../../MediaScrapers/IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/ScraperCache";
 import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaRecord, MediaKind, ExternalReferences, MediaCastRecord, RoleRecord } from "../../../MediaRecord";
 import * as TVDB from 'node-tvdb';
-import { MediaRecordFactory } from "./MediaRecordFactory";
+import { MediaRecordFactory, getQueryBoxSet } from "./MediaRecordFactory";
 import { UnicastServer } from "../../../UnicastServer";
 import { Logger } from 'clui-logger';
+
+function isObjectEmpty ( object : any ) : boolean {
+    if ( typeof object !== 'object' ) {
+        return true;
+    }
+
+    let value : any = void 0;
+
+    for ( let key in object ) {
+        value = object[ key ];
+
+        if ( value !== null && value !== void 0 ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function hasObjectEmptyProperties ( object : any ) : boolean {
+    let value : any = void 0;
+
+    for ( let key in object ) {
+        value = object[ key ];
+
+        if ( value === null || value === void 0 ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function stripEmptyProperties<T>( object : T ) : Partial<T> {
+    const stripped : Partial<T> = {};
+
+    let value : any = void 0;
+
+    for ( let key in object ) {
+        value = object[ key ];
+
+        if ( value !== null && value !== void 0 ) {
+            stripped[ key ] = value;
+        }
+    }
+    
+    return stripped;
+}
 
 export class TheTVDB implements IScraper {
     server : UnicastServer;
@@ -41,18 +89,20 @@ export class TheTVDB implements IScraper {
         return `${ method }|${ id }`;
     }
 
-    runCachedTask<T extends any> ( method : string, id : string, runner : () => Promise<T>, options : CacheOptions = {} ) {
+    runCachedTask<T extends any> ( method : string, id : string, query : IScraperQuery, runner : () => Promise<T>, options : CacheOptions = {} ) {
+        id = id + this.getQueryKey( query );
+
         const key = this.getCacheKey( method, id );
-
+        
         const cached = this.cache.get<T>( key, options );
-
+        
         if ( cached ) {
             return cached;
         }
-
+        
         return this.cache.set<T>( key, runner(), options ).catch( err => {
             this.logger.error( method  + ' ' + id );
-
+            
             return Promise.reject( err );
         } );
     }
@@ -61,21 +111,33 @@ export class TheTVDB implements IScraper {
         return Object.keys( external ).sort().map( key => '' + key + '=' + external[ key ]  ).join( ',' );
     }
 
+    protected getQueryKey ( query : IScraperQuery ) : string {
+        if ( isObjectEmpty( query ) ) {
+            return '';
+        }
+
+        if ( hasObjectEmptyProperties( query ) ) {
+            query = stripEmptyProperties( query );
+        }
+
+        return JSON.stringify( query );
+    }
+
     /* Retrieve Records */
-    getMovieArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+    getMovieArt ( id : string, kind ?: ArtRecordKind, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getMovie ( id : string, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
+    getMovie ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
         return Promise.resolve( null );
     }
 
-    getMovieExternal( external : ExternalReferences, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
+    getMovieExternal( external : ExternalReferences, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MovieMediaRecord> {
         return Promise.resolve( null );
     }
 
-    getTvShowAllArt ( id : string, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
-        return this.runCachedTask<any[]>( 'getTvShowArt', id, async () => {
+    getTvShowAllArt ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+        return this.runCachedTask<any[]>( 'getTvShowArt', id, query, async () => {
             const kinds = [ "fanart", "poster", "season", "seasonwide", "series" ];
 
             let art : ArtRecord[] = [];
@@ -90,8 +152,8 @@ export class TheTVDB implements IScraper {
         }, cache );
     }
 
-    async getTvShowArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
-        let art = await this.getTvShowAllArt( id, cache );
+    async getTvShowArt ( id : string, kind ?: ArtRecordKind, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+        let art = await this.getTvShowAllArt( id, query, cache );
 
         art = art.filter( art => art.season === null );
 
@@ -102,19 +164,19 @@ export class TheTVDB implements IScraper {
         return art;
     }
 
-    getTvShow ( id : string, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
-        return this.runCachedTask<TvShowMediaRecord>( 'getTvShow', id, async () => {
+    getTvShow ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
+        return this.runCachedTask<TvShowMediaRecord>( 'getTvShow', id, query, async () => {
             const rawShow = await this.tvdb.getSeriesById( +id );
 
             const summary = await this.tvdb.getEpisodesSummaryBySeriesId( +id );
 
-            const art = await this.getTvShowAllArt( id, cache );
+            const art = await this.getTvShowAllArt( id, query, cache );
 
-            return this.factory.createTvShowMediaRecord( rawShow, summary, art );
+            return this.factory.createTvShowMediaRecord( rawShow, summary, art, query );
         }, cache );
     }
 
-    getTvShowExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
+    getTvShowExternal ( external : ExternalReferences, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvShowMediaRecord> {
         const externalString = this.getExternalCacheKey( external );
 
         const keysMapper : { [ key : string ] : Function } = {
@@ -122,9 +184,9 @@ export class TheTVDB implements IScraper {
             'zap2it': this.tvdb.getSeriesByZap2ItId.bind( this.tvdb ),
         };
 
-        return this.runCachedTask<TvShowMediaRecord>( 'getTvShowExternal', externalString, async () => {
+        return this.runCachedTask<TvShowMediaRecord>( 'getTvShowExternal', externalString, query, async () => {
             if ( external[ 'tvdb' ] ) {
-                return await this.getTvShow( external[ 'tvdb' ], cache );
+                return await this.getTvShow( external[ 'tvdb' ], query, cache );
             }
 
             for ( let source of Object.keys( external ) ) {
@@ -134,7 +196,7 @@ export class TheTVDB implements IScraper {
                     const results = await fetcher( external[ source ] );
 
                     if ( results.length > 0 ) {
-                        return this.getTvShow( results[ 0 ].id, cache );
+                        return this.getTvShow( results[ 0 ].id, query, cache );
                     }
                 }
             }
@@ -143,15 +205,19 @@ export class TheTVDB implements IScraper {
         }, cache );
     }
 
-    getTvShowSeasons ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]> {
-        return this.runCachedTask<TvSeasonMediaRecord[]>( 'getTvShowSeasons', id, async () => {
-            const show = await this.getTvShow( id, cache );
+    getTvShowSeasons ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord[]> {
+        return this.runCachedTask<TvSeasonMediaRecord[]>( 'getTvShowSeasons', id, query, async () => {
+            const show = await this.getTvShow( id, query, cache );
 
             const summary = await this.tvdb.getEpisodesSummaryBySeriesId( +id );
 
             const seasons : TvSeasonMediaRecord[] = [];
 
-            for ( let season of summary.airedSeasons ) {
+            const boxSet = getQueryBoxSet( query );
+
+            console.log( summary );
+
+            for ( let season of summary[ boxSet + 'Seasons' ] ) {
                 const poster = ( await this.tvdb.getSeasonPosters( id, season ).catch( () => [] ) )[ 0 ];
 
                 seasons.push( this.factory.createTvSeasonMediaRecord( show, season, poster ? this.factory.createArtRecord( poster ).url : null ) );
@@ -161,13 +227,13 @@ export class TheTVDB implements IScraper {
         }, cache );
     }
 
-    getTvShowEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
-        return this.runCachedTask<TvEpisodeMediaRecord[]>( 'getTvShowEpisodes', id, async () => {
-            const show = await this.getTvShow( id );
+    getTvShowEpisodes ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
+        return this.runCachedTask<TvEpisodeMediaRecord[]>( 'getTvShowEpisodes', id, query, async () => {
+            const show = await this.getTvShow( id, query, cache );
 
             const episodes : any[] = await this.tvdb.getEpisodesBySeriesId( id );
 
-            return episodes.map( ep => this.factory.createTvEpisodeMediaRecord( show, ep ) );
+            return episodes.map( ep => this.factory.createTvEpisodeMediaRecord( show, ep, query ) );
         }, cache ).then( episodes => episodes.map( episode => {
             episode.airedAt = typeof episode.airedAt === 'string' ? new Date( episode.airedAt ) : episode.airedAt;
 
@@ -175,26 +241,26 @@ export class TheTVDB implements IScraper {
          } ) );
     }
 
-    getTvShowSeason ( id : string, season : number, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+    getTvShowSeason ( id : string, season : number, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
         season = +season;
 
         const key = `${id}S${season}`;
 
-        return this.runCachedTask<TvSeasonMediaRecord>( 'getTvShowSeason', key, async () => {
-            const seasons = await this.getTvShowSeasons( id );
+        return this.runCachedTask<TvSeasonMediaRecord>( 'getTvShowSeason', key, query, async () => {
+            const seasons = await this.getTvShowSeasons( id, query );
 
             return seasons.find( ep => ep.number == season );
         }, cache );
     }
 
-    getTvShowEpisode ( id : string, season : number, episode : number, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+    getTvShowEpisode ( id : string, season : number, episode : number, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
         season = +season;
         episode = +episode;
 
         const key = `${id}S${season}E${episode}`;
 
-        return this.runCachedTask<TvEpisodeMediaRecord>( 'getTvShowEpisode', key, async () => {
-            const episodes = await this.getTvShowEpisodes( id, cache );
+        return this.runCachedTask<TvEpisodeMediaRecord>( 'getTvShowEpisode', key, query, async () => {
+            const episodes = await this.getTvShowEpisodes( id, query, cache );
 
             return episodes.find( ep => ep.seasonNumber == season && ep.number == episode );
         }, cache ).then( episode => {
@@ -204,10 +270,10 @@ export class TheTVDB implements IScraper {
         } );
     }
 
-    async getTvSeasonArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+    async getTvSeasonArt ( id : string, kind ?: ArtRecordKind, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         const [ showId, seasonNumber ] = id.split( 'S' );
 
-        let art = await this.getTvShowAllArt( showId, cache );
+        let art = await this.getTvShowAllArt( showId, query, cache );
 
         art = art.filter( art => art.season == +seasonNumber );
 
@@ -218,29 +284,29 @@ export class TheTVDB implements IScraper {
         return art;
     }
 
-    getTvSeason ( id : string, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
-        return this.runCachedTask<TvSeasonMediaRecord>( 'getTvSeason', id, async () => {
+    getTvSeason ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+        return this.runCachedTask<TvSeasonMediaRecord>( 'getTvSeason', id, query, async () => {
             const [ showId, seasonNumber ] = id.split( 'S' );
 
-            const seasons = await this.getTvShowSeasons( showId, cache );
+            const seasons = await this.getTvShowSeasons( showId, query, cache );
 
             return seasons.find( season => season.number == +seasonNumber );
         }, cache );
     }
     
-    getTvSeasonExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
+    getTvSeasonExternal ( external : ExternalReferences, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvSeasonMediaRecord> {
         if ( external.tvdb ) {
-            return this.getTvSeason( external.tvdb, cache );
+            return this.getTvSeason( external.tvdb, query, cache );
         }
 
         return Promise.resolve( null );
     }
 
-    getTvSeasonEpisodes ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
-        return this.runCachedTask<TvEpisodeMediaRecord[]>( 'getTvSeasonEpisodes', id, async () => {
+    getTvSeasonEpisodes ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord[]> {
+        return this.runCachedTask<TvEpisodeMediaRecord[]>( 'getTvSeasonEpisodes', id, query, async () => {
             const [ showId, seasonNumber ] = id.split( 'S' );
 
-            const episodes = await this.getTvShowEpisodes( showId, cache );
+            const episodes = await this.getTvShowEpisodes( showId, query, cache );
 
             return episodes.filter( episode => episode.seasonNumber == +seasonNumber );
         }, cache ).then( episodes => episodes.map( episode => {
@@ -250,12 +316,12 @@ export class TheTVDB implements IScraper {
         } ) );
     }
     
-    async getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+    async getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         if ( kind && kind != ArtRecordKind.Thumbnail ) {
             return [];
         }
 
-        const episode = await this.getTvEpisode( id, cache );
+        const episode = await this.getTvEpisode( id, query, cache );
 
         if ( !episode ) {
             return [];
@@ -270,13 +336,13 @@ export class TheTVDB implements IScraper {
         } ];
     }
 
-    getTvEpisode ( id : string, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
-        return this.runCachedTask<TvEpisodeMediaRecord>( 'getTvEpisode', id, async () => {
+    getTvEpisode ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+        return this.runCachedTask<TvEpisodeMediaRecord>( 'getTvEpisode', id, query, async () => {
             const episode = await this.tvdb.getEpisodeById( id, cache );
 
-            const show = await this.getTvShow( episode.seriesId );
+            const show = await this.getTvShow( episode.seriesId, query );
 
-            return this.factory.createTvEpisodeMediaRecord( show, episode );
+            return this.factory.createTvEpisodeMediaRecord( show, episode, query );
         }, cache ).then( episode => {
             episode.airedAt = typeof episode.airedAt === 'string' ? new Date( episode.airedAt ) : episode.airedAt;
             
@@ -284,9 +350,9 @@ export class TheTVDB implements IScraper {
         } );
     }
     
-    getTvEpisodeExternal ( external : ExternalReferences, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
+    getTvEpisodeExternal ( external : ExternalReferences, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvEpisodeMediaRecord> {
         if ( external.tvdb ) {
-            return this.getTvEpisode( external.tvdb, cache );
+            return this.getTvEpisode( external.tvdb, query, cache );
         }
 
         return Promise.resolve( null );
@@ -294,7 +360,7 @@ export class TheTVDB implements IScraper {
 
 
     /* Get Media Art */
-    getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
+    getMediaArt ( record : MediaRecord, kind ?: ArtRecordKind, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         const id = record.external.tvdb;
 
         if ( !id ) {
@@ -302,38 +368,38 @@ export class TheTVDB implements IScraper {
         }
 
         if ( record.kind === MediaKind.Movie ) {
-            return this.getMovieArt( id, kind, cache );
+            return this.getMovieArt( id, kind, query, cache );
         } else if ( record.kind === MediaKind.TvShow ) {
-            return this.getTvShowArt( id, kind, cache );
+            return this.getTvShowArt( id, kind, query, cache );
         } else if ( record.kind === MediaKind.TvSeason ) {
-            return this.getTvSeasonArt( id, kind, cache );
+            return this.getTvSeasonArt( id, kind, query, cache );
         } else if ( record.kind === MediaKind.TvEpisode ) {
-            return this.getTvEpisodeArt( id, kind, cache );
+            return this.getTvEpisodeArt( id, kind, query, cache );
         }
     }
 
     /* Get Media Cast */
-    getMovieCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getMovieCast ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getTvShowCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
-        return this.runCachedTask<RoleRecord[]>( 'getTvShowCast', id, async () => {
+    getTvShowCast ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+        return this.runCachedTask<RoleRecord[]>( 'getTvShowCast', id, query, async () => {
             const actors : any[] = await this.tvdb.getActors( id );
 
             return actors.map( actor => this.factory.createActorRoleRecord( actor ) );
         }, cache );
     }
 
-    getTvSeasonCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getTvSeasonCast ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getTvEpisodeCast ( id : string, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getTvEpisodeCast ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return Promise.resolve( [] );
     }
 
-    getMediaCast ( record : MediaRecord, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
+    getMediaCast ( record : MediaRecord, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         const id = record.external.tvdb;
 
         if ( !id ) {
@@ -341,23 +407,23 @@ export class TheTVDB implements IScraper {
         }
 
         if ( record.kind === MediaKind.Movie ) {
-            return this.getMovieCast( id, cache );
+            return this.getMovieCast( id, query, cache );
         } else if ( record.kind === MediaKind.TvShow ) {
-            return this.getTvShowCast( id, cache );
+            return this.getTvShowCast( id, query, cache );
         } else if ( record.kind === MediaKind.TvSeason ) {
-            return this.getTvSeasonCast( id, cache );
+            return this.getTvSeasonCast( id, query, cache );
         } else if ( record.kind === MediaKind.TvEpisode ) {
-            return this.getTvEpisodeCast( id, cache );
+            return this.getTvEpisodeCast( id, query, cache );
         }
     }
 
     /* Search Records */
-    searchMovie ( name : string, limit : number = 5, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]> {
+    searchMovie ( name : string, limit : number = 5, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<MovieMediaRecord[]> {
         return Promise.resolve( [] );
     }
 
-    searchTvShow ( name : string, limit : number = 5, cache ?: CacheOptions ) : Promise<TvShowMediaRecord[]> {
-        return this.runCachedTask<TvShowMediaRecord[]>( 'searchTvShow', '' + limit + '|' + name, async () => {
+    searchTvShow ( name : string, limit : number = 5, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<TvShowMediaRecord[]> {
+        return this.runCachedTask<TvShowMediaRecord[]>( 'searchTvShow', '' + limit + '|' + name, query, async () => {
             const shows : TvShowMediaRecord[] = [];
             
             const matches = await this.tvdb.getSeriesByName( name ).catch( () => [] );
