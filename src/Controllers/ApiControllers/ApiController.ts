@@ -16,6 +16,7 @@ import { PeopleController } from './MediaControllers/PeopleController';
 import { StorageController } from './MediaControllers/StorageController';
 import { RandomStream } from '../../ES2017/RandomStream';
 import * as sortBy from 'sort-by';
+import { RepositoriesController } from './MediaControllers/RepositoriesController';
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -53,6 +54,9 @@ export class ApiController extends BaseController {
 
     @Controller( ProvidersController, '/media/providers' )
     providers : ProvidersController;
+
+    @Controller( RepositoriesController, '/media/repositories' )
+    repositories : RepositoriesController;
 
     @Controller( SessionsController, '/media/sessions' )
     sessions : SessionsController;

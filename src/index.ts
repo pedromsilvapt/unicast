@@ -14,6 +14,7 @@ import { TestTool, ToolFactory } from "./Tools/Tool";
 import { PersistSubtitlesTool } from './Tools/PersistSubtitles';
 import { CollectionsSyncTool } from './Tools/CollectionsSync';
 import { FullScanMediaCastTool } from './Tools/Migrations/FullScanMediaCast';
+import { RepositoryPathTool } from './Tools/Migrations/AddRepositoryPath';
 import { LocateTool } from './Tools/Locate';
 
 if ( !Symbol.asyncIterator ) {
@@ -37,6 +38,7 @@ server.tools.add( new ToolFactory( PersistSubtitlesTool ) );
 server.tools.add( new ToolFactory( PreviewTriggersTool ) );
 server.tools.add( new ToolFactory( CollectionsSyncTool ) );
 server.tools.add( new ToolFactory( FullScanMediaCastTool ) );
+server.tools.add( new ToolFactory( RepositoryPathTool ) );
 server.tools.add( new ToolFactory( LocateTool ) );
 server.tools.add( new ToolFactory( TestTool ) );
 

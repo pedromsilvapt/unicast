@@ -28,6 +28,31 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         return query;
     }
 
+    getRepositoryPathsQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+        if ( typeof req.query.filterRepositories === 'object' ) {
+            const repos = Object.keys( req.query.filterRepositories );
+
+            const included = repos.filter( genre => req.query.filterRepositories[ genre ] === 'include' );
+            const excluded = repos.filter( genre => req.query.filterRepositories[ genre ] === 'exclude' );
+
+            if ( included.length > 0 || excluded.length > 0 ) {
+                query = query.filter( ( doc ) => {
+                    if ( included.length > 0 && excluded.length > 0 ) {
+                        return ( doc( "repositoryPaths" ) as any ).setIntersection( included ).isEmpty().not().and(
+                            ( doc( "repositoryPaths" ) as any ).setIntersection( excluded ).isEmpty()
+                        );
+                    } else if ( included.length > 0 ) {
+                        return ( doc( "repositoryPaths" ) as any ).setIntersection( included ).isEmpty().not();
+                    } else if ( excluded.length > 0 ) {
+                        return ( doc( "repositoryPaths" ) as any ).setIntersection( excluded ).isEmpty();
+                    }
+                } );
+            }
+        }
+
+        return query;
+    }
+
     getGenresQuery ( req : Request, query : r.Sequence ) : r.Sequence {
         if ( typeof req.query.filterGenres === 'object' ) {
             const genres = Object.keys( req.query.filterGenres );

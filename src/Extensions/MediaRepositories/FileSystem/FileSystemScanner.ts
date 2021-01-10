@@ -67,16 +67,29 @@ export enum MediaScanContent {
     Movies = "movies"
 }
 
-export interface FileSystemScannerConfig {
+export interface FileSystemMountConfig {
+    name: string;
+    path: string;
+    displayName?: string;
+}
+
+export interface FileSystemScannerConfigBase<M> {
     content : MediaScanContent;
     folders : string[];
     scrapper : string;
     exclude ?: (string | RegExp)[];
     ignoreUnreachableMedia ?: boolean;
     enableDefaultMounts ?: boolean;
-    mounts ?: string[];
+    mounts ?: M[];
 }
 
+export interface FileSystemScannerConfig extends FileSystemScannerConfigBase<string | FileSystemMountConfig> {
+    
+}
+
+export interface FileSystemScannerConfigNormalized extends FileSystemScannerConfigBase<FileSystemMountConfig> {
+    
+}
 
 export class VideosFileWalker extends FileWalker {
     exclusionRules : RegExp[];
@@ -111,7 +124,7 @@ export class VideosFileWalker extends FileWalker {
 export class FileSystemScanner {
     server : UnicastServer;
 
-    config : FileSystemScannerConfig;
+    config : FileSystemScannerConfigNormalized;
 
     settings : Settings;
 
@@ -134,7 +147,7 @@ export class FileSystemScanner {
 
     protected showsLocalSettings : Map<string, TvShowLocalSettings> = new Map();
 
-    constructor ( server : UnicastServer, config : FileSystemScannerConfig, settings : Settings, reporter ?: MediaSyncTask | LoggerInterface ) {
+    constructor ( server : UnicastServer, config : FileSystemScannerConfigNormalized, settings : Settings, reporter ?: MediaSyncTask | LoggerInterface ) {
         this.server = server;
 
         this.config = config;
@@ -183,13 +196,13 @@ export class FileSystemScanner {
         };
     }
 
-    async findMovieFor ( scraper : IScraper, id : string, details : any, query ?: IScraperQuery, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
+    async findMovieFor ( scraper : IScraper, id : string, title : string, year : number | null, query ?: IScraperQuery, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
         const movieId = this.settings.get<string>( [ 'associations', 'movie', id ] );
 
         if ( !movieId ) {
-            const title = typeof details.year === 'number' ? ( details.title + ` (${ details.year })` ) : details.title;
+            const titleQuery = typeof year === 'number' ? ( title + ` (${ year })` ) : title;
             
-            return ( await scraper.searchMovie( title, 1, query, cache ) )[ 0 ];
+            return ( await scraper.searchMovie( titleQuery, 1, query, cache ) )[ 0 ];
         } else {
             return scraper.getMovie( movieId, query, cache );
         }
@@ -212,6 +225,8 @@ export class FileSystemScanner {
                     }
 
                     const dirname = path.basename( path.dirname( videoFile ) );
+                    
+                    const localSettings = await this.getMovieLocalSettings( path.dirname( videoFile ) );
     
                     if ( !dirname ) {
                         logger.static().warn( `File ${ videoFile } is not inside a directory, will be skipped.` );
@@ -220,8 +235,10 @@ export class FileSystemScanner {
                     }
 
                     const details = parseTorrentName( dirname );
-    
-                    const id = shorthash.unique( videoFile );
+
+                    const fullVideoFile = path.join( folder, videoFile );
+
+                    const id = this.server.hash( fullVideoFile );
     
                     let movie = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.Movie ).get( id ) as MovieMediaRecord ) );
 
@@ -235,9 +252,12 @@ export class FileSystemScanner {
     
                     const movieCache : CacheOptions = this.refreshConditions.testMovie( id ) ? { ...cache, readTtl: 60  } : cache;
 
-                    console.log( videoFile, id );
-                    movie = await this.findMovieFor( scraper, id, details, {}, movieCache );
-    
+                    // TODO We need to use || instead of ?? because the generated Typescript code is not hygienic otherwise
+                    const movieName: string = localSettings.name || details.title;
+                    const movieYear: number | null = localSettings.year || details.year;
+
+                    movie = await this.findMovieFor( scraper, id, movieName, movieYear, {}, movieCache );
+
                     if ( !movie ) {
                         this.logScanError( MediaKind.Movie, videoFile, 'Cannot find movie ' + id + ' ' + details.title );
     
@@ -250,7 +270,7 @@ export class FileSystemScanner {
                         ...movie,
                         id: id,
                         internalId: movie.id,
-                        sources: [ { "id": path.join( folder, videoFile ) } ],
+                        sources: [ { "id": fullVideoFile } ],
                         quality: this.parseQuality( videoFile ),
                         addedAt: stats.mtime
                     } as MovieMediaRecord;
@@ -309,6 +329,24 @@ export class FileSystemScanner {
 
         return {};
     };
+
+    async getMovieLocalSettings ( folder : string ) : Promise<MovieLocalSettings> {
+        try {
+            const localSettingsPath = path.join( folder, 'media.yaml' );
+
+            if ( await fs.exists( localSettingsPath ) ) {
+                var contents = await fs.readFile( localSettingsPath, { encoding: 'utf8' } );
+
+                return yaml.load( contents );
+            }
+        } catch ( error ) {
+            if ( this.logger != null ) {
+                this.logger.error( `There was an unexpected error when retrieving the show's settings for "${ folder }": ${ error.message }` )
+            }
+        }
+
+        return {};
+    }
 
     async * scanEpisodeVideoFile ( scraper : IScraper, folder : string, videoFile : string, stats : fs.Stats, cache : CacheOptions = {} ) : AsyncIterableIterator<MediaRecord> {
         // `videoFile` is the relative file path. For instance, for a file located in
@@ -556,4 +594,9 @@ export interface TvShowLocalSettings {
         id?: string | number,
         override?: Partial<TvEpisodeMediaRecord>
     }[],
+}
+
+export interface MovieLocalSettings {
+    name?: string;
+    year?: string;
 }

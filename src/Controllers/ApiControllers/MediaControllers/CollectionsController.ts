@@ -1,5 +1,5 @@
 import { BaseTableController } from "../../BaseTableController";
-import { CollectionRecord, CollectionTreeRecord, BaseTable, CollectionsTable, TreeIterationOrder } from "../../../Database/Database";
+import { CollectionRecord, BaseTable, CollectionsTable, TreeIterationOrder } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { Route } from "../../BaseController";

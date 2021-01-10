@@ -103,6 +103,7 @@ export interface MediaCastRecord extends EntityRecord {
 export interface MediaRecord extends EntityRecord {
     art : MediaRecordArt;
     repository ?: string;
+    repositoryPaths ?: string[];
     kind : MediaKind;
     title : string;
     transient ?: boolean;

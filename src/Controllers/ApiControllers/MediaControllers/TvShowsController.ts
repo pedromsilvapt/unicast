@@ -16,9 +16,10 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
         return this.getTransientQuery( req,
                 this.getCollectionsQuery( req,
                 this.getGenresQuery( req, 
+                this.getRepositoryPathsQuery( req,
                 this.getWatchedQuery( req,
                     super.getQuery( req, res, query )
-                ) ) ) );
+                ) ) ) ) );
     }
 
     async transformAll ( req : Request, res : Response, shows : TvShowMediaRecord[] ) : Promise<any> {

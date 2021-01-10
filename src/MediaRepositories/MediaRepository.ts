@@ -7,6 +7,18 @@ import { MediaRecordFilter } from './ScanConditions';
 import { MediaSyncSnapshot, MediaSyncTask } from '../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 
+export enum VirtualRepositoryState {
+    Online = 'online',
+    Offline = 'offline',
+    Unknown = 'unknown',
+}
+
+export interface IVirtualRepository {
+    name: string;
+    displayName: string;
+    state: VirtualRepositoryState
+}
+
 // Why an Interface and an abstract class, I hear you asking?
 // Because abstract classes in TypeScript don't allow, for some weird reason, optional methods, while interfaces do
 // And thus with an interface we retain all the good static typing, and with the abstract class we get to implement any default behaviour
@@ -23,7 +35,11 @@ export interface IMediaRepository {
 
     subtitles ?: ISubtitlesRepository;
 
+    hasMediaKind ( kind : MediaKind ) : boolean;
+
     available () : Promise<boolean>;
+
+    listVirtualRepositories ? () : Promise<IVirtualRepository[] | null>;
 
     scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, reporter ?: MediaSyncTask | LoggerInterface ) : AsyncIterable<T>;
 
@@ -40,6 +56,8 @@ export interface IMediaRepository {
     getPreferredMediaArt ( kind : MediaKind, id : string, key : string ) : string;
 
     setPreferredMediaArt ( kind : MediaKind, id : string, key : string, url : string ) : void;
+
+    toJSON () : any;
 }
 
 export abstract class MediaRepository implements IEntity, IMediaRepository {
@@ -54,6 +72,10 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
     public abstract readonly ignoreUnreachableMedia : boolean;
 
     public readonly subtitles ?: ISubtitlesRepository;
+
+    hasMediaKind ( kind : MediaKind ) : boolean {
+        return true;
+    }
 
     available () : Promise<boolean> {
         return Promise.resolve( true );
@@ -75,4 +97,14 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
 
     abstract getPreferredMedia ( kind : MediaKind, matchedId : string ) : string;
 
+    toJSON () : any {
+        const json : any = {
+            ...this
+        };
+
+        delete json.server;
+        delete json.subtitles;
+
+        return json;
+    }
 }
