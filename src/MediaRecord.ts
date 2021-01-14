@@ -115,7 +115,7 @@ export interface PlayableMediaRecord extends MediaRecord {
     quality : PlayableQualityRecord;
     playCount : number;
     watched : boolean;
-    lastPlayed : Date;
+    lastPlayedAt : Date;
     addedAt : Date;
 }
 
@@ -139,6 +139,7 @@ export interface TvShowMediaRecord extends MediaRecord {
     rating : number;
     seasonsCount : number;
     year : number;
+    lastPlayedAt : Date;
     watchedEpisodesCount : number;
     watched : boolean;
     addedAt : Date;
@@ -149,6 +150,7 @@ export interface TvSeasonMediaRecord extends MediaRecord {
     art : TvSeasonMediaRecordArt;
     number : number;
     tvShowId : string;
+    lastPlayedAt : Date;
     episodesCount : number;
     watchedEpisodesCount : number;
 }

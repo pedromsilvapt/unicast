@@ -935,14 +935,15 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         { name: 'internalId' },
         { name: 'title' },
         { name: 'rating' },
+        { name: 'runtime' },
         { name: 'parentalRating' },
         { name: 'year' },
-        { name: 'lastPlayed' },
+        { name: 'lastPlayedAt' },
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
 
-    dateFields = [ 'addedAt', 'lastPlayed' ];
+    dateFields = [ 'addedAt', 'lastPlayedAt' ];
 
     relations : {
         collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>,
@@ -951,7 +952,7 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
     
     baseline : Partial<MovieMediaRecord> = {
         watched: false,
-        lastPlayed: null,
+        lastPlayedAt: null,
         playCount: 0,
         transient: false
     }
@@ -962,7 +963,7 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
 
     readonly kind : MediaKind = MediaKind.TvShow;
 
-    dateFields = [ 'addedAt', 'lastPlayed' ];
+    dateFields = [ 'addedAt', 'lastPlayedAt' ];
 
     baseline : Partial<TvShowMediaRecord> = {
         watched: false,
@@ -979,7 +980,7 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         { name: 'rating' },
         { name: 'parentalRating' },
         { name: 'year' },
-        { name: 'lastPlayed' },
+        { name: 'lastPlayedAt' },
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
@@ -1134,11 +1135,11 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
 
     readonly kind : MediaKind = MediaKind.TvEpisode;
     
-    dateFields = [ 'addedAt', 'airedAt', 'lastPlayed' ];
+    dateFields = [ 'addedAt', 'airedAt', 'lastPlayedAt' ];
 
     baseline : Partial<TvEpisodeMediaRecord> = {
         watched: false,
-        lastPlayed: null,
+        lastPlayedAt: null,
         playCount: 0,
         transient: false
     };
@@ -1147,7 +1148,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         { name: 'internalId' },
         { name: 'number' },
         { name: 'tvSeasonId' },
-        { name: 'lastPlayed' },
+        { name: 'lastPlayedAt' },
         { name: 'airedAt' },
         { name: 'addedAt' }
     ];
@@ -1214,12 +1215,12 @@ export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
 
     readonly kind : MediaKind = MediaKind.Custom;
 
-    dateFields = [ 'addedAt', 'lastPlayed' ];
+    dateFields = [ 'addedAt', 'lastPlayedAt' ];
 
     indexesSchema : IndexSchema[] = [
         { name: 'internalId' },
         { name: 'title' },
-        { name: 'lastPlayed' },
+        { name: 'lastPlayedAt' },
         { name: 'addedAt' }
     ];
 }
@@ -1279,7 +1280,7 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
     
     relations: {
         records: ManyToManyPolyRelation<CollectionRecord, MediaRecord>;
-        parent: BelongsToOneRelation<HistoryRecord, HistoryRecord>;
+        parent: BelongsToOneRelation<CollectionRecord, HistoryRecord>;
     }
 
     installRelations ( tables : DatabaseTables ) {

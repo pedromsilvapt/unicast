@@ -106,7 +106,7 @@ export class YoutubeMediaSource extends MediaSource {
             external: {},
             internalId: this.videoInfo.player_response.videoDetails.videoId,
             kind: MediaKind.Custom,
-            lastPlayed: null,
+            lastPlayedAt: null,
             playCount: 0,
             quality: quality,
             repository: null,

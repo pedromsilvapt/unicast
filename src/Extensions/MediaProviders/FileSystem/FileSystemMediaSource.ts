@@ -111,7 +111,7 @@ export class FileSystemMediaSource extends MediaSource {
             watched: false,
             addedAt: new Date(),
             runtime: runtime,
-            lastPlayed: null,
+            lastPlayedAt: null,
             playCount: 0,
             quality: quality
         } as CustomMediaRecord;

@@ -6,7 +6,7 @@ import * as r from 'rethinkdb';
 import { Route } from '../../BaseController';
 
 export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
-    sortingFields : string[] = [ 'title', 'seasonsCount', 'rating', 'parentalRating', 'year', 'lastPlayed', 'addedAt' ]
+    sortingFields : string[] = [ 'title', 'seasonsCount', 'rating', 'parentalRating', 'year', 'lastPlayedAt', 'addedAt' ]
 
     get table () : MediaTable<TvShowMediaRecord> {
         return this.server.database.tables.shows;

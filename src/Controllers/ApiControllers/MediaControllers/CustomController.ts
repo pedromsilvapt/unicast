@@ -5,7 +5,7 @@ import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
 
 export class CustomController extends MediaTableController<CustomMediaRecord> {
-    sortingFields : string[] = [ 'title', 'lastPlayed', 'addedAt' ]
+    sortingFields : string[] = [ 'title', 'lastPlayedAt', 'addedAt' ]
     
     get table () : MediaTable<CustomMediaRecord> {
         return this.server.database.tables.custom;
