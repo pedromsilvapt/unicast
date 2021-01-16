@@ -9,7 +9,7 @@ import { FileSystemVideoMediaStream } from '../../../Extensions/MediaProviders/F
 import { Semaphore } from "data-semaphore";
 import * as sortBy from 'sort-by';
 import { MpvSynchronizerController } from "../../../Subtitles/Validate/MPV/SynchronizerController";
-import { InvalidArgumentError } from "restify-errors";
+import { InvalidArgumentError, NotFoundError } from "restify-errors";
 import { measure } from '../../../Diagnostics';
 
 export class SubtitlesController extends BaseController {
@@ -95,6 +95,10 @@ export class SubtitlesController extends BaseController {
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+
         const file = await this.server.storage.getRandomFile( 'synchronize-local-', 'srt', 'temp/subtitles' );
         
         await this.server.subtitles.storeLocalToFile( media, subtitle, file );
@@ -119,6 +123,10 @@ export class SubtitlesController extends BaseController {
         const subtitles = await this.server.subtitles.providers.search( media, this.getRequestLanguages( req ) );
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
 
         const file = await this.server.storage.getRandomFile( 'synchronize-remote-', 'srt', 'temp/subtitles' );
         
@@ -161,6 +169,10 @@ export class SubtitlesController extends BaseController {
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+        
         const file = await this.server.storage.getRandomFile( 'validate-local-', 'srt', 'temp/subtitles' );
         
         await this.server.subtitles.storeLocalToFile( media, subtitle, file );
@@ -175,6 +187,10 @@ export class SubtitlesController extends BaseController {
         const subtitles = await this.server.subtitles.providers.search( media, this.getRequestLanguages( req ) );
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
 
         const file = await this.server.storage.getRandomFile( 'validate-remote-', '.srt', 'temp/subtitles' );
 

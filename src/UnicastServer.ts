@@ -31,7 +31,7 @@ import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
 import { Tool } from './Tools/Tool';
 import { Journal } from './Journal';
-import { LiveLogger, Logger, ConsoleBackend, SharedLogger, FilterBackend } from 'clui-logger';
+import { ConsoleBackend, SharedLogger, FilterBackend, HttpRequestLogger } from 'clui-logger';
 import { CommandsHistory } from './Receivers/CommandsHistory';
 import { DataStore } from './DataStore';
 import { AccessControl, AccessIdentity, IpCredential, ScopeRule } from './AccessControl';
@@ -171,7 +171,7 @@ export class UnicastServer {
                 key: fs.readFileSync( keyFile ),
                 certificate: fs.readFileSync( certFile ),
                 passphrase: passphrase
-            } ) );
+            } as restify.ServerOptions ) );
 
             this.isHttpsEnabled = true;
         }
@@ -200,8 +200,8 @@ export class UnicastServer {
             }
         } );
 
-        this.httpLoggerMiddleware = new HttpRequestLogger( this, req => {
-            return req.method === 'OPTIONS' || !( req.url.startsWith( '/api' ) || req.url.startsWith( '/media/send' ) ) || req.url.startsWith( '/api/media/artwork' );
+        this.httpLoggerMiddleware = new HttpRequestLogger( this.logger.service( 'http' ), act => {
+            return act.req.method === 'OPTIONS' || !( act.req.url.startsWith( '/api' ) || act.req.url.startsWith( '/media/send' ) ) || act.req.url.startsWith( '/api/media/artwork' );
         } );
 
         this.http.use( this.httpLoggerMiddleware.before() );
@@ -349,137 +349,6 @@ export class UnicastServer {
                 process.exit();
             }
         }
-    }
-}
-export interface HttpRequestLoggerHFPArea {
-    key : string;
-    area : LiveLogger;
-    timeout : any;
-    acquired : number;
-}
-
-export interface HttpRequestLoggerHFP {
-    pattern : RegExp;
-    keyer ?: ( match : RegExpMatchArray ) => string;
-    maxTtl ?: number;
-    areas : Map<string, HttpRequestLoggerHFPArea>;
-}
-
-export interface HttpRequestLoggerFilter {
-    ( req : restify.Request ) : boolean;
-}
-
-export class HttpRequestLogger {
-    logger : Logger;
-
-    protected skip : HttpRequestLoggerFilter;
-
-    protected highFrequencyPatterns : HttpRequestLoggerHFP[] = [];
-
-    /**
-     * Controls how many seconds a high frequency pattern will be available to be rewritten.
-     * After this timeouts, the live area responsible for this pattern will be automatically
-     * closed and any new requests will create a new one
-     */
-    public highFrequencyMaxTtl : number = 60;
-
-    constructor ( server : UnicastServer, skip ?: HttpRequestLoggerFilter ) {
-        this.logger = server.logger.service( 'http' );
-        this.skip = skip;
-    }
-
-    protected findHighFrequencyPattern ( req : restify.Request ) : HttpRequestLoggerHFP {
-        return this.highFrequencyPatterns.find( pattern => pattern.pattern.test( req.url ) );
-    }
-
-    protected acquireHFPLiveArea ( hfp : HttpRequestLoggerHFP, req : restify.Request ) : LiveLogger {
-        const match = req.url.match( hfp.pattern );
-
-        const key = hfp.keyer ? hfp.keyer( match ) : ( match[ 1 ] || match[ 0 ] );
-
-        let existingArea = hfp.areas.get( key );
-
-        if ( existingArea == null ) {
-            existingArea = { key: key, area: this.logger.live(), timeout: null, acquired: 1 };
-
-            hfp.areas.set( key, existingArea );
-        } else {
-            existingArea.acquired += 1;
-        }
-
-        return existingArea.area;
-    }
-
-    protected releaseHFPLiveArea ( hfp : HttpRequestLoggerHFP, req : restify.Request ) {
-        const match = req.url.match( hfp.pattern );
-
-        const key = hfp.keyer ? hfp.keyer( match ) : ( match[ 1 ] || match[ 0 ] );
-
-        let existingArea = hfp.areas.get( key );
-
-        if ( existingArea ) {
-            existingArea.acquired -= 1;
-
-            if ( existingArea.acquired == 0 ) {
-                if ( existingArea.timeout != null ) {
-                    clearTimeout( existingArea.timeout );
-                }
-
-                existingArea.timeout = setTimeout( () => {
-                    existingArea.timeout = null;
-
-                    if ( existingArea.acquired == 0 ) {
-                        hfp.areas.delete( existingArea.key );
-
-                        existingArea.area.close();
-                    }
-                }, ( hfp.maxTtl || this.highFrequencyMaxTtl ) * 1000 );
-            }
-        }
-    }
-
-    registerHighFrequencyPattern ( pattern : RegExp, keyer : ( match : RegExpMatchArray ) => string = null, maxTtl : number = null ) {
-        this.highFrequencyPatterns.push( { pattern, keyer, maxTtl, areas: new Map() } );
-    }
-
-    before () {
-        return ( req : restify.Request, res : restify.Response, next : restify.Next ) => {
-            if ( !this.skip || !this.skip( req ) ) {
-                const hfp = this.findHighFrequencyPattern( req );
-
-                const live = hfp ? this.acquireHFPLiveArea( hfp, req ) : this.logger.live();
-    
-                live.info( `${ chalk.green( req.method.toUpperCase() ) } ${ chalk.grey( req.url ) } ${ chalk.grey( 'running...' ) }` );
-    
-                req.hfp = hfp;
-                req.live = live;
-                req.stopwatch = new Stopwatch().resume();
-            }
-
-            return next();
-        };
-    }
-
-    after () {
-        return ( req : restify.Request, res : restify.Response ) => {
-            if ( req.live ) {
-                const live : LiveLogger = req.live;
-
-                const stopwatch : Stopwatch = req.stopwatch;
-
-                const statusCode = res.statusCode >= 200 && res.statusCode <= 299
-                    ? chalk.grey( res.statusCode )
-                    : chalk.red( res.statusCode );
-
-                live.info( `${ chalk.green( req.method.toUpperCase() ) } ${ chalk.cyan( req.url ) } ${ statusCode } ${ stopwatch.readHumanized() }` )
-                
-                if ( !req.hfp ) {
-                    req.live.close();
-                } else {
-                    this.releaseHFPLiveArea( req.hfp, req );
-                }
-            }
-        };
     }
 }
 

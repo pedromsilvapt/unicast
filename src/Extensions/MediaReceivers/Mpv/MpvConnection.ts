@@ -109,11 +109,11 @@ export class MpvConnection {
     }
 
     mute () : Promise<void> {
-        return this.call( 'mute' );
+        return this.call( 'mute', true );
     }
 
     unmute () : Promise<void> {
-        return this.call( 'unmute' );
+        return this.call( 'mute', false );
     }
 
     volume ( level : number ) : Promise<void> {

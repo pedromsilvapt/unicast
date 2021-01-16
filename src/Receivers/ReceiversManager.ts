@@ -20,6 +20,15 @@ export class ReceiversManager extends EntityManager<IMediaReceiver, string> {
 export class ReceiverFactoriesManager extends EntityFactoryManager<IMediaReceiver, ReceiversManager, ReceiverFactory<IMediaReceiver>, string, string> {
     constructor ( receivers : ReceiversManager, server : UnicastServer ) {
         super( receivers, server );
+
+        this.server.onListen.subscribe( () => {
+            // Before the HTTP server starts listening, register the high 
+            // frequency url
+            this.server.httpLoggerMiddleware.registerHighFrequencyPattern(
+                /\/api\/player\/(\w+)\/status/i,
+                match => match[ 1 ]
+            );
+        } );
     }
 
     protected getEntityKey ( entity : ReceiverFactory<IMediaReceiver> ) : string {
