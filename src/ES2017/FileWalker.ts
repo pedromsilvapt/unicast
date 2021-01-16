@@ -18,10 +18,16 @@ export class FileWalker {
         return false;
     }
     
-    protected async * runSingle ( base : string, file : string, stats ?: fs.Stats ) : AsyncIterableIterator<[ string, fs.Stats ]> {
+    protected async * runSingle ( base : string, file : string, stats ?: fs.Stats, ignoreErrors : boolean = false ) : AsyncIterableIterator<[ string, fs.Stats ]> {
         if ( !stats ) {
-            stats = await fs.stat( file );
+            if ( ignoreErrors ) {
+                stats = await fs.stat( file ).catch( () => null );
+            } else {
+                stats = await fs.stat( file );
+            }
         }
+
+        if ( !stats ) return;
 
         if ( stats.isFile() ) {
             if ( !await this.isExcluded( base, file, stats ) ) {
@@ -51,7 +57,7 @@ export class FileWalker {
             file = path.resolve( file );
         }
 
-        let stream = new AsyncStream( this.runSingle( file, file, stats ) );
+        let stream = new AsyncStream( this.runSingle( file, file, stats, true ) );
 
         if ( progress ) {
             stream = stream.tap( (v, i) => progress.info( `${ i + 1 } files` ) );

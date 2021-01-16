@@ -998,12 +998,12 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         };
     }
 
-    async repairEpisodesCount ( show : string | TvShowMediaRecord ) : Promise<TvShowMediaRecord> {
+    async repairEpisodesCount ( show : string | TvShowMediaRecord, seasons : TvSeasonMediaRecord[] = null ) : Promise<Partial<TvShowMediaRecord>> {
         if ( typeof show === 'string' ) {
             show = await this.get( show );
         }
 
-        const seasons = await this.relations.seasons.load( show );
+        seasons = seasons ?? await this.relations.seasons.load( show );
 
         const seasonsCount = seasons.length;
 
@@ -1011,10 +1011,34 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
 
         const watchedEpisodesCount = itt( seasons ).map( season => season.watchedEpisodesCount ).sum();
 
-        return this.updateIfChanged( show, {
+        return {
             watched: episodesCount == watchedEpisodesCount,
             seasonsCount, episodesCount, watchedEpisodesCount
-        } );
+        };
+    }
+
+    async repairRepositoryPaths ( show : string | TvShowMediaRecord, seasons : TvSeasonMediaRecord[] = null ) : Promise<Partial<TvShowMediaRecord>> {
+        if ( typeof show === 'string' ) {
+            show = await this.get( show );
+        }
+
+        seasons = seasons ?? await this.relations.seasons.load( show );
+
+        const repositoryPaths : string[] = [];
+
+        for ( let season of seasons ) {
+            if ( season.repositoryPaths instanceof Array ) {
+                for ( let path of season.repositoryPaths ) {
+                    if ( !repositoryPaths.includes( path ) ) {
+                        repositoryPaths.push( path );
+                    }
+                }
+            }
+        }
+
+        return {
+            repositoryPaths: repositoryPaths,
+        };
     }
 
     async repair ( shows : string[] = null ) {
@@ -1031,7 +1055,12 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
             
             await this.database.tables.seasons.repair( seasons.map( season => season.id ) )
 
-            await this.repairEpisodesCount( show );
+            const changes = {
+                ...await this.repairEpisodesCount( show, seasons ),
+                ...await this.repairRepositoryPaths( show, seasons ),
+            };
+
+            await this.updateIfChanged( show, changes );
         } ) );
     }
 }
@@ -1072,41 +1101,64 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         };
     }
 
-    async repairEpisodesCount ( season : string | TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
+    async repairEpisodesCount ( season : string | TvSeasonMediaRecord, episodes : TvEpisodeMediaRecord[] | null ) : Promise<Partial<TvSeasonMediaRecord>> {
         if ( typeof season === 'string' ) {
             season = await this.get( season );
         }
 
-        // const episodes = await this.database.tables.episodes.find( query => query.filter( { tvSeasonId: id } ) );
-        const episodes = await this.relations.episodes.load( season );
+        episodes = episodes ?? await this.relations.episodes.load( season );
 
         const episodesCount : number = itt( episodes ).keyBy( episode => episode.number ).size;
 
         const watchedEpisodesCount : number = itt( episodes ).filter( episode => episode.watched ).keyBy( episode => episode.number ).size;
 
-        return this.updateIfChanged( season, {
+        return {
             episodesCount,
             watchedEpisodesCount
-        } );
+        };
     }
 
-    async repairTvShowArt ( season : string | TvSeasonMediaRecord ) : Promise<TvSeasonMediaRecord> {
+    async repairTvShowArt ( season : string | TvSeasonMediaRecord, show : TvShowMediaRecord | null = null ) : Promise<Partial<TvSeasonMediaRecord>> {
         if ( typeof season === 'string' ) {
             season = await this.get( season );
         }
 
-        const show = await this.database.tables.shows.get( season.tvShowId );
+        show = show ?? await this.database.tables.shows.get( season.tvShowId );
 
         if ( !show ) {
-            return season;
+            return {};
         }
 
-        return this.updateIfChanged( season, {
+        return {
             art: {
                 ...season.art,
                 tvshow: show.art
             }
-        } );
+        };
+    }
+
+    async repairRepositoryPaths ( season : string | TvSeasonMediaRecord, episode : TvEpisodeMediaRecord[] = null ) : Promise<Partial<TvSeasonMediaRecord>> {
+        if ( typeof season === 'string' ) {
+            season = await this.get( season );
+        }
+
+        const episodes = await this.relations.episodes.load( season );
+
+        const repositoryPaths : string[] = [];
+
+        for ( let episode of episodes ) {
+            if ( episode.repositoryPaths instanceof Array ) {
+                for ( let path of episode.repositoryPaths ) {
+                    if ( !repositoryPaths.includes( path ) ) {
+                        repositoryPaths.push( path );
+                    }
+                }
+            }
+        }
+
+        return {
+            repositoryPaths: repositoryPaths,
+        };
     }
 
     async repair ( seasons : string[] = null ) {
@@ -1123,9 +1175,13 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
 
             await this.database.tables.episodes.repair( episodes.map( episode => episode.id ) )
 
-            await this.repairEpisodesCount( season );
-
-            await this.repairTvShowArt( season );
+            const changes = {
+                ...await this.repairEpisodesCount( season, episodes ),
+                ...await this.repairTvShowArt( season ),
+                ...await this.repairRepositoryPaths( season, episodes ),
+            };
+            
+            await this.updateIfChanged( season, changes );
         } ) );
     }
 }
@@ -1259,7 +1315,7 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
     ];
     
     relations: {
-        record: BelongsToOnePolyRelation<HistoryRecord, MediaRecord>;
+        record: BelongsToOnePolyRelation<HistoryRecord, MediaRecord, { record: MediaRecord }>;
     }
 
     installRelations ( tables : DatabaseTables ) {
@@ -1397,7 +1453,6 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
                         .and( query( 'id' ).eq( record.id ).not() )
                 );
             }
-
         } ) );
     }
 }
@@ -1664,3 +1719,4 @@ export function createMediaRecordPolyMap ( tables : DatabaseTables ) : PolyRelat
         'custom': tables.custom
     };
 }
+

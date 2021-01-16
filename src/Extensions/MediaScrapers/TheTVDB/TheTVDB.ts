@@ -215,8 +215,6 @@ export class TheTVDB implements IScraper {
 
             const boxSet = getQueryBoxSet( query );
 
-            console.log( summary );
-
             for ( let season of summary[ boxSet + 'Seasons' ] ) {
                 const poster = ( await this.tvdb.getSeasonPosters( id, season ).catch( () => [] ) )[ 0 ];
 
@@ -385,7 +383,7 @@ export class TheTVDB implements IScraper {
 
     getTvShowCast ( id : string, query : IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return this.runCachedTask<RoleRecord[]>( 'getTvShowCast', id, query, async () => {
-            const actors : any[] = await this.tvdb.getActors( id );
+            const actors : any[] = await this.tvdb.getActors( id ).catch( () => [] );
 
             return actors.map( actor => this.factory.createActorRoleRecord( actor ) );
         }, cache );

@@ -1,6 +1,6 @@
 import { Database, MediaTable } from './Database/Database';
 import { RepositoriesManager } from './MediaRepositories/RepositoriesManager';
-import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord } from './MediaRecord';
+import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord, isTvSeasonRecord } from './MediaRecord';
 import { BackgroundTask } from './BackgroundTask';
 import { MediaManager } from './UnicastServer';
 import { Future } from '@pedromsilva/data-future';
@@ -223,7 +223,7 @@ export class MediaSync {
 
         // We get the scraper media record associated with our local `media` record (using the external object)
         // We do this so we can then get the record's internal scraper id to get the cast
-        const scraperMedia = await this.scrapers.getMediaExternal( media.scraper, media.kind, media.external, cache );
+        const scraperMedia = await this.scrapers.getMediaExternal( media.scraper, media.kind, media.external, {}, cache );
 
         if ( !scraperMedia ) {
             task.reportError( media.kind, `No external media found for ${ JSON.stringify( media.external ) }. Could not get cast.`, media );
@@ -232,7 +232,7 @@ export class MediaSync {
         }
 
         // A list of RoleRecord from the scraper
-        const newRoles : RoleRecord[] = await this.scrapers.getMediaCast( media.scraper, media.kind, scraperMedia.id, cache );
+        const newRoles : RoleRecord[] = await this.scrapers.getMediaCast( media.scraper, media.kind, scraperMedia.id, {}, cache );
 
         // A map associating the internal id (meaning, the id from the scraper)
         // and the existing person record in the local database
@@ -444,28 +444,49 @@ export class MediaSync {
                     const deleting : Promise<void>[] = [];
                     const moving : Promise<void>[] = [];
     
+                    // Mark any media mean to be ignored as touched
+                    if ( repository.ignoreUnreachableMedia ) {
+                        for ( let [ record, touched ] of snapshot.recordsIter() ) {
+                            if ( touched ) continue;
+    
+                            if ( !await repository.isMediaReachable( record ) ) {
+                                // Mark this media as touched
+                                snapshot.touched.get( record.kind ).add( record.id );
+                            }
+                        }
+
+                        // If an episode or season were touched, make sure their parent entities
+                        // (season and show, respectively) are also marked as touched so they are
+                        // not removed
+                        for ( let [ record, touched ] of snapshot.recordsIter( [ MediaKind.TvEpisode, MediaKind.TvSeason ] ) ) {
+                            if ( !touched ) continue;
+    
+                            if ( isTvEpisodeRecord( record ) ) {
+                                snapshot.touched.get( MediaKind.TvSeason ).add( record.tvSeasonId );
+                            }
+    
+                            if ( isTvSeasonRecord( record ) ) {
+                                snapshot.touched.get( MediaKind.TvShow ).add( record.tvShowId );
+                            }
+                        }
+                    }
+
                     // We must iterate over the records loaded into memory before the sync started
                     // because we're not awaiting for all records to be stored inside, since
                     // we need to check if they are to be removed first (to allow updateMoved)
-                    for ( let kind of snapshot.records.keys() ) {
-                        for ( let record of snapshot.records.get( kind ).values() ) {
-                            if ( !snapshot.touched.get( record.kind ).has( record.id ) ) {
-                                if ( repository.ignoreUnreachableMedia && !await repository.isMediaReachable( record ) ) {
-                                    continue;
-                                }
+                    for ( let [ record, touched ] of snapshot.recordsIter() ) {
+                        if ( touched ) continue;
 
-                                task.addTotal( 1 );
+                        task.addTotal( 1 );
 
-                                const duplicate = snapshot.popDuplicated( record );
+                        const duplicate = snapshot.popDuplicated( record );
 
-                                if ( options.updateMoved && duplicate != null ) {
-                                    snapshot.association.get( record.kind ).get( duplicate.internalId ).resolve( record.id );
+                        if ( options.updateMoved && duplicate != null ) {
+                            snapshot.association.get( record.kind ).get( duplicate.internalId ).resolve( record.id );
 
-                                    moving.push( task.do( this.moveRecord( task, record, duplicate, snapshot.options.dryRun ), 1 ) );
-                                } else if ( options.cleanMissing ) {
-                                    deleting.push( task.do( this.deleteRecord( task, record, options.dryRun ), 1 ) );
-                                }
-                            }
+                            moving.push( task.do( this.moveRecord( task, record, duplicate, snapshot.options.dryRun ), 1 ) );
+                        } else if ( options.cleanMissing ) {
+                            deleting.push( task.do( this.deleteRecord( task, record, options.dryRun ), 1 ) );
                         }
                     }
 
@@ -658,6 +679,20 @@ export class MediaSyncSnapshot {
         }
 
         return null;
+    }
+
+    public * recordsIter ( kinds : MediaKind[] = null ) : IterableIterator<[MediaRecord, boolean]> {
+        if ( kinds === null ) {
+            kinds = Array.from( this.records.keys() );
+        }
+
+        for ( let kind of kinds ) {
+            if ( !this.records.has( kind ) ) continue;
+
+            for ( let record of this.records.get( kind ).values() ) {
+                yield [ record, this.touched.get( kind ).has( record.id ) ];
+            }
+        }
     }
 
     public static async from ( media : MediaManager, options : Partial<MediaSyncOptions>, repository : string ) : Promise<MediaSyncSnapshot> {
