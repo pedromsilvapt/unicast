@@ -50,6 +50,7 @@
     "case": "^1.5.5",
     "castv2-client": "^1.2.0",
     "chalk": "^2.1.0",
+    "chevrotain": "^7.0.3",
     "clui-live": "^0.3.4",
     "clui-logger": "^0.2.1",
     "clui-progressbar": "^0.1.1",
