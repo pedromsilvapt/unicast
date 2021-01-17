@@ -1,3 +1,4 @@
+import { CompiledQuery, QueryAst, QueryLang, QuerySemantics } from '../QueryLang';
 import { BaseController, Route } from "./BaseController";
 import { BaseTable } from "../Database/Database";
 import { Response, Request } from "restify";
@@ -41,19 +42,21 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
     }
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        if ( req.query.filterSort ) {
-            let sort = typeof req.query.filterSort === 'string' ?
-                { field: req.query.filterSort, direction: 'asc' } :
-                { direction: 'asc', ...req.query.filterSort };
+        const reqQuery: RequestQuery<R> = req.query;
 
-            if ( !this.sortingFields.includes( req.query.filterSort.field ) ) {
-                throw new InvalidArgumentError( `Invalid sort field "${ req.query.filterSort.field }" requested.` );
+        if ( reqQuery.filterSort ) {
+            let sort = typeof reqQuery.filterSort === 'string' ?
+                { field: reqQuery.filterSort, direction: 'asc' } :
+                { direction: 'asc', ...reqQuery.filterSort };
+
+            if ( !this.sortingFields.includes( sort.field ) ) {
+                throw new InvalidArgumentError( `Invalid sort field "${ sort.field }" requested.` );
             }
 
-            if ( req.query.filterSort.direction == 'desc' ) {
-                query = query.orderBy( { index: r.desc( req.query.filterSort.field ) } );
+            if ( sort.direction == 'desc' ) {
+                query = query.orderBy( { index: r.desc( sort.field ) } );
             } else {
-                query = query.orderBy( { index: r.asc( req.query.filterSort.field ) } );
+                query = query.orderBy( { index: r.asc( sort.field ) } );
             }
         } else if ( this.defaultSortField ) {
             if ( this.defaultSortFieldDirection === 'desc' ) {
@@ -63,8 +66,8 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             }
         }
 
-        if ( req.query.search ) {
-            query = this.getSearchQuery( req.query.search, query );
+        if ( reqQuery.search?.body ) {
+            query = this.getSearchQuery( reqQuery.search.body, query );
         }
 
         return query;
@@ -75,14 +78,38 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             query = query.skip( +req.query.skip );
         }
 
-        if ( req.query.take ) {
+        if ( req.query.take && req.query.take !== Infinity ) {
             query = query.limit( +req.query.take );
         }
 
         return query;
     }
 
-    async transformQuery ( req : Request ) : Promise<void> {};
+    async transformQuery ( req : Request ) : Promise<void> {
+        // The query object before transformation
+        const rawQuery: RawRequestQuery = req.query;
+
+        // The query object after transformation
+        const query: RequestQuery<R> = req.query;
+
+        if ( rawQuery.search ) {
+            const parsedQuery = QueryLang.embeddedParse( rawQuery.search );
+
+            query.search = {
+                body: parsedQuery.body
+            };
+            
+            if ( parsedQuery.embeddedQuery != null ) {
+                query.search.embeddedQueryAst = QueryLang.parse( parsedQuery.embeddedQuery );
+                query.search.embeddedQuerySemantics = this.createCustomQuerySemantics( req, query.search.embeddedQueryAst ) || new QuerySemantics();
+                query.search.embeddedQuery = QueryLang.compile( query.search.embeddedQueryAst, query.search.embeddedQuerySemantics );
+            }
+        }
+    };
+
+    public createCustomQuerySemantics ( req: Request, ast: QueryAst ) : QuerySemantics | null {
+        return null;
+    }
 
     async transformAll ( req : Request, res : Response, items : R[] ) : Promise<any[]> {
         return items;
@@ -108,6 +135,18 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         return Promise.all( item.map( each => this.transform( req, res, each ) ) );
     }
 
+    public async runCustomQuery ( req : Request, items : R[] ) : Promise<R[]> {
+        const query: RequestQuery<R> = req.query;
+
+        const embeddedQuery = query?.search?.embeddedQuery;
+
+        if ( embeddedQuery ) {
+            return items.filter( record => embeddedQuery( record ) != false );
+        }
+
+        return items;
+    }
+
     public createQuery ( req : Request, res : Response, query : ( query : r.Sequence ) => r.Sequence ) : Promise<R[]> {
         return this.table.find( query );
     }
@@ -117,12 +156,41 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         if ( !this.allowedActions.includes( 'list' ) ) {
             throw new NotAuthorizedError();
         }
-
+        
         await this.transformQuery( req );
 
-        const list = await this.createQuery( req, res, query => this.getPagination( req, res, this.getQuery( req, res, query ) ) );
+        let skip = +( req.query.skip || 0 );
+        let take = +( req.query.take || Infinity );
+        
+        const result: R[] = [];
 
-        return this.runTransforms( req, res, list );
+        let nextBatchSkip = skip;
+        
+        while ( true ) {
+            req.query = { ...req.query, skip: nextBatchSkip, take: take };
+
+            // Query the database
+            let partialList = await this.createQuery( req, res, query => this.getPagination( req, res, this.getQuery( req, res, query ) ) );
+
+            // Mark each record with their real index
+            for ( let [ index, record ] of partialList.entries() ) record[ '$index' ] = nextBatchSkip + index;
+
+            nextBatchSkip += partialList.length;
+
+            const hasNoMore = partialList.length < take;
+
+            partialList = await this.runCustomQuery( req, partialList );
+    
+            if ( partialList.length + result.length > take ) {
+                partialList = partialList.slice( 0, take - result.length );
+            }
+
+            result.push( ...partialList );
+
+            if ( hasNoMore || result.length >= take ) break;
+        }
+
+        return this.runTransforms( req, res, result );
     }
 
     @Route( 'get', '/:id', null, true )
@@ -189,3 +257,24 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         return { success };
     }
 }
+
+interface RawRequestQuery {
+    skip?: string;
+    take?: string;
+    search?: string;
+};
+
+export interface RequestQuery<R> {
+    skip?: number;
+    take?: number;
+    search?: {
+        body: string;
+        embeddedQuery?: CompiledQuery<R>;
+        embeddedQueryAst?: QueryAst;
+        embeddedQuerySemantics?: QuerySemantics<R>;
+    };
+    filterSort?: string | {
+        direction?: 'asc' | 'desc';
+        field?: string;
+    }
+};

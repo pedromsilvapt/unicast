@@ -14,6 +14,8 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
     }
 
     async transformQuery ( req : Request ) : Promise<void> {
+        await super.transformQuery( req );
+        
         if ( req.query.show ) {
 
             if ( req.query.seasonNumber ) {

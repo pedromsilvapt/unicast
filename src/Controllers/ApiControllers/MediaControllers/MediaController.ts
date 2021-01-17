@@ -1,4 +1,4 @@
-import { BaseTableController } from "../../BaseTableController";
+import { BaseTableController, RequestQuery } from "../../BaseTableController";
 import { Request, Response } from "restify";
 import * as r from 'rethinkdb';
 import { MediaRecord, ArtRecord, isPlayableRecord, PersonRecord } from "../../../MediaRecord";
@@ -6,8 +6,41 @@ import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
 import { MediaTable } from "../../../Database/Database";
 import { ResourceNotFoundError, InvalidArgumentError } from 'restify-errors';
+import { MediaRecordQuerySemantics, QueryAst, QueryLang, QuerySemantics } from '../../../QueryLang';
 
 export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
+    createCustomQuerySemantics ( req: Request, ast : QueryAst ) : QuerySemantics<R> {
+        const semantics = new MediaRecordQuerySemantics();
+
+        semantics.features.collection = QueryLang.hasIdentifier( ast, 'collection' );
+
+        semantics.features.cast = QueryLang.hasIdentifier( ast, 'cast' );
+
+        semantics.features.repository = QueryLang.hasIdentifier( ast, 'repository' );
+
+        semantics.features.genre = QueryLang.hasIdentifier( ast, 'genre' );
+
+        return semantics;
+    }
+
+    async runCustomQuery ( req: Request, records: R[] ) : Promise<R[]> {
+        const query: RequestQuery<R> = req.query;
+
+        const semantics = query?.search?.embeddedQuerySemantics as MediaRecordQuerySemantics<R>;
+
+        if ( semantics != null ) {
+            if ( semantics.features.collection ) {
+                await this.table.relations.collections.applyAll( records );
+            }
+    
+            if ( semantics.features.cast ) {
+                await this.table.relations.cast.applyAll( records );
+            }
+        }
+
+        return super.runCustomQuery( req, records );
+    }
+
     getTransientQuery ( req : Request, query : r.Sequence ) : r.Sequence {
         if ( req.query.transient == 'include' ) {
             return ( query.filter as any )( doc => doc( 'transient' ).eq( true ), { default: true } );

@@ -305,7 +305,6 @@ export class UnicastServer {
     async run ( args ?: string[] ) : Promise<void> {
         const toolsToRun = this.tools.parse( args );
 
-        
         if ( toolsToRun.length > 0 ) {
             this.loggerBackend.addPredicate( '>=error', true );
             this.loggerBackend.addPredicate( '[Tools/]', true );

@@ -38,6 +38,8 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
     }
 
     async transformQuery ( req : Request ) {
+        await super.transformQuery( req );
+        
         if ( req.query.filterMedia ) {
             const media : [ MediaKind, string ][] = req.query.filterMedia.map( id => id.split( ',' ) );
 
