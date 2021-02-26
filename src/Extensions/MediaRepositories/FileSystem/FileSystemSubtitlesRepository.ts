@@ -106,7 +106,7 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         return Promise.resolve( fs.createReadStream( file ) );
     }
 
-    async store ( media : MediaRecord, subtitle : ISubtitle, data : NodeJS.ReadableStream | Buffer) : Promise<ILocalFileSystemSubtitle> {
+    async store ( media : MediaRecord, subtitle : ISubtitle, data : NodeJS.ReadableStream | Buffer ) : Promise<ILocalFileSystemSubtitle> {
         const extension = '.' + ( subtitle.format || 'srt' ).toLowerCase();
 
         const video = this.getMediaFile( media );
@@ -154,6 +154,33 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         return subtitle;
     }
 
+    async rename ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle, name : string ) : Promise<ILocalFileSystemSubtitle> {
+        const video = this.getMediaFile( media );
+
+        const prefix = path.basename( video, path.extname( video ) );
+
+        if ( !name.startsWith( prefix ) ) {
+            throw new Error( `Invalid subtitle name, must contain the video file name at the start.` );
+        }
+
+        const extension = ( subtitle.format || '.srt' ).toLowerCase();
+
+        const oldFilePath = path.join( path.dirname( video ), subtitle.file );
+        
+        const newFilePath = path.join( path.dirname( video ), name + extension );
+
+        if ( await fs.exists( newFilePath ) ) {
+            throw new Error( `Already exists a subtitle named "${ newFilePath }"` );
+        }
+        
+        await fs.rename( oldFilePath, newFilePath );
+
+        return {
+            ...subtitle,
+            releaseName: name + extension,
+        };
+    }
+
     async delete ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle ) : Promise<void> {
         const folder = path.dirname( this.getMediaFile( media ) );
 
@@ -163,5 +190,4 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
             await fs.unlink( file );
         }
     }
-    
 }

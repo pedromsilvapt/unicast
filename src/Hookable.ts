@@ -5,6 +5,12 @@ export class Hookable {
 
     allowImplicitCreation : boolean = true;
 
+    errorHookName: string;
+
+    public constructor ( errorHookName?: string ) {
+        this.errorHookName = errorHookName;
+    }
+
     has ( name : string ) {
         return this.hooks.has( name );
     }
@@ -15,6 +21,10 @@ export class Hookable {
         }
 
         const hook = new Hook( name );
+
+        if ( this.errorHookName != null && name != this.errorHookName ) {
+            hook.onError = this.get( this.errorHookName );
+        }
 
         this.hooks.set( name, hook );
 
@@ -62,6 +72,8 @@ export class Hook<T = any> {
     protected notificationSemaphore : Semaphore = new Semaphore( 1 );
 
     allowConcurrentNotifications : boolean = false;
+    
+    onError: Hook<any>;
 
     constructor ( name : string ) {
         this.name = name;
@@ -106,7 +118,11 @@ export class Hook<T = any> {
             try {
                 await subscription( arg );
             } catch ( error ) {
-                console.error( error );
+                if ( this.onError != null ) {
+                    this.onError.notify( error );
+                } else {
+                    console.error( error );
+                }
             }
         }
 

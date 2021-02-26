@@ -1,13 +1,17 @@
-import { Record, PropertyAccessor, createPropertyAccessor } from "./Relation";
+import { TableRecord, PropertyAccessor, createPropertyAccessor } from "./Relation";
 import { PolyRelationMap, PolyRelation } from "./PolyRelation";
 import * as itt from 'itt';
+import { Relatable } from '../RelationGraph';
 
-export class BelongsToOnePolyRelation<M extends Record, R extends Record, E = {}> extends PolyRelation<M, R, R, E> {
+export class BelongsToOnePolyRelation<M extends TableRecord, R extends TableRecord, E = {}> extends PolyRelation<M, R, R, E> {
     typesMap : PolyRelationMap<R>;
 
     foreignType : PropertyAccessor<M, string>;
 
     foreignKey : PropertyAccessor<M, string>;
+
+    // TODO Support deep relations inside poly relationships
+    relatedTable: Relatable<any> = null;
 
     constructor ( member : string, typesMap : PolyRelationMap<R>, foreignType : string | PropertyAccessor<M, string>, foreignKey : string | PropertyAccessor<M, string> ) {
         super( member, typesMap );

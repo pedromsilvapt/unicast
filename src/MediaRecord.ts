@@ -107,15 +107,15 @@ export interface MediaRecord extends EntityRecord {
     kind : MediaKind;
     title : string;
     transient ?: boolean;
+    playCount : number;
+    lastPlayedAt : Date | null;
 }
 
 export interface PlayableMediaRecord extends MediaRecord {
     runtime : number;
     sources : MediaSourceDetails[];
     quality : PlayableQualityRecord;
-    playCount : number;
     watched : boolean;
-    lastPlayedAt : Date;
     addedAt : Date;
 }
 
@@ -139,7 +139,6 @@ export interface TvShowMediaRecord extends MediaRecord {
     rating : number;
     seasonsCount : number;
     year : number;
-    lastPlayedAt : Date;
     watchedEpisodesCount : number;
     watched : boolean;
     addedAt : Date;
@@ -150,7 +149,6 @@ export interface TvSeasonMediaRecord extends MediaRecord {
     art : TvSeasonMediaRecordArt;
     number : number;
     tvShowId : string;
-    lastPlayedAt : Date;
     episodesCount : number;
     watchedEpisodesCount : number;
 }

@@ -1,7 +1,9 @@
+import { NotImplementedError } from 'restify-errors';
 import * as r from 'rethinkdb';
-import { BaseTable } from '../Database';
+import type { BaseTable } from '../Database';
+import type { Relatable } from '../RelationGraph';
 
-export interface Record { id ?: string; }
+export interface TableRecord { id ?: string; }
 
 export interface PropertyAccessor<O = any, V = any> {
     ( obj : O ) : V
@@ -27,13 +29,19 @@ export function createPropertyAccessor<O = any, V = any> ( property : string | P
     }
 }
 
-export abstract class Relation<M extends Record, R, E = {}> {
+export abstract class Relation<M extends TableRecord, R, E = {}> {
     member : string;
 
-    queryClauses ?: ( query : r.Sequence ) => r.Sequence
+    queryClauses ?: ( query : r.Sequence ) => r.Sequence;
+
+    abstract relatedTable: Relatable<any>;
 
     constructor ( member : string ) {
         this.member = member;
+    }
+    
+    with ( ...subRelations: Relation<any, any>[] ) : Relation<M, R, E> {
+        throw new NotImplementedError();
     }
 
     where ( query : ( query : r.Sequence ) => r.Sequence ) : this {
@@ -106,5 +114,9 @@ export abstract class Relation<M extends Record, R, E = {}> {
         }
 
         return items as (ME & E)[];
+    }
+
+    typed<ME extends M = M> ( items : ME[] ) : asserts items is (ME & E)[] {
+        // nop
     }
 }

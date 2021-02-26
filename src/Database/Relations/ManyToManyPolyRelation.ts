@@ -1,14 +1,15 @@
-import { Record } from "./Relation";
+import { Relation, TableRecord } from "./Relation";
 import { PolyRelationMap, PolyRelation } from "./PolyRelation";
-import * as itt from 'itt';
 import { BaseTable } from "../Database";
+import { Relatable } from '../RelationGraph';
+import * as itt from 'itt';
 import * as r from 'rethinkdb';
 
-export interface ManyToManyPolyCache<R extends Record> {
+export interface ManyToManyPolyCache<R extends TableRecord> {
     links : Map<string, any[]>;
     related : Map<string, Map<string, R>>;
 }
-export class ManyToManyPolyRelation<M extends Record, R extends Record> extends PolyRelation<M, R, R[]> {
+export class ManyToManyPolyRelation<M extends TableRecord, R extends TableRecord> extends PolyRelation<M, R, R[]> {
     foreignType : string;
 
     foreignKey : string;
@@ -18,6 +19,9 @@ export class ManyToManyPolyRelation<M extends Record, R extends Record> extends 
     middleKey : string;
     
     public pivotField : string = null;
+
+    // TODO Support deep relations inside poly relationships
+    relatedTable: Relatable<any> = null;
 
     constructor ( member : string, typesMap : PolyRelationMap<R>, middleTable : string | BaseTable<any>, middleKey : string, foreignType : string, foreignKey : string ) {
         super( member, typesMap );

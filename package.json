@@ -21,6 +21,7 @@
   "author": "Pedro M. Silva <pemiolsi@hotmail.com>",
   "license": "ISC",
   "devDependencies": {
+    "@types/chalk": "^2.2.0",
     "@types/config": "0.0.32",
     "@types/deep-equal": "^1.0.0",
     "@types/jimp": "^0.2.1",

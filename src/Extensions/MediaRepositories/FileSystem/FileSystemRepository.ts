@@ -180,6 +180,12 @@ export class FileSystemRepository extends MediaRepository {
         return null;
     }
 
+    public getRealFilePath ( record: PlayableMediaRecord ) : Promise<string> {
+        const ids = record?.sources?.map( source => source.id )?.filter( id => id != null ) ?? [];
+
+        return Promise.resolve( ids[ 0 ] ?? null );
+    }
+
     onEntityInit () {
         this.subtitles = new FileSystemSubtitlesRepository( this.server );
 

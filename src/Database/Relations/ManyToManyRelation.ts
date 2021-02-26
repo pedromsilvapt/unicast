@@ -1,4 +1,4 @@
-import { Record, Relation } from "./Relation";
+import { TableRecord, Relation } from "./Relation";
 import { BaseTable } from "../Database";
 import * as itt from "itt";
 import * as r from 'rethinkdb';
@@ -18,13 +18,13 @@ export function mapMapArray<K, V, U> ( map : Map<K, V[]>, mapper : ( value : V, 
     return mapMap( map, ( array, key ) => array.map( value => mapper( value, key ) ) );
 }
 
-export interface ManyToManyCache<R extends Record> {
+export interface ManyToManyCache<R extends TableRecord> {
     links : Map<string, string[]>;
     related : Map<string, R>;
     pivots : Map<string, Map<string, any>>;
 }
 
-export class ManyToManyRelation<M extends Record, R extends Record> extends Relation<M, R[]> {
+export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> extends Relation<M, R[]> {
     public middleTable : BaseTable<any> | string;
 
     public relatedTable : BaseTable<R>;
@@ -45,6 +45,8 @@ export class ManyToManyRelation<M extends Record, R extends Record> extends Rela
 
     public pivotIndexOut : string = null;
 
+    public subRelations : Relation<R, any>[] = [];
+
     constructor ( member : string, middleTable : string | BaseTable<any>, relatedTable : BaseTable<R>, recordForeign : string, relatedForeign : string ) {
         super( member );
 
@@ -52,6 +54,21 @@ export class ManyToManyRelation<M extends Record, R extends Record> extends Rela
         this.relatedTable = relatedTable;
         this.recordForeign = recordForeign;
         this.relatedForeign = relatedForeign;
+    }
+
+    public with ( ...subRelations : Relation<R, any>[] ) : ManyToManyRelation<M, R> {
+        const relation = new ManyToManyRelation( 
+            this.member, 
+            this.middleTable, 
+            this.relatedTable, 
+            this.recordForeign, 
+            this.relatedForeign 
+        );
+
+        relation.subRelations = [ ...this.subRelations ];
+        relation.subRelations.push( ...subRelations );
+
+        return relation;
     }
 
     poly ( field : string, value : string ) : this {
@@ -74,6 +91,12 @@ export class ManyToManyRelation<M extends Record, R extends Record> extends Rela
         return this;
     }
 
+    async loadSubRelations ( records : R[] ) {
+        for ( let relation of this.subRelations ) {
+            await relation.applyAll( records );
+        }
+    }
+    
     async loadRelatedLinks ( items : M[] ) : Promise<any[]> {
         const keys = items.map( item => item.id );
 
@@ -130,6 +153,8 @@ export class ManyToManyRelation<M extends Record, R extends Record> extends Rela
             ? await this.relatedTable.findAll( middleKeys, { index: this.pivotIndexOut } )
             : await this.relatedTable.findAll( middleKeys );
         
+        await this.loadSubRelations( related );
+
         return this.buildRelatedCache( middleTableItems, related );
     }
 

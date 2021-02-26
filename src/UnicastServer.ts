@@ -1,6 +1,6 @@
 import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
-import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord } from "./MediaRecord";
+import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord, isTvEpisodeRecord, isTvSeasonRecord, isMovieRecord, isTvShowRecord, isCustomRecord } from "./MediaRecord";
 import { Database, BaseTable, CollectionRecord, MediaTable } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
@@ -9,9 +9,8 @@ import { routes } from 'unicast-interface';
 import * as internalIp from 'internal-ip';
 import * as corsMiddleware from 'restify-cors-middleware';
 import { ApiController } from "./Controllers/ApiControllers/ApiController";
-import * as chalk from 'chalk';
 import * as sortBy from 'sort-by';
-import { BackgroundTasksManager, Stopwatch } from "./BackgroundTask";
+import { BackgroundTasksManager } from "./BackgroundTask";
 import { Storage } from "./Storage";
 import { TranscodingManager } from "./Transcoding/TranscodingManager";
 import * as fs from 'mz/fs';
@@ -36,15 +35,18 @@ import { CommandsHistory } from './Receivers/CommandsHistory';
 import { DataStore } from './DataStore';
 import { AccessControl } from './AccessControl';
 import { TIMESTAMP_SHORT } from 'clui-logger/lib/Backends/ConsoleBackend';
+import { Relation } from './Database/Relations/Relation';
+import { max } from './ES2017/Date';
+import * as crypto from 'crypto';
 
 export class UnicastServer {
-    readonly hooks : Hookable = new Hookable();
+    readonly hooks : Hookable = new Hookable( 'error' );
 
+    readonly onError : Hook<Error> = this.hooks.create( 'error' );
+    
     readonly onStart : Hook<void> = this.hooks.create( 'start' );
 
     readonly onListen : Hook<void> = this.hooks.create( 'listen' );
-    
-    readonly onError : Hook<Error> = this.hooks.create( 'error' );
 
     readonly onClose : Hook<void> = this.hooks.create( 'close' );
 
@@ -702,32 +704,47 @@ export class MediaManager {
 export class MediaWatchTracker {
     mediaManager : MediaManager;
 
+    public excludedReceivers : Set<string> = new Set();
+
     protected semaphore : Semaphore = new Semaphore( 1 );
 
     constructor ( mediaManager : MediaManager ) {
         this.mediaManager = mediaManager;
-    }
 
-    protected async watchTvEpisodesBatch ( customQuery : any, watched : boolean, watchedAt : Date ) : Promise<TvEpisodeMediaRecord[]> {
+        this.excludedReceivers = new Set( this.mediaManager.server.config.get( 'server.excludeFromPlayCount', [] ) );
+
+        const historyTable = this.mediaManager.database.tables.history;
+
+        historyTable.onCreate.subscribe( async session => {
+            const record = await historyTable.relations.record.load( session );
+
+            // Allow media played in some receivers to not be included
+            if ( !this.excludedReceivers.has( session.receiver ) ) {
+                await this.onPlay( record, session.createdAt );
+            }
+        } );
+        
+        historyTable.onDelete.subscribe( async session => {
+            const record = await historyTable.relations.record.load( session );
+            
+            // Allow media played in some receivers to not be included
+            if ( !this.excludedReceivers.has( session.receiver ) ) {
+                await this.onPlayRepair( record );
+            }
+        } );
+    }
+    
+    protected async watchTvEpisodesBatch ( customQuery : any, watched : boolean ) : Promise<TvEpisodeMediaRecord[]> {
         const episodes = await this.mediaManager.database.tables.episodes.find( query => 
             query.filter( doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ) )    
         );
 
-        if ( watched ) {
-            // When watched, only increment the play count of episodes whose play count equals zero
-            await this.mediaManager.database.tables.episodes.updateMany(
-                doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( false ) ) )
-            , row => r.branch(
-                row( 'playCount' ).eq( 0 ),
-                { watched: true, lastPlayedAt: watchedAt, playCount: row( 'playCount' ).add( 1 ) } as any,
-                { watched: true } as any
-            ) );
-        } else {
-            await this.mediaManager.database.tables.episodes.updateMany(
-                doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( true ) ) )
-            , { watched: false } );
-        }
-
+        // When watched, only increment the play count of episodes whose play count equals zero
+        await this.mediaManager.database.tables.episodes.updateMany(
+            doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ),
+            { watched }
+        );
+        
         for ( let episode of episodes ) {
             // MARK UNAWAITED
             this.mediaManager.server.repositories.watch( episode, watched );
@@ -736,7 +753,7 @@ export class MediaWatchTracker {
         return episodes;
     }
 
-    async watchTvShow ( show : TvShowMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+    async watchTvShow ( show : TvShowMediaRecord, watched : boolean = true ) {
         const release = await this.semaphore.acquire();
 
         try {
@@ -749,8 +766,8 @@ export class MediaWatchTracker {
             const seasonIds = seasons.map( season => season.id );
     
             // And get all episodes that belong to those seasons and are or are not watched, depending on what change we are making
-            const episodes = await this.watchTvEpisodesBatch( doc => r.expr( seasonIds ).contains( doc( 'tvSeasonId' ) ), watched, watchedAt );
-                        
+            const episodes = await this.watchTvEpisodesBatch( doc => r.expr( seasonIds ).contains( doc( 'tvSeasonId' ) ), watched );
+
             for ( let season of seasons ) {
                 await this.mediaManager.database.tables.seasons.update( season.id, {
                     watchedEpisodesCount: watched ? season.episodesCount : 0
@@ -768,11 +785,11 @@ export class MediaWatchTracker {
         }
     }
 
-    async watchTvSeason ( season : TvSeasonMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+    async watchTvSeason ( season : TvSeasonMediaRecord, watched : boolean = true ) {
         const release = await this.semaphore.acquire();
 
         try {
-            const episodes = await this.watchTvEpisodesBatch( doc => doc( 'tvSeasonId' ).eq( r.expr( season.id ) ), watched, watchedAt );
+            const episodes = await this.watchTvEpisodesBatch( doc => doc( 'tvSeasonId' ).eq( r.expr( season.id ) ), watched );
     
             const difference = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
     
@@ -793,7 +810,7 @@ export class MediaWatchTracker {
         }
     }
 
-    async watchTvEpisode ( episode : TvEpisodeMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+    async watchTvEpisode ( episode : TvEpisodeMediaRecord, watched : boolean = true ) {
         const release = await this.semaphore.acquire();
 
         try {
@@ -803,10 +820,7 @@ export class MediaWatchTracker {
                 return;
             }
 
-            await this.mediaManager.database.tables.episodes.update( episode.id, watched 
-                ? { watched: true, lastPlayedAt: watchedAt, playCount: r.row( 'playCount' ).add( 1 ) }
-                : { watched: false } 
-            );
+            await this.mediaManager.database.tables.episodes.update( episode.id, { watched } );
 
             // MARK UNAWAITED            
             this.mediaManager.server.repositories.watch( episode, watched );
@@ -836,7 +850,7 @@ export class MediaWatchTracker {
         }
     }
 
-    async watchMovie ( movie : MovieMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+    async watchMovie ( movie : MovieMediaRecord, watched : boolean = true ) {
         const release = await this.semaphore.acquire();
 
         try {
@@ -846,13 +860,10 @@ export class MediaWatchTracker {
                 return;
             }
 
-            await this.mediaManager.database.tables.movies.update( movie.id, watched 
-                ? { watched: true, lastPlayedAt: watchedAt, playCount: r.row( 'playCount' ).add( 1 ) }
-                : { watched: false } 
-            );
+            await this.mediaManager.database.tables.movies.update( movie.id, { watched } );
 
             // MARK UNAWAITED
-            this.mediaManager.server.repositories.watch( movie, watched );
+            await this.mediaManager.server.repositories.watch( movie, watched );
         } catch ( err ) {
             throw err;
         } finally {
@@ -860,7 +871,7 @@ export class MediaWatchTracker {
         }
     }
 
-    async watchCustom ( custom : CustomMediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
+    async watchCustom ( custom : CustomMediaRecord, watched : boolean = true ) {
         const release = await this.semaphore.acquire();
 
         try {
@@ -870,9 +881,183 @@ export class MediaWatchTracker {
                 return;
             }
 
-            await this.mediaManager.database.tables.custom.update( custom.id, watched 
-                ? { watched: true, lastPlayedAt: watchedAt, playCount: r.row( 'playCount' ).add( 1 ) }
-                : { watched: false } 
+            await this.mediaManager.database.tables.custom.update( custom.id, { watched } );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async watch ( media : MediaRecord, watched : boolean = true ) {
+        if ( isMovieRecord( media ) ) {
+            return this.watchMovie( media, watched );
+        } else if ( isTvShowRecord( media ) ) {
+            return this.watchTvShow( media, watched );
+        } else if ( isTvSeasonRecord( media ) ) {
+            return this.watchTvSeason( media, watched );
+        } else if ( isTvEpisodeRecord( media ) ) {
+            return this.watchTvEpisode( media, watched );
+        } else if ( isCustomRecord( media ) ) {
+            return this.watchCustom( media, watched );
+        }
+    }
+    
+    protected async onPlaySingle<T extends PlayableMediaRecord> ( table : MediaTable<T>, record : T, playDate: Date = new Date() ) : Promise<T> {
+        // Make sure we have the most recent information regarding this media record
+        record = await table.get( record.id );
+
+        const lastPlayedAt = max( record.lastPlayedAt, playDate );
+
+        await table.update( record.id, { 
+            lastPlayedAt, playCount: r.row( 'playCount' ).add( 1 ) 
+        } );
+
+        record.lastPlayedAt = lastPlayedAt;
+        record.playCount = ( record.playCount ?? 0 ) + 1;
+
+        return record;
+    }
+
+    public async onPlayContainerChanges<P extends MediaRecord, C extends MediaRecord> ( table : MediaTable<P>, parent : P, relation : Relation<P, C[]> | C[] ) : Promise<Partial<MediaRecord>> {
+        parent = await table.get( parent.id );
+
+        const allChildren = relation instanceof Relation
+            ? await relation.load( parent )
+            : relation;
+
+        const lastPlayedAt = allChildren.reduce( ( date, record ) => max( date, record.lastPlayedAt ), null as Date );
+
+        const playCount = allChildren.reduce( ( count, record ) => Math.min( count, record.playCount ?? 0 ), 0 );
+
+        return { lastPlayedAt, playCount };
+    }
+
+    protected async onPlayContainer<P extends MediaRecord, C extends MediaRecord> ( table : MediaTable<P>, parent : P, relation : Relation<P, C[]> ) : Promise<P> {
+        const changes = await this.onPlayContainerChanges( table, parent, relation );
+
+        await table.update( parent.id, changes );
+
+        Object.assign( parent, changes );
+
+        return parent;
+    }
+
+    async onPlayMovie ( movie : MovieMediaRecord, playDate: Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            await this.onPlaySingle( this.mediaManager.database.tables.movies, movie, playDate );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+    
+    async onPlayTvEpisode ( episode : TvEpisodeMediaRecord, playDate: Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            const tables = this.mediaManager.database.tables;
+
+            episode = await this.onPlaySingle( tables.episodes, episode, playDate );
+
+            let season = await this.mediaManager.get( MediaKind.TvSeason, episode.tvSeasonId );
+
+            season = await this.onPlayContainer( 
+                tables.seasons, 
+                season,
+                tables.seasons.relations.episodes,
+            );
+
+            let show = await this.mediaManager.get( MediaKind.TvShow, season.tvShowId );
+
+            show = await this.onPlayContainer( 
+                tables.shows, 
+                show, 
+                tables.shows.relations.seasons,
+            );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+    
+    async onPlayCustom ( custom : CustomMediaRecord, playDate: Date = new Date() ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            await this.onPlaySingle( this.mediaManager.database.tables.custom, custom, playDate );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async onPlay ( media : MediaRecord, playDate : Date = new Date() ) {
+        if ( isMovieRecord( media ) ) {
+            return this.onPlayMovie( media, playDate );
+        } else if ( isTvEpisodeRecord( media ) ) {
+            return this.onPlayTvEpisode( media, playDate );
+        } else if ( isCustomRecord( media ) ) {
+            return this.onPlayCustom( media, playDate );
+        }
+    }
+    
+    /* On Play Repair */
+    public async onPlayRepairSingleChanges<T extends MediaRecord> ( table : MediaTable<T>, record : T ) : Promise<Partial<MediaRecord>> {
+        record = await table.get( record.id );
+
+        let recordSessions = await this.mediaManager.database.tables.history.findAll(
+            [ [ record.kind, record.id ] ], { index: 'reference' }
+        );
+
+        recordSessions = recordSessions.filter( session => !this.excludedReceivers.has( session.receiver ) );
+
+        const playCount = recordSessions.length;
+
+        const lastPlayedAt = recordSessions.reduce( ( date, session ) => max( date, session.createdAt ), null as Date );
+
+        return { lastPlayedAt, playCount };
+    }
+
+    protected async onPlayRepairSingle<T extends PlayableMediaRecord> ( table : MediaTable<T>, record : T ) : Promise<T> {
+        const changes = await this.onPlayRepairSingleChanges( table, record );
+
+        await table.update( record.id, changes );
+
+        Object.assign( record, changes );
+
+        return record;
+    }
+
+    public async onPlayRepairMovie ( movie : MovieMediaRecord ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            await this.onPlayRepairSingle( this.mediaManager.database.tables.movies, movie );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    public async onPlayRepairTvShow ( show : TvShowMediaRecord ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            const tables = this.mediaManager.database.tables;
+
+            show = await this.mediaManager.get( MediaKind.TvShow, show.id );
+
+            show = await this.onPlayContainer( 
+                tables.shows, 
+                show, 
+                tables.shows.relations.seasons,
             );
         } catch ( err ) {
             throw err;
@@ -881,17 +1066,108 @@ export class MediaWatchTracker {
         }
     }
 
-    async watch ( media : MediaRecord, watched : boolean = true, watchedAt : Date = new Date() ) {
-        if ( media.kind === MediaKind.Movie ) {
-            return this.watchMovie( media as MovieMediaRecord, watched, watchedAt );
-        } else if ( media.kind === MediaKind.TvShow ) {
-            return this.watchTvShow( media as TvShowMediaRecord, watched, watchedAt );
-        } else if ( media.kind === MediaKind.TvSeason ) {
-            return this.watchTvSeason( media as TvSeasonMediaRecord, watched, watchedAt );
-        } else if ( media.kind === MediaKind.TvEpisode ) {
-            return this.watchTvEpisode( media as TvEpisodeMediaRecord, watched, watchedAt );
-        } else if ( media.kind === MediaKind.Custom ) {
-            return this.watchCustom( media as CustomMediaRecord, watched, watchedAt );
+    public async onPlayRepairTvSeason ( season : TvSeasonMediaRecord, updateContainer : boolean = true ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            const tables = this.mediaManager.database.tables;
+
+            season = await this.mediaManager.get( MediaKind.TvSeason, season.id );
+
+            season = await this.onPlayContainer( 
+                tables.seasons, 
+                season,
+                tables.seasons.relations.episodes,
+            );
+
+            if ( updateContainer ) {
+                let show = await this.mediaManager.get( MediaKind.TvShow, season.tvShowId );
+    
+                show = await this.onPlayContainer( 
+                    tables.shows, 
+                    show, 
+                    tables.shows.relations.seasons,
+                );
+            }
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    public async onPlayRepairTvEpisode ( episode : TvEpisodeMediaRecord, updateContainer : boolean = true ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            const tables = this.mediaManager.database.tables;
+
+            episode = await this.onPlayRepairSingle( tables.episodes, episode );
+
+            if ( updateContainer ) {
+                // The rest is the same as the onPlayTvEpisode method
+                let season = await this.mediaManager.get( MediaKind.TvSeason, episode.tvSeasonId );
+    
+                season = await this.onPlayContainer( 
+                    tables.seasons, 
+                    season,
+                    tables.seasons.relations.episodes,
+                );
+    
+                let show = await this.mediaManager.get( MediaKind.TvShow, season.tvShowId );
+    
+                show = await this.onPlayContainer( 
+                    tables.shows, 
+                    show, 
+                    tables.shows.relations.seasons,
+                );
+            }
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    public async onPlayRepairCustom ( custom : CustomMediaRecord ) {
+        const release = await this.semaphore.acquire();
+
+        try {
+            await this.onPlayRepairSingle( this.mediaManager.database.tables.custom, custom );
+        } catch ( err ) {
+            throw err;
+        } finally {
+            release();
+        }
+    }
+
+    async onPlayRepair ( media : MediaRecord, updateContainer : boolean = true ) {
+        if ( isMovieRecord( media ) ) {
+            return this.onPlayRepairMovie( media );
+        } else if ( isTvShowRecord( media ) ) {
+            return this.onPlayRepairTvShow( media );
+        } else if ( isTvSeasonRecord( media ) ) {
+            return this.onPlayRepairTvSeason( media, updateContainer );
+        } else if ( isTvEpisodeRecord( media ) ) {
+            return this.onPlayRepairTvEpisode( media, updateContainer );
+        } else if ( isCustomRecord( media ) ) {
+            return this.onPlayRepairCustom( media );
+        }
+    }
+
+    async onPlayRepairChanges ( media : MediaRecord ) : Promise<Partial<MediaRecord>> {
+        const tables = this.mediaManager.database.tables;
+
+        if ( isMovieRecord( media ) ) {
+            return this.onPlayRepairSingleChanges( tables.movies, media );
+        } else if ( isTvShowRecord( media ) ) {
+            return this.onPlayContainerChanges( tables.shows, media, tables.shows.relations.seasons );
+        } else if ( isTvSeasonRecord( media ) ) {
+            return this.onPlayContainerChanges( tables.seasons, media, tables.seasons.relations.episodes );
+        } else if ( isTvEpisodeRecord( media ) ) {
+            return this.onPlayRepairSingleChanges( tables.episodes, media );
+        } else if ( isCustomRecord( media ) ) {
+            return this.onPlayRepairSingleChanges( tables.custom, media );
         }
     }
 }

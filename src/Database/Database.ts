@@ -18,7 +18,8 @@ import * as equals from 'fast-deep-equal';
 import { toArray, AsyncStream } from 'data-async-iterators';
 import { collect, groupingBy, first, mapping, toSet } from 'data-collectors';
 import { ComposedTask } from '../BackgroundTask';
-import { child_process } from 'mz';
+import { DotNode, expandDotStrings, Relatable, tableChainDeep } from './RelationGraph';
+import type { Relation } from './Relations/Relation';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -384,7 +385,7 @@ export interface IndexSchema {
     options ?: { multi ?: boolean; geo ?: boolean; };
 }
 
-export abstract class BaseTable<R extends { id ?: string }> {
+export abstract class BaseTable<R extends { id ?: string }> implements Relatable<R> {
     abstract readonly tableName : string;
 
     pool : ConnectionPool;
@@ -393,7 +394,7 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     dateFields : string[] = [];
 
-    relations : any = {};
+    relations : Record<string, Relation<R, any>> = {};
 
     onCreate : Hook<R> = new Hook( 'onCreate' );
 
@@ -457,6 +458,14 @@ export abstract class BaseTable<R extends { id ?: string }> {
 
     installRelations ( tables : DatabaseTables ) {
         return {};
+    }
+
+    tableChainDeep ( children: DotNode[] ) : Relation<any, any>[] {
+        return tableChainDeep( this, children );
+    }
+
+    createRelationsQuery ( ...relations : string[] ) : RelationsQuery<R, this> {
+        return new RelationsQuery( this, this.tableChainDeep( expandDotStrings( relations ) ) );
     }
 
     async get ( id : string ) : Promise<R> {
@@ -1182,6 +1191,8 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
             };
             
             await this.updateIfChanged( season, changes );
+
+            Object.assign( season, changes );
         } ) );
     }
 }
@@ -1243,12 +1254,16 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
             return episode;
         }
 
-        return this.updateIfChanged( episode, {
+        const changes = {
             art: {
                 ...episode.art,
                 tvshow: show.art
             }
-        } );
+        };
+
+        await this.updateIfChanged( episode, changes );
+
+        Object.assign( episode, changes );
     }
 
     async repair ( episodes : string[] = null ) {
@@ -1720,3 +1735,33 @@ export function createMediaRecordPolyMap ( tables : DatabaseTables ) : PolyRelat
     };
 }
 
+export class RelationsQuery<R extends {id?: string}, T extends BaseTable<R>> {
+    protected table : T;
+    
+    protected relations : Relation<R, any>[];
+
+    constructor ( table: T, relations: Relation<R, any>[] ) {
+        this.table = table;
+        this.relations = relations;
+    }
+
+    async apply ( record : R ) {
+        for ( let rel of this.relations ) {
+            await rel.apply( record );
+        }
+    }
+
+    async applyAll ( records : R[] ) {
+        for ( let rel of this.relations ) {
+            await rel.applyAll( records );
+        }
+    }
+
+    applyStream ( records : AsyncIterable<R>, pageSize : number = 100 ) : AsyncStream<R> {
+        return new AsyncStream( records ).chunkEvery( pageSize ).tap( records => this.applyAll( records ) ).flatten();
+    }
+
+    findStream<T extends R> ( query ?: ( query : r.Sequence ) => r.Sequence ) {
+        return this.applyStream( this.table.findStream<T>( query ) );
+    }
+}

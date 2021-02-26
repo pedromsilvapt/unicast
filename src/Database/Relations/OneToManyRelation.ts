@@ -1,9 +1,9 @@
-import { Record, Relation } from "./Relation";
+import { TableRecord, Relation } from "./Relation";
 import { BaseTable } from "../Database";
 import * as itt from "itt";
 import * as sortBy from "sort-by";
 
-export abstract class OneToManyRelation<M extends Record, R extends Record> extends Relation<M, R[]> {
+export abstract class OneToManyRelation<M extends TableRecord, R extends TableRecord> extends Relation<M, R[]> {
     public relatedTable : BaseTable<R>;
 
     public member : string;
@@ -40,12 +40,36 @@ export abstract class OneToManyRelation<M extends Record, R extends Record> exte
     }
 }
 
-export class HasManyRelation<M extends Record, R extends Record> extends OneToManyRelation<M, R> {
+export class HasManyRelation<M extends TableRecord, R extends TableRecord> extends OneToManyRelation<M, R> {
+    subRelations : Relation<R, any>[] = [];
+
+    public with ( ...subRelations : Relation<R, any>[] ) : HasManyRelation<M, R> {
+        const relation = new HasManyRelation( 
+            this.member, 
+            this.relatedTable, 
+            this.foreignKey, 
+            this.indexName 
+        );
+
+        relation.subRelations = [ ...this.subRelations ];
+        relation.subRelations.push( ...subRelations );
+
+        return relation;
+    }
+
+    async loadSubRelations ( records : R[] ) {
+        for ( let relation of this.subRelations ) {
+            await relation.applyAll( records );
+        }
+    }
+    
     async loadRelated ( items : M[] ) : Promise<Map<string, R[]>> {
         const keys = items.map( item => item.id );
 
         const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey, this.indexName );
         
+        await this.loadSubRelations( related );
+
         return itt( related ).groupBy( rel => rel[ this.foreignKey ] );
     }
 

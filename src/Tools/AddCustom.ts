@@ -127,7 +127,7 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
             "internalId": null,
             "kind": MediaKind.Custom,
             "scraper": null,
-            "lastPlayed": null,
+            "lastPlayedAt": null,
             "playCount": 0,
             "quality": quality,
             "repository": null,
