@@ -1,6 +1,9 @@
 import { EntityManager } from "../EntityManager";
-import { Tool, ExecutionContext, LocalExecutionContext, ToolFactory } from "./Tool";
+import { Tool, ExecutionContext, LocalExecutionContext, ToolFactory, Class } from "./Tool";
 import * as minimist from 'minimist';
+import { FileWalker } from '../ES2017/FileWalker';
+import { basename, dirname, extname, join, relative, resolve } from 'path';
+import * as chalk from 'chalk';
 
 function splitArray<T> ( array : T[], separator : T ) : T[][] {
     let split : T[][] = [];
@@ -41,6 +44,59 @@ export class ToolsManager extends EntityManager<ToolFactory<Tool>, string> {
         }
 
         return Promise.race( [ tool.run( options ), tool.context.onResolve ] );
+    }
+
+    protected async * readFolder ( folder : string ) : AsyncIterableIterator<Class<Tool>> {
+        const fileWalker = new FileWalker();
+
+        const ignoredFiles = [
+           resolve( join( folder, 'Tool.js' ) ),
+           resolve( join( folder, 'ToolsManager.js' ) ),
+        ];
+
+        for await ( let [ filePath, stats ] of fileWalker.run( folder ) ) {
+            if ( !stats.isFile() ) {
+                continue;
+            }
+
+            if ( extname( filePath ).toLowerCase() !== '.js' ) {
+                continue;
+            }
+            
+            if ( ignoredFiles.includes( filePath ) ) {
+                continue;
+            }
+
+            const toolClassName = basename( filePath, extname( filePath ) ) + 'Tool';
+
+            const toolModule = require( filePath );
+
+            const relPath = relative( folder, filePath );
+
+            if ( toolClassName in toolModule ) {
+                const toolClass = toolModule[ toolClassName ] as Class<Tool>;
+
+                if ( this.server.config.get( 'tools.logLoadedTools', false ) ) {
+                    this.server.logger.debug( ToolsManager.name, `Loading ${ chalk.cyan( toolClassName ) } from ${ chalk.cyan( relPath ) }` );
+                }
+                
+                yield toolClass;
+            } else {
+                if ( this.server.config.get( 'tools.warnMissingTools', true ) ) {
+                    this.server.logger.warn( ToolsManager.name, `Tool ${ chalk.cyan( toolClassName ) } not found in ${ chalk.cyan( relPath ) }` );
+                }
+            }
+        }
+    }
+
+    async addFolder ( folder : string = null ) : Promise<void> {
+        if ( folder === null ) {
+            folder = dirname( __filename );
+        }
+
+        for await ( let toolClass of this.readFolder( folder ) ) {
+            this.add( new ToolFactory( toolClass ) );
+        }
     }
 
     parse ( args : string[] = process.argv.slice( 2 ) ) : [ Tool, any ][] {
