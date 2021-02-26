@@ -188,7 +188,7 @@ export class GeneralRemote extends EventEmitter {
         }
     }
 
-    async getStatus () {
+    async getStatus () : Promise<any> {
         if ( !this.isConnected ) {
             await this.connect();
         }

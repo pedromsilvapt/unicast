@@ -1,7 +1,10 @@
-import { Synchronized } from 'data-semaphore';
+import { Synchronized, SynchronizedBy } from 'data-semaphore';
 import { Lifetime } from '../../../ES2017/Lifetime';
 import * as jayson from 'jayson';
-import { PlayableMediaRecord, MediaKind } from '../../../MediaRecord';
+import { PlayableMediaRecord, MediaKind, TvShowMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from '../../../MediaRecord';
+import { CircuitBreaker } from '../../../ES2017/Resilient';
+import { stringify } from 'querystring';
+import { attachCookies } from 'superagent';
 
 export interface KodiActivePlayer {
     playerid: number;
@@ -34,6 +37,8 @@ export class KodiConnection {
 
     public readonly fallback : string;
 
+    public readonly pages : KodiDefaultPages;
+
     public usingFallback : boolean = false;
 
     public failedAttemptsAtConnecting : number = 0;
@@ -48,6 +53,8 @@ export class KodiConnection {
         this.username = username;
         this.password = password;
         this.fallback = fallback;
+
+        this.pages = new KodiDefaultPages( this );
     }
 
     public get connected () {
@@ -193,6 +200,11 @@ export class KodiConnection {
     }
 
     async status () : Promise<any> {
+        // console.log( ( await this.call( 'Settings.GetSections', { level: 'expert' } ) ).sections.map( s => s.id ) );
+        // console.log( ( await this.call( 'Settings.GetCategories', { level: 'expert' } ) ).categories.map( s => s.id ) );
+        // console.log( ( await this.call( 'Settings.GetSettings', { level: 'expert' } ) ).settings.map( s => s.id ).filter( s => s.includes( 'subt' ) ) );
+        // console.log( await this.call( 'Settings.GetSettingValue', { setting: 'subtitles.height' } ) );
+
         const player = await this.getActiveVideoPlayer();
 
         if ( player == null ) return null;
@@ -267,7 +279,202 @@ export class KodiConnection {
         return this.call( 'Input.ShowOSD' );
     }
 
+    getGuiProperty ( property : "currentwindow" ) : Promise<GUIProperties.CurrentWindow>;
+    getGuiProperty ( property : "currentcontrol" ) : Promise<GUIProperties.CurrentControl>;
+    getGuiProperty ( property : "skin" ) : Promise<GUIProperties.Skin>;
+    getGuiProperty ( property : "fullscreen" ) : Promise<GUIProperties.Fullscreen>;
+    getGuiProperty ( property : "stereoscopicmode" ) : Promise<GUIProperties.StereoscopicMode>;
+    getGuiProperty ( property : string ) : Promise<GUIProperties.Any>;
+    async getGuiProperty ( property : string ) : Promise<GUIProperties.Any> {
+        return ( await this.call( 'GUI.GetProperties', { properties: [ property ] } ) )[ property ];
+    }
+
     quit () : Promise<void> {
         return this.call( 'System.Shutdown' );
     }
+}
+
+export namespace GUIProperties {
+    export interface CurrentWindow {
+        id: number;
+        label: string;
+    }
+
+    export interface CurrentControl {
+        label: string;
+    }
+
+    export interface Skin {
+        id: string;
+        name: string;
+    }
+
+    export type Fullscreen = boolean;
+
+    export interface StereoscopicMode {
+        label: string;
+        mode: 'on' | 'off';
+    }
+
+    export type Any = CurrentWindow | CurrentControl | Skin | Fullscreen | StereoscopicMode;
+}
+
+export enum KodiListOrientation {
+    Vertical,
+    Horizontal,
+}
+
+export class KodiDefaultPages {
+    protected connection: KodiConnection;
+
+    constructor ( connection : KodiConnection ) {
+        this.connection = connection;
+    }
+    
+    // Unnecessary now since the unicast kodi plugin is able to better handle 
+    // auto-selection more elegantly
+    protected async selectItem ( 
+        pageId : number,
+        listOrientation : KodiListOrientation, 
+        itemLabel: string, 
+        allItems: string[] = null 
+    ) {
+        const itemIndex = allItems?.findIndex( label => itemLabel === label ) + 1;
+
+        // If the page already has some item selected, we need to know if we 
+        // want to go backwards or forwards
+        let hasOptimalDirection = false;
+        // Forward is Right/Down, Backwards is Left/Up
+        let optimalDirectionForward = true;
+
+        await new CircuitBreaker( {
+            delay: 200,
+
+            // Roughly 4 seconds
+            maxAttempts: 20,
+
+            action: async () => {
+                const currentWindow = await this.connection.getGuiProperty( "currentwindow" );
+
+                if ( currentWindow.id !== pageId ) {
+                    throw new Error( `Can't select item. Reason: incorrect window, expected ${ pageId }, actual ${ currentWindow.id }.` );
+                }
+
+                let currentControl = await this.connection.getGuiProperty( "currentcontrol" );
+                
+                if ( currentControl.label === itemLabel ) {
+                    return;
+                }
+
+                let times = 200;
+
+                if ( allItems != null ) {
+                    const currentIndex = currentControl.label !== '[..]'
+                        ? allItems.findIndex( item => item === currentControl.label ) + 1
+                        : 0;
+
+                    if ( currentIndex < 0 ) {
+                        throw new Error( `Current control not found in all items list.` );
+                    }
+
+                    const dst = Math.abs( currentIndex - itemIndex );
+
+                    optimalDirectionForward = allItems.length + 1 - dst > dst;
+
+                    times = optimalDirectionForward ? dst : allItems.length + 1 - dst;
+
+                    // If the selected index is after the one we want to select
+                    // the optimal direction is the opposite
+                    if ( currentIndex > itemIndex ) {
+                        optimalDirectionForward = !optimalDirectionForward;
+                    }
+                }
+
+                let inputDirection = optimalDirectionForward
+                    ? ( listOrientation == KodiListOrientation.Horizontal ? 'Right' : 'Down' )
+                    : ( listOrientation == KodiListOrientation.Horizontal ? 'Left' : 'Up' );
+                
+                for ( let i = 0; i < times; i++ ) {
+                    await this.connection.call( 'Input.' + inputDirection, {} );
+                    
+                    if ( allItems == null ) {
+                        await new Promise( resolve => setTimeout( resolve, 200 ) );
+        
+                        currentControl = await this.connection.getGuiProperty( "currentcontrol" );
+        
+                        if ( currentControl.label === itemLabel ) {
+                            break;
+                        }
+                    }
+                }
+
+                if ( allItems != null ) {
+                    await new Promise( resolve => setTimeout( resolve, 200 ) );
+    
+                    currentControl = await this.connection.getGuiProperty( "currentcontrol" );
+    
+                    if ( currentControl.label !== itemLabel ) {
+                        throw new Error( `Incorrect control` );
+                    }
+                }
+            }
+        } ).run();
+    }
+
+    public async openAddon ( path : string = '/', params: any = null ) : Promise<string> {
+        if ( params != null ) {
+            path = path + '?' + stringify( params );
+        }
+
+        await this.connection.call( 'Addons.ExecuteAddon', { wait: true, addonid: 'plugin.video.unicast', params: path } );
+
+        return 'plugin://plugin.video.unicast' + path;
+    }
+    
+    public async sendAutoSelect ( page_path: string, item: string ) : Promise<void> {
+        this.connection.call( 'JSONRPC.NotifyAll', { 
+            sender: 'unicast', 
+            'message': `PluginVideoUnicast.AutoSelect`, 
+            data: { 
+                page: page_path, 
+                selectedItem: item
+            } 
+        } );
+    }
+
+    public async openSingleMovieList ( record : MovieMediaRecord ) {
+        const path = await this.openAddon( `/movies/single/${ record.id }` );
+        
+        await this.sendAutoSelect( path, record.title );
+    }
+    
+    public async openSingleTvShowList ( record : TvShowMediaRecord ) {
+        const path = await this.openAddon( `/tvshows/single/${ record.id }` );
+
+        await this.sendAutoSelect( path, record.title );
+    }
+
+    public async openTvShow ( record : TvShowMediaRecord, options : TvShowPageOptions = {} ) {
+        const path = await this.openAddon( `/tvshows/${ record.id }/seasons` );
+
+        if ( options.selectedSeason ) {
+            await this.sendAutoSelect( path, `Season ${options.selectedSeason.number}` );
+        }
+    }
+
+    public async openTvSeason ( record : TvSeasonMediaRecord, options : TvSeasonPageOptions = {} ) {
+        const path = await this.openAddon( `/tvseasons/${ record.id }/episodes` );
+        
+        if ( options.selectedEpisode ) {
+            await this.sendAutoSelect( path, options.selectedEpisode.title );
+        }
+    }
+}
+
+export interface TvShowPageOptions {
+    selectedSeason?: TvSeasonMediaRecord;
+}
+
+export interface TvSeasonPageOptions {
+    selectedEpisode?: TvEpisodeMediaRecord;
 }

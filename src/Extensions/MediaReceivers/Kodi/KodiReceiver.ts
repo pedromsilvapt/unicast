@@ -11,6 +11,7 @@ import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord, isPlayableRec
 import { LoadOptions } from 'unicast-mpv/lib/Player';
 import { KodiHttpSender } from './KodiHttpSender';
 import { NoMediaFound } from '../../../Controllers/ApiControllers/PlayerController';
+import { CircuitBreaker } from '../../../ES2017/Resilient';
   
 // create a client
 export interface KodiConfig {
@@ -454,6 +455,34 @@ export class KodiReceiver extends BaseReceiver {
     async setVolume ( level : number ) : Promise<ReceiverStatus> {
         await this.connection.volume( level );
 
+        return this.status();
+    }
+
+    async openMediaPage ( kind : MediaKind, id : string ) : Promise<ReceiverStatus> {
+        if ( kind === MediaKind.Movie ) {
+            const movie = await this.server.media.get( kind, id );
+
+            await this.connection.pages.openSingleMovieList( movie );
+        } else if ( kind === MediaKind.TvShow ) {
+            const show = await this.server.media.get( kind, id );
+
+            await this.connection.pages.openSingleTvShowList( show );
+        } else if ( kind === MediaKind.TvSeason ) {
+            const selectedSeason = await this.server.media.get( kind, id );
+            
+            const show = await this.server.media.get( MediaKind.TvShow, selectedSeason.tvShowId );
+
+            await this.connection.pages.openTvShow( show, { selectedSeason } );
+        } else if ( kind === MediaKind.TvEpisode ) {
+            const selectedEpisode = await this.server.media.get( kind, id );
+            
+            const season = await this.server.media.get( MediaKind.TvSeason, selectedEpisode.tvSeasonId );
+
+            await this.connection.pages.openTvSeason( season, { selectedEpisode } );
+        } else {
+            throw new InvalidArgumentError( `Kind ${ kind } is not supported.` );
+        }
+        
         return this.status();
     }
 
