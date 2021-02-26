@@ -31,7 +31,7 @@ export class DataStore {
         let query : ( query : r.Sequence ) => r.Sequence;
 
         if ( options.prefix ) {
-            query = q => q.filter( r.row( 'key' ).match("^" + escapeRegExp( options.prefix ) ) );
+            query = q => q.filter( ( r.row( 'key' ) as any ).match("^" + escapeRegExp( options.prefix ) ) );
         }
 
         if ( options.tags && options.tags.length > 0 ) {
@@ -68,7 +68,7 @@ export class DataStore {
             } );
         } else {
             return await this.table.update( record.id, {
-                value: r.literal( value ),
+                value: ( r as any ).literal( value ),
                 updatedAt: now,
                 ...( tags ? { tags } : {} )
             } );

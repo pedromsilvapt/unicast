@@ -26,6 +26,8 @@ export interface ISubtitlesRepository<S extends ILocalSubtitle = ILocalSubtitle>
 
     update ( media : MediaRecord, subtitle : S, data : Buffer | NodeJS.ReadableStream ) : Promise<S>;
 
+    rename ? ( media : MediaRecord, subtitle : S, name : string ) : Promise<S>;
+
     delete ( media : MediaRecord, subtitle : S ) : Promise<void>;
 }
 

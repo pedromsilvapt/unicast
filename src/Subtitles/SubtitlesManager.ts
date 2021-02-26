@@ -1,6 +1,7 @@
 import { SubtitlesProvidersManager } from "./ProvidersManager";
 import { UnicastServer } from "../UnicastServer";
-import { OpenSubtitlesSubtitles } from "./Providers/OpenSubtitles/OpenSubtitlesProvider";
+import { OpenSubtitlesProvider } from "./Providers/OpenSubtitles/OpenSubtitlesProvider";
+import { EmbeddedSubtitlesProvider } from "./Providers/EmbeddedSubtitles/EmbeddedSubtitlesProvider";
 import { ISubtitle } from "./Providers/ISubtitlesProvider";
 import { MediaRecord } from "../MediaRecord";
 import { FallbackSubtitlesRepository, IDatabaseLocalSubtitle } from "./SubtitlesRepository";
@@ -26,7 +27,8 @@ export class SubtitlesManager {
 
         this.providers = new SubtitlesProvidersManager( server );
 
-        this.providers.add( new OpenSubtitlesSubtitles );
+        this.providers.add( new OpenSubtitlesProvider() );
+        this.providers.add( new EmbeddedSubtitlesProvider() );
 
         this.repository = new FallbackSubtitlesRepository( server );
     }
@@ -114,6 +116,20 @@ export class SubtitlesManager {
             return mediaRepository.subtitles.update( media, subtitle, data );
         } else {
             return this.repository.update( media, subtitle as IDatabaseLocalSubtitle, data );
+        }
+    }
+
+    async rename ( media : MediaRecord, subtitle : ILocalSubtitle, name : string ) : Promise<ILocalSubtitle> {
+        const mediaRepository = this.server.repositories.get( media.repository );
+
+        if ( !mediaRepository || !mediaRepository.subtitles || !mediaRepository.subtitles.canWrite ) {
+            throw new Error( `Fallback repository does not support yet renaming subtitles.` );
+        } else {
+            if ( mediaRepository.subtitles.canWrite && mediaRepository.subtitles.rename ) {
+                return mediaRepository.subtitles.rename( media, subtitle, name );
+            } else {
+                throw new Error( `Subtitles Repository "${ mediaRepository.subtitles.constructor.name }" does not support yet renaming subtitles.` );
+            }
         }
     }
 

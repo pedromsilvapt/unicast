@@ -18,7 +18,7 @@ export interface IOpenSubtitlesResult extends ISubtitle {
     };
 }
 
-export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitlesResult> {
+export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesResult> {
     readonly name: string = 'opensubtitles';
 
     server : UnicastServer;
@@ -42,7 +42,7 @@ export class OpenSubtitlesSubtitles implements ISubtitlesProvider<IOpenSubtitles
             const show = await this.server.media.get( MediaKind.TvShow, season.tvShowId );
 
             return {
-                imdbid: media.external.imdb.slice( 2 ),
+                imdbid: show.external.imdb.slice( 2 ),
                 query: show.title,
                 season: media.seasonNumber,
                 episode: media.number

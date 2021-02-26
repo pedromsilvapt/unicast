@@ -50,7 +50,7 @@ export class SubtitlesController extends BaseController {
     async listRemote ( req : Request, res : Response ) : Promise<ISubtitle[]> {
         const langs = this.getRequestLanguages( req );
 
-        const media = await this.server.media.get( req.params.kind, req.params.id );
+        const media = await this.server.media.get( req.params.kind as MediaKind, req.params.id );
 
         if ( !isPlayableRecord( media ) ) {
             throw new InvalidArgumentError( `Invalid media type ${ media.kind }.` );
@@ -69,6 +69,27 @@ export class SubtitlesController extends BaseController {
         }
 
         return result;
+    }
+
+    @Route( 'post', '/:kind/:id/local/:sub/rename' )
+    async rename ( req : Request, res : Response ) : Promise<ILocalSubtitle> {
+        const media = await this.server.media.get( req.params.kind as MediaKind, req.params.id );
+
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( `Invalid media type ${ media.kind }.` );
+        }
+
+        const subtitles = await this.server.subtitles.get( media, req.params.sub );
+
+        if ( !subtitles ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+
+        if ( typeof req.body.releaseName !== 'string' ) {
+            throw new InvalidArgumentError( `Expected body releaseName to be string, got "${ typeof req.body.releaseName }"` );
+        }
+
+        return await this.server.subtitles.rename( media, subtitles, req.body.releaseName );
     }
 
     protected async synchronizeSubtitle ( media : PlayableMediaRecord, subtitleFile : string ) : Promise<boolean> {
@@ -91,9 +112,7 @@ export class SubtitlesController extends BaseController {
     async synchronizeLocal ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
         
-        const subtitles = await this.server.subtitles.list( media );
-
-        const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+        const subtitle = await this.server.subtitles.get( media, req.params.sub );
 
         if ( !subtitle ) {
             throw new NotFoundError( 'Requested subtitle was not found.' );

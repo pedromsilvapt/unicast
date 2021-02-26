@@ -53,35 +53,39 @@ export class Storage {
     async getRandomFolder ( prefix : string = null, container : string = 'temp/folders' ) : Promise<string> {
         const release = await this.cleaningSemaphore.acquire();
 
-        const random = uid( this.randomNameLength );
-
-        const folder = this.getPath( 
-            container, 
-            ( prefix ? ( prefix + '' ) : '' ) + random
-        );
-        
-        await this.ensureDir( folder );
-
-        release();
-
-        return folder;
+        try {
+            const random = uid( this.randomNameLength );
+    
+            const folder = this.getPath( 
+                container, 
+                ( prefix ? ( prefix + '' ) : '' ) + random
+            );
+            
+            await this.ensureDir( folder );
+    
+            return folder;
+        } finally {
+            release();
+        }
     }
 
     async getRandomFile ( prefix : string, extension : string = null, container : string = 'temp/files' ) {
         const release = await this.cleaningSemaphore.acquire();
-        
-        const random = uid( this.randomNameLength );
 
-        const file = this.getPath(
-            container,
-            ( prefix ? ( prefix + '' ) : '' ) + random + ( extension ? ( '.' + extension ) : '' )            
-        );
+        try {
+            const random = uid( this.randomNameLength );
+    
+            const file = this.getPath(
+                container,
+                ( prefix ? ( prefix + '' ) : '' ) + random + ( extension ? ( '.' + extension ) : '' )            
+            );
+    
+            await this.ensureDir( path.dirname( file ) );
 
-        await this.ensureDir( path.dirname( file ) );
-
-        release();
-
-        return file;
+            return file;
+        } finally {
+            release();
+        }
     }
 
     async clean () {
