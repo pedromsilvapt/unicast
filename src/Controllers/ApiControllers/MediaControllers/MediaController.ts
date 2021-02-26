@@ -32,11 +32,13 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
             if ( semantics.features.collection ) {
                 await this.table.relations.collections.applyAll( records );
             }
-    
+            
             if ( semantics.features.cast ) {
                 await this.table.relations.cast.applyAll( records );
             }
         }
+        
+        await this.table.relations.collections.applyAll( records );
 
         return super.runCustomQuery( req, records );
     }

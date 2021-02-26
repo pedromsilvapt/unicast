@@ -6,7 +6,6 @@ export abstract class VideoMediaStream extends MediaStream {
         return stream.type == MediaStreamType.Video;
     }
 
-
     type : MediaStreamType = MediaStreamType.Video;
     
     duration : number;

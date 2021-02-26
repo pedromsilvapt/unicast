@@ -34,7 +34,7 @@ import { Journal } from './Journal';
 import { ConsoleBackend, SharedLogger, FilterBackend, HttpRequestLogger } from 'clui-logger';
 import { CommandsHistory } from './Receivers/CommandsHistory';
 import { DataStore } from './DataStore';
-import { AccessControl, AccessIdentity, IpCredential, ScopeRule } from './AccessControl';
+import { AccessControl } from './AccessControl';
 import { TIMESTAMP_SHORT } from 'clui-logger/lib/Backends/ConsoleBackend';
 
 export class UnicastServer {
@@ -302,6 +302,10 @@ export class UnicastServer {
         }
     }
 
+    public hash ( value : string ) {
+        return crypto.createHash('sha256').update( value ).digest('hex');
+    }
+
     async run ( args ?: string[] ) : Promise<void> {
         const toolsToRun = this.tools.parse( args );
 
@@ -445,7 +449,7 @@ export class MediaManager {
         return null;
     }
 
-    get ( kind : MediaKind.Movie, id : string ) : Promise<MediaRecord>;
+    get ( kind : MediaKind.Movie, id : string ) : Promise<MovieMediaRecord>;
     get ( kind : MediaKind.TvShow, id : string ) : Promise<TvShowMediaRecord>;
     get ( kind : MediaKind.TvSeason, id : string ) : Promise<TvSeasonMediaRecord>;
     get ( kind : MediaKind.TvEpisode, id : string ) :Promise<TvEpisodeMediaRecord>;
@@ -679,6 +683,18 @@ export class MediaManager {
                     }
                 } );
             }
+        }
+    }
+
+    async humanize ( record: MediaRecord ): Promise<string> {
+        if ( isTvEpisodeRecord( record ) ) {
+            const season = await this.get( MediaKind.TvSeason, record.tvSeasonId );
+
+            const show = await this.get( MediaKind.TvShow, season.tvShowId );
+        
+            return `${show.title} ${season.number}x${record.number} - ${record.title}`;
+        } else {
+            return record.title;
         }
     }
 }

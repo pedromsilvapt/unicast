@@ -5,6 +5,7 @@ import { Response, Request } from "restify";
 import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from "restify-errors";
 import * as regexEscape from 'regex-escape';
 import * as r from 'rethinkdb';
+import { EntityResource } from '../AccessControl';
 
 export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<R>> extends BaseController {
     abstract readonly table : T;
@@ -141,9 +142,13 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         const embeddedQuery = query?.search?.embeddedQuery;
 
         if ( embeddedQuery ) {
-            return items.filter( record => embeddedQuery( record ) != false );
+            items = items.filter( record => embeddedQuery( record ) != false );
         }
 
+        items = items.filter( record => 
+            this.server.accessControl.authenticate( req.identity, new EntityResource( this.table.tableName, record ) ) 
+        );
+        
         return items;
     }
 
@@ -205,7 +210,15 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
-        return this.runTransforms( req, res, item );
+        const transformedItem = await this.runTransforms( req, res, item );
+
+        const authorized = this.server.accessControl.authenticate( req.identity, new EntityResource( this.table.tableName, transformedItem ) );
+
+        if ( !authorized ) {
+            throw new NotAuthorizedError();
+        }
+
+        return transformedItem;
     }
 
     @Route( 'post', '/' )

@@ -33,10 +33,12 @@ export class QueryLang {
         return this.embeddedParser.parse( query );
     }
 
-    public static compile<C = any> ( query : string | QueryAst, semantics : QuerySemantics<C> ) : CompiledQuery<C> {
+    public static compile<C = any> ( query : string | QueryAst, semantics ?: QuerySemantics<C> ) : CompiledQuery<C> {
         if ( typeof query === 'string' ) {
             query = QueryLang.parse( query );
         }
+        
+        semantics = semantics ?? new QuerySemantics<C>();
         
         if ( query.kind === 'binaryOperator' ) {
             let customSemantics = semantics.getPropertyOperatorFor( query );
@@ -68,6 +70,8 @@ export class QueryLang {
                 return ( c ) => lhs( c ) >= rhs( c );
             } else if ( query.op === BinaryOperator.GreaterThan ) {
                 return ( c ) => lhs( c ) > rhs( c );
+            } else if ( query.op === BinaryOperator.Implies ) {
+                return ( c ) => !lhs( c ) || rhs( c );
             } else if ( query.op === BinaryOperator.And ) {
                 return ( c ) => lhs( c ) && rhs( c );
             } else if ( query.op === BinaryOperator.Or ) {
@@ -215,6 +219,7 @@ export enum PropertyType {
 export enum BinaryOperator {
     And,
     Or,
+    Implies,
 
     EqualTo,
     LessThan,
@@ -301,6 +306,8 @@ const String = createToken( { name: "String", pattern: /"(?:[^"\\]|\\.)*"|'(?:[^
 
 const ComparisonOperator = createToken( { name: "ComparisonOperator", pattern: Lexer.NA } );
 
+const Implies = createToken( { name: "EqualTo", pattern: /=>/, categories: ComparisonOperator } );
+
 const EqualTo = createToken( { name: "EqualTo", pattern: /=/, categories: ComparisonOperator } );
 
 const NotEqualTo = createToken( { name: "NotEqualTo", pattern: /!=/, categories: ComparisonOperator } );
@@ -342,7 +349,7 @@ const AllQueryTokens = [
     Or,
     Not,
     LogicOperator,
-
+    
     True,
     False,
     Bool,
@@ -351,7 +358,8 @@ const AllQueryTokens = [
     Identifier,
     Integer,
     String,
-
+    
+    Implies,
     GreaterThanEqualTo,
     GreaterThan,
     LessThanEqualTo,
@@ -502,6 +510,7 @@ export class QueryParser {
                 else if ( tokenType == Minus ) return BinaryOperator.Minus
                 else if ( tokenType == Mul ) return BinaryOperator.Mul
                 else if ( tokenType == Div ) return BinaryOperator.Div
+                else if ( tokenType == Implies ) return BinaryOperator.Implies
                 else if ( tokenType == EqualTo ) return BinaryOperator.EqualTo
                 else if ( tokenType == NotEqualTo ) return BinaryOperator.NotEqualTo
                 else if ( tokenType == LessThan ) return BinaryOperator.LessThan

@@ -2,7 +2,7 @@ import { UnicastServer } from "../UnicastServer";
 import { Router } from 'restify-router';
 import { Request, Response, Next } from "restify";
 import { Logger } from 'clui-logger';
-import { AccessIdentity, IpCredential, ScopeRule } from '../AccessControl';
+import { AccessCard, IpIdentity, ScopeResource } from '../AccessControl';
 import { InvalidCredentialsError  } from 'restify-errors';
 
 export type RoutesDeclarations = { 
@@ -95,9 +95,9 @@ export function AuthenticationMiddleware ( controller : { server : UnicastServer
     return async function ( req : Request, res : Response, next : Next ) {
         const ip = req.connection.remoteAddress;
 
-        const identity = new AccessIdentity( [ new IpCredential( ip ) ] );
+        req.identity =  new AccessCard( [ new IpIdentity( ip ) ] );
 
-        if ( controller.server.accessControl.authenticate( identity, new ScopeRule( authScope ) ) ) {
+        if ( controller.server.accessControl.authenticate( req.identity, new ScopeResource( authScope ) ) ) {
             return next();
         } else {
             return next( new InvalidCredentialsError( "IP Address " + ip + " not atuhorized for scope: " + authScope ) );

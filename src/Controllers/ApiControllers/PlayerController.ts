@@ -10,6 +10,7 @@ import { MediaStreamSelectors } from '../../MediaProviders/MediaStreams/MediaStr
 import * as mime from 'mime';
 import { MediaPreview } from '../../MediaPreview';
 import * as sortBy from 'sort-by';
+import { EntityResource } from '../../AccessControl';
 
 export class InvalidDeviceArgumentError extends InvalidArgumentError {
     constructor ( device : string ) {
@@ -35,6 +36,7 @@ export class PlayerController extends BaseController {
     async list ( req : Request, res : Response ) {
         return Array.from( this.server.receivers )
             .map( receiver => receiver.toJSON() )
+            .filter( receiver => this.server.accessControl.authenticate( req.identity, new EntityResource( 'receiver', receiver ) ) )
             .sort( sortBy( 'type', 'name' ) );
     }
 

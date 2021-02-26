@@ -38,7 +38,9 @@ export class MediaTools {
             sampleRate: +track.sample_rate,
             channels: +track.channels,
             // Track each stream's duration as well
-            duration: null
+            duration: null,
+            language: track.tags?.language,
+            title: track.tags?.title,
         } ) );
     }
 
@@ -104,6 +106,8 @@ export interface TrackMediaMetadata {
     sampleRate: number;
     channels: number;
     duration: number;
+    language?: string;
+    title?: string;
 }
 
 export interface FormatMediaMetadata {
