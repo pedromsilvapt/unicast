@@ -6,7 +6,10 @@ import { MediaTableController } from "./MediaController";
 import { Route } from "../../BaseController";
 
 export class MoviesController extends MediaTableController<MovieMediaRecord> {
-    sortingFields : string[] = [ 'title', 'rating', 'runtime', 'parentalRating', 'year', 'lastPlayedAt', 'addedAt' ]
+    sortingFields: string[] = [ 
+        'title', 'rating', 'runtime', 'parentalRating', 
+        'year', 'lastPlayedAt', 'playCount', 'addedAt' 
+    ];
     
     get table () : MediaTable<MovieMediaRecord> {
         return this.server.database.tables.movies;

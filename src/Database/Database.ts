@@ -948,6 +948,7 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         { name: 'parentalRating' },
         { name: 'year' },
         { name: 'lastPlayedAt' },
+        { name: 'playCount' },
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
@@ -964,6 +965,28 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         lastPlayedAt: null,
         playCount: 0,
         transient: false
+    }
+
+    
+    async repair ( movies : string[] = null ) {
+        if ( !movies ) {
+            movies = ( await this.find() ).map( movie => movie.id );
+        }
+
+        await super.repair( movies );
+
+        await Promise.all( movies.map( async movieId => {
+            const movie = await this.get( movieId );
+
+            const changes = {
+                // TODO Extract from server into here
+                ...await this.database.server.media.watchTracker.onPlayRepairChanges( movie ),
+            }
+            
+            await this.updateIfChanged( movie, changes );
+
+            Object.assign( movie, changes );
+        } ) );
     }
 }
 
@@ -990,6 +1013,7 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         { name: 'parentalRating' },
         { name: 'year' },
         { name: 'lastPlayedAt' },
+        { name: 'playCount' },
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
@@ -1067,6 +1091,8 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
             const changes = {
                 ...await this.repairEpisodesCount( show, seasons ),
                 ...await this.repairRepositoryPaths( show, seasons ),
+                // TODO Extract from server into here
+                ...await this.database.server.media.watchTracker.onPlayRepairChanges( show, { seasons } ),
             };
 
             await this.updateIfChanged( show, changes );
@@ -1092,7 +1118,9 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
     indexesSchema : IndexSchema[] = [ 
         { name: 'internalId' },
         { name: 'number' },
-        { name: 'tvShowId' }
+        { name: 'tvShowId' },
+        { name: 'playCount' },
+        { name: 'lastPlayedAt' },
     ];
     
     relations : {
@@ -1188,6 +1216,8 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
                 ...await this.repairEpisodesCount( season, episodes ),
                 ...await this.repairTvShowArt( season ),
                 ...await this.repairRepositoryPaths( season, episodes ),
+                // TODO Extract from server into here
+                ...await this.database.server.media.watchTracker.onPlayRepairChanges( season, { episodes } ),
             };
             
             await this.updateIfChanged( season, changes );
@@ -1216,6 +1246,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         { name: 'number' },
         { name: 'tvSeasonId' },
         { name: 'lastPlayedAt' },
+        { name: 'playCount' },
         { name: 'airedAt' },
         { name: 'addedAt' }
     ];
@@ -1237,7 +1268,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         };
     }
 
-    async repairTvShowArt ( episode : string | TvEpisodeMediaRecord ) : Promise<TvEpisodeMediaRecord> {
+    async repairTvShowArt ( episode : string | TvEpisodeMediaRecord ) : Promise<Partial<TvEpisodeMediaRecord>> {
         if ( typeof episode === 'string' ) {
             episode = await this.get( episode );
         }
@@ -1251,19 +1282,15 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         const show = await this.database.tables.shows.get( season.tvShowId );
 
         if ( !show ) {
-            return episode;
+            return {};
         }
 
-        const changes = {
+        return {
             art: {
                 ...episode.art,
                 tvshow: show.art
             }
         };
-
-        await this.updateIfChanged( episode, changes );
-
-        Object.assign( episode, changes );
     }
 
     async repair ( episodes : string[] = null ) {
@@ -1276,7 +1303,15 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         await Promise.all( episodes.map( async episodeId => {
             const episode = await this.get( episodeId );
 
-            await this.repairTvShowArt( episode );
+            const changes = {
+                ...await this.repairTvShowArt( episode ),
+                // TODO Extract from server into here
+                ...await this.database.server.media.watchTracker.onPlayRepairChanges( episode ),
+            }
+            
+            await this.updateIfChanged( episode, changes );
+
+            Object.assign( episode, changes );
         } ) );
     }
 }
@@ -1292,6 +1327,7 @@ export class CustomMediaTable extends MediaTable<CustomMediaRecord> {
         { name: 'internalId' },
         { name: 'title' },
         { name: 'lastPlayedAt' },
+        { name: 'playCount' },
         { name: 'addedAt' }
     ];
 }

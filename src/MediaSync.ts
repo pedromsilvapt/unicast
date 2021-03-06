@@ -21,7 +21,8 @@ export interface MediaSyncOptions {
     refetchIncomplete : boolean;
     updateMoved : boolean;
     dryRun : boolean;
-    cache ?: CacheOptions;
+    cache : CacheOptions;
+    autoFinishTask : boolean;
 }
 
 export class MediaSync {
@@ -507,7 +508,9 @@ export class MediaSync {
             }
         }
         
-        task.setStateFinish();
+        if ( options.autoFinishTask ?? true ) {
+            task.setStateFinish();
+        }
     }
 }
 

@@ -20,11 +20,12 @@ export class ProvidersController extends BaseController {
                 dryRun: req.query.dryRun === 'true', 
                 refetchExisting: req.query.refetchExisting == 'true',
                 refetchIncomplete: req.query.refetchIncomplete == 'true',
-                updateMoved: req.query.updateMoved == 'true' || true,
+                updateMoved: req.query.updateMoved == 'true',
                 cache: {
                     readCache: !req.query.cache || req.query.cache.read != 'false',
                     writeCache: !req.query.cache || req.query.cache.write != 'false'
-                }
+                },
+                autoFinishTask: false,
             };
 
             this.server.logger.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );

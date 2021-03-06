@@ -5,7 +5,7 @@ import * as r from 'rethinkdb';
 import { MediaTableController } from "./MediaController";
 
 export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRecord> {
-    sortingFields : string[] = [ 'title', 'number', 'lastPlayedAt', 'airedAt', 'addedAt' ];
+    sortingFields : string[] = [ 'title', 'number', 'lastPlayedAt', 'airedAt', 'addedAt', 'playCount' ];
     
     defaultSortField : string = 'number';
 

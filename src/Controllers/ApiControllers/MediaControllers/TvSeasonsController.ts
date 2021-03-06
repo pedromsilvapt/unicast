@@ -6,7 +6,7 @@ import { MediaTableController } from "./MediaController";
 import { Route } from '../../BaseController';
 
 export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecord> {
-    sortingFields : string[] = [ 'number', 'lastPlayedAt' ];
+    sortingFields : string[] = [ 'number', 'lastPlayedAt', 'playCount' ];
 
     defaultSortField : string = 'number';
 

@@ -53,7 +53,7 @@
     "chalk": "^2.1.0",
     "chevrotain": "^7.0.3",
     "clui-live": "^0.3.4",
-    "clui-logger": "^0.2.1",
+    "clui-logger": "^0.2.2",
     "clui-progressbar": "^0.1.1",
     "composable": "^0.9.2",
     "config": "^1.26.2",

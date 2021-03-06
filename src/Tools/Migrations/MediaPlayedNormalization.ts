@@ -24,49 +24,6 @@ export class MediaPlayedNormalizationTool extends Tool<MediaPlayedNormalizationO
         ]
     }
 
-    async hasSessionFor ( date : Date, external: ExternalReferences ) : Promise<boolean> {
-        const history: HistoryTable = this.server.database.tables.history;
-
-        const startDate = subDays( date, 1 );
-        const endDate = addDays( date, 1 );
-
-        // let nearbySessions = await history.find( query => {
-        //     return query.filter( row => row( 'createdAt' ).gt( startDate ).and( row( 'createdAt' ).lt( endDate ) ) );
-        // } );
-
-        let nearbySessions = await history.find( query => {
-            return query.between( startDate, endDate, { index: 'createdAt' } );
-        } );
-
-        await history.relations.record.applyAll( nearbySessions );
-        
-        history.relations.record.typed( nearbySessions );
-
-        return nearbySessions.some( session => {
-            if ( session.record == null ) return false;
-
-            return Object.keys( session.record.external )
-                .some( key => session.record.external[ key ] == external[ key ] && external[ key ] != null );
-        } );
-    }
-
-    async createSessionFor ( options : MediaPlayedNormalizationOptions, date : Date, record : PlayableMediaRecord ) : Promise<void> {
-        if ( !options.dryRun ) {
-            await this.server.database.tables.history.create( {
-                createdAt: date,
-                position: record.runtime * 1000,
-                positionHistory: [ { start: 0, end: record.runtime * 1000 } ],
-                receiver: 'Unknown',
-                reference: { kind: record.kind, id: record.id },
-                updatedAt: date,
-                watched: true,
-                playlist: null,
-                playlistPosition: null,
-                transcoding: null,
-            } );
-        }
-    }
-
     async run ( options : MediaPlayedNormalizationOptions ) {
         await this.server.database.install();
 
@@ -94,8 +51,9 @@ export class MediaPlayedNormalizationTool extends Tool<MediaPlayedNormalizationO
         const log = async ( record: MediaRecord, changes: any ) => {
             statsLogger.static().info( await this.server.media.humanize( record ) + ': ' + JSON.stringify( changes ) );
         };
-
-        const messages: { date: Date, msg: string }[] = [];
+        const logCounter = ( table: any, count: number ) => {
+            statsLogger.info( table.constructor.name + ' Records changed: ' + count );
+        };
 
         for ( let table of tables ) {
             this.logger.info(table.tableName);
@@ -115,27 +73,22 @@ export class MediaPlayedNormalizationTool extends Tool<MediaPlayedNormalizationO
                     var changes = {
                         ...await this.server.media.watchTracker.onPlayRepairChanges( record ),
                         lastPlayedAtLegacy,
+                        lastPlayed: r.literal(),
                     }
     
-                    if (lastPlayedAtLegacy.length > 0) {   
-                        await log( record, changes );
-                    }
-    
-                    if ( options.dryRun == false ) {
+                    logCounter( table, ++recordsChanged );
+
+                    if ( !options.dryRun ) {
                         await table.updateIfChanged( record, changes );
                     }
                 } catch ( error ) {
                     this.server.onError.notify( error );
                 }
-            }, 1 ).drain();
+            }, 20 ).drain();
         }
         
         await new Promise(resolve => setTimeout(resolve, 500));
 
         statsLogger.close();
-
-        messages.sort( (a, b) => <any>a.date - <any>b.date );
-
-        for (let row of messages) this.log( row.msg );
     }
 }

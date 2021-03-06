@@ -928,7 +928,9 @@ export class MediaWatchTracker {
 
         const lastPlayedAt = allChildren.reduce( ( date, record ) => max( date, record.lastPlayedAt ), null as Date );
 
-        const playCount = allChildren.reduce( ( count, record ) => Math.min( count, record.playCount ?? 0 ), 0 );
+        const defaultPlayCount = allChildren.length > 0 ? allChildren[ 0 ].playCount : 0;
+
+        const playCount = allChildren.reduce( ( count, record ) => Math.min( count, record.playCount ?? 0 ), defaultPlayCount );
 
         return { lastPlayedAt, playCount };
     }
@@ -1155,21 +1157,26 @@ export class MediaWatchTracker {
         }
     }
 
-    async onPlayRepairChanges ( media : MediaRecord ) : Promise<Partial<MediaRecord>> {
+    async onPlayRepairChanges ( media : MediaRecord, context?: PlayRepairChangesContext ) : Promise<Partial<MediaRecord>> {
         const tables = this.mediaManager.database.tables;
 
         if ( isMovieRecord( media ) ) {
             return this.onPlayRepairSingleChanges( tables.movies, media );
         } else if ( isTvShowRecord( media ) ) {
-            return this.onPlayContainerChanges( tables.shows, media, tables.shows.relations.seasons );
+            return this.onPlayContainerChanges( tables.shows, media, context.seasons ?? tables.shows.relations.seasons );
         } else if ( isTvSeasonRecord( media ) ) {
-            return this.onPlayContainerChanges( tables.seasons, media, tables.seasons.relations.episodes );
+            return this.onPlayContainerChanges( tables.seasons, media, context.episodes ?? tables.seasons.relations.episodes );
         } else if ( isTvEpisodeRecord( media ) ) {
             return this.onPlayRepairSingleChanges( tables.episodes, media );
         } else if ( isCustomRecord( media ) ) {
             return this.onPlayRepairSingleChanges( tables.custom, media );
         }
     }
+}
+
+export interface PlayRepairChangesContext {
+    seasons?: TvSeasonMediaRecord[];
+    episodes?: TvEpisodeMediaRecord[];
 }
 
 export interface Route extends restify.RouteOptions {
