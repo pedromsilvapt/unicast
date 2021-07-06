@@ -16,11 +16,13 @@ export interface MediaSourceDetails {
     enabled ?: string | string[];
     disabled ?: string | string[];
 
+    scraper ?: string;
+
     [ property : string ] : any;
 }
 
 export abstract class MediaSource {
-    loading = null;
+    loading : Promise<this> = null;
 
     manager : ProvidersManager;
 

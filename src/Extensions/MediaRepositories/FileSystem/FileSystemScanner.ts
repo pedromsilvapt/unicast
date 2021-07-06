@@ -15,6 +15,7 @@ import { MediaRecordFiltersContainer } from '../../../MediaRepositories/ScanCond
 import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 import * as yaml from 'js-yaml' 
+import { isSameFile, MovieLocalSettings, TvShowLocalSettings } from './LocalSettings';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
     if ( obj == null ) {
@@ -53,14 +54,6 @@ export function pathRootName ( file : string ) {
 
     return segments.find( s => s != '..' && s != '.' );
 }
-
-export function isSameFile ( baseFolder : string, file1 : string, file2 : string ) : boolean {
-    if ( !path.isAbsolute( file1 ) ) file1 = path.resolve( baseFolder, file1 );
-    if ( !path.isAbsolute( file2 ) ) file2 = path.resolve( baseFolder, file2 );
-    
-    return file1 == file2;
-}
-
 
 export enum MediaScanContent {
     TvShows = "tvshows",
@@ -196,15 +189,16 @@ export class FileSystemScanner {
         };
     }
 
-    async findMovieFor ( scraper : IScraper, id : string, title : string, year : number | null, query ?: IScraperQuery, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
-        const movieId = this.settings.get<string>( [ 'associations', 'movie', id ] );
+    async findMovieFor ( scraper : IScraper, id : string, title : string, year : number | null, externalMovieId : string = null, query ?: IScraperQuery, cache : CacheOptions = {} ) : Promise<MovieMediaRecord> {
+        // External here stands for scraper movie id
+        externalMovieId = externalMovieId || this.settings.get<string>( [ 'associations', 'movie', id ] );
 
-        if ( !movieId ) {
+        if ( !externalMovieId ) {
             const titleQuery = typeof year === 'number' ? ( title + ` (${ year })` ) : title;
             
             return ( await scraper.searchMovie( titleQuery, 1, query, cache ) )[ 0 ];
         } else {
-            return scraper.getMovie( movieId, query, cache );
+            return scraper.getMovie( externalMovieId, query, cache );
         }
     }
 
@@ -256,7 +250,9 @@ export class FileSystemScanner {
                     const movieName: string = localSettings.name || details.title;
                     const movieYear: number | null = localSettings.year || details.year;
 
-                    movie = await this.findMovieFor( scraper, id, movieName, movieYear, {}, movieCache );
+                    const movieScraperId = localSettings.id;
+
+                    movie = await this.findMovieFor( scraper, id, movieName, movieYear, movieScraperId, {}, movieCache );
 
                     if ( !movie ) {
                         this.logScanError( MediaKind.Movie, videoFile, 'Cannot find movie ' + id + ' ' + movieName + ' (' + movieYear + ')' );
@@ -272,7 +268,8 @@ export class FileSystemScanner {
                         internalId: movie.id,
                         sources: [ { "id": fullVideoFile } ],
                         quality: this.parseQuality( videoFile ),
-                        addedAt: stats.mtime
+                        addedAt: stats.mtime,
+                        ...localSettings?.override ?? {},
                     } as MovieMediaRecord;
                 } catch ( error ) {
                     logger.static().error( videoFile + ' ' + error.message + '\n' + error.stack );
@@ -333,9 +330,6 @@ export class FileSystemScanner {
     async getMovieLocalSettings ( folder : string ) : Promise<MovieLocalSettings> {
         try {
             const localSettingsPath = path.join( folder, 'media.yaml' );
-            if (folder.includes('Minari')) {
-                console.log(folder, localSettingsPath, await fs.exists( localSettingsPath ));
-            }
 
             if ( await fs.exists( localSettingsPath ) ) {
                 var contents = await fs.readFile( localSettingsPath, { encoding: 'utf8' } );
@@ -589,23 +583,4 @@ export class FileSystemScanner {
             throw new Error( `Invalid file system scanning type ${ this.config.content }` );
         }
     }
-}
-
-export interface TvShowLocalSettings {
-    show?: {
-        name?: string,
-        id?: string | number;
-    },
-    episodes ?: {
-        file: string,
-        id?: string | number,
-        override?: Partial<TvEpisodeMediaRecord>,
-        ignore?: boolean,
-    }[],
-}
-
-export interface MovieLocalSettings {
-    id?: string;
-    name?: string;
-    year?: string;
 }

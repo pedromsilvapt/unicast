@@ -424,6 +424,7 @@ export class MediaManager {
 
     watchTracker : MediaWatchTracker;
 
+    customization : MediaCustomization;
 
     userRanks : MediaUserRanks;
 
@@ -439,6 +440,7 @@ export class MediaManager {
         this.server = server;
 
         this.watchTracker = new MediaWatchTracker( this );
+        this.customization = new MediaCustomization( this );
         this.userRanks = new MediaUserRanks( this );
     }
 
@@ -693,6 +695,30 @@ export class MediaManager {
         }
     }
 
+    async updateManyIfChanged<R extends MediaRecord> ( original : R[], changed: R[], options : Partial<r.OperationOptions> = {} ): Promise<R[]> {
+        if ( original.length === changed.length ) {
+            throw new Error( 
+                `Update many media: original and changed records should have the same length, ` +
+                `instead got ${original.length} and ${changed.length}.` 
+            );
+        }
+
+        for ( let [ index, record ] of original.entries() ) {
+            if ( changed[ index ].kind != null && record.kind !== changed[ index ].kind ) {
+                throw new Error(
+                    `Update many media: Cannot change kind of index ${index} ` +
+                    `from ${record.kind} to ${changed[ index ].kind}.`
+                );
+            }
+        }
+        
+        return Promise.all( original.map( ( record, index ) => {
+            const table = this.getTable( record.kind ) as any as BaseTable<R>;
+            
+            return table.updateIfChanged( record, changed[ index ], { updatedAt: new Date() }, options );
+        } ) );
+    }
+
     async humanize ( record: MediaRecord ): Promise<string> {
         if ( isTvEpisodeRecord( record ) ) {
             const season = await this.get( MediaKind.TvSeason, record.tvSeasonId );
@@ -706,6 +732,60 @@ export class MediaManager {
     }
 }
 
+export class MediaCustomization {
+    public mediaManager : MediaManager;
+
+    public constructor ( mediaManager : MediaManager ) {
+        this.mediaManager = mediaManager;
+    }
+
+    async save<R extends MediaRecord> ( record: R, customization: DeepPartial<R> ) {
+        await this.saveMany( [ { record, customization } ] );
+    }
+
+    async saveMany ( recordCustomizations: MediaRecordCustomization<MediaRecord>[] ) {
+        const customizationsByRepository = collect( recordCustomizations, groupingBy( recCust => recCust.record.repository ) );
+
+        for ( let [ repositoryName, repositoryRecordCustomizations ] of customizationsByRepository ) {
+            const repository = this.mediaManager.server.repositories.get( repositoryName );
+
+            if ( repository == null ) {
+                throw new Error( `Cannot apply customization to records, because repository "${repositoryName}" was not found.` );
+            }
+
+            for ( const entry of repositoryRecordCustomizations) {
+                await repository.saveCustomization( entry.record, entry.customization );
+            }
+        }
+        
+        // Save the database
+        const originalRecords = recordCustomizations.map( record => record.record );
+        
+        const appliedRecords = this.applyMany( recordCustomizations );
+
+        await this.mediaManager.server.media.updateManyIfChanged( originalRecords, appliedRecords );
+    }
+
+    apply<R extends MediaRecord> ( record: R, customization: DeepPartial<R> ): R {
+        return {
+            ...record,
+            ...customization,
+        };
+    }
+
+    applyMany<R extends MediaRecord> ( recordCustomizations: MediaRecordCustomization<R>[] ) : R[] {
+        return recordCustomizations.map( pair => this.apply( pair.record, pair.customization ) );
+    }
+}
+
+export interface MediaRecordCustomization<R extends MediaRecord> {
+    record: R;
+    customization: DeepPartial<R>;
+}
+
+export type DeepPartial<T extends object> = {
+    [K in keyof T] ?: T[K]
+};
 
 export class MediaUserRanks {
     public mediaManager: MediaManager;

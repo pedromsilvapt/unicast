@@ -1,14 +1,18 @@
 import { IVirtualRepository, MediaRepository, VirtualRepositoryState } from "../../../MediaRepositories/MediaRepository";
-import { MediaRecord, MediaKind, isPlayableRecord, PlayableMediaRecord, isMovieRecord, isTvEpisodeRecord, TvEpisodeMediaRecord, MovieMediaRecord } from "../../../MediaRecord";
+import { MediaRecord, MediaKind, isPlayableRecord, PlayableMediaRecord, isMovieRecord, isTvEpisodeRecord, TvEpisodeMediaRecord, MovieMediaRecord, isTvShowRecord, isTvSeasonRecord } from "../../../MediaRecord";
 import { FileSystemMountConfig, FileSystemScanner, FileSystemScannerConfig, FileSystemScannerConfigNormalized, MediaScanContent } from "./FileSystemScanner";
 import { filter, map } from "data-async-iterators";
 import { Settings } from "../../../MediaScrapers/Settings";
 import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
 import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import * as fs from 'mz/fs';
+import * as path from 'path';
 import { MediaRecordFilter } from '../../../MediaRepositories/ScanConditions';
 import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
+import { DeepPartial } from '../../../UnicastServer';
+import * as yaml from 'js-yaml' 
+import { LocalSettings } from './LocalSettings';
 
 export class FileSystemRepository extends MediaRepository {
     config : FileSystemScannerConfigNormalized;
@@ -263,6 +267,101 @@ export class FileSystemRepository extends MediaRepository {
     
     getPreferredMedia ( kind : MediaKind, matchedId : string ) : string {
         return this.settings.get<string>( [ 'associations', kind, matchedId ] );
+    }
+
+    protected async getEpisodesShowFolders ( episodes : TvEpisodeMediaRecord[] ): Promise<string[]> {
+        var folders = new Set<string>();
+
+        const episodePathsList = await Promise.all( 
+            episodes.map( episode => this.getRealFilePath( episode ) )
+        );
+
+        for ( const episodePath of episodePathsList ) {
+            const seasonPath = path.dirname( episodePath )
+
+            const showFolder = path.dirname( seasonPath );
+
+            if ( !folders.has( showFolder ) ) {
+                folders.add( showFolder );
+            }
+        }
+
+        return Array.from( folders );
+    }
+
+    async getCustomizationPaths ( record : MediaRecord ) : Promise<string[]> {
+        if ( isMovieRecord( record ) ) {
+            const moviePath = await this.getRealFilePath( record );
+
+            return [ path.join( path.dirname( moviePath ), 'media.yaml' ) ];
+        } else if ( isTvShowRecord( record ) ) {
+            const episodes = await this.server.media.getEpisodes( record.id );
+
+            const showFolders = await this.getEpisodesShowFolders( episodes )
+            
+            return showFolders.map( showPath => path.join( showPath, 'media.yaml' ) );
+        } else if ( isTvSeasonRecord( record ) ) {
+            const episodes = await this.server.media.getSeasonEpisodes( record.id );
+
+            const showFolders = await this.getEpisodesShowFolders( episodes )
+            
+            return showFolders.map( showPath => path.join( showPath, 'media.yaml' ) );
+        } else if ( isTvEpisodeRecord( record ) ) {
+            const episodePath = await this.getRealFilePath( record );
+
+            const seasonPath = path.dirname( episodePath );
+
+            const showPath = path.dirname( seasonPath );
+
+            return [ path.join( showPath, 'media.yaml' ) ];
+        }
+    }
+
+    async getExistingCustomizationPaths ( record : MediaRecord ) : Promise<string[]> {
+        const allPossiblePaths = await this.getCustomizationPaths( record );
+
+        const existingPaths: string[] = [];
+
+        // TODO Parallelize
+        for ( const path of allPossiblePaths ) {
+            if ( await fs.exists( path ) ) {
+                existingPaths.push( path );
+            }
+        }
+
+        return existingPaths;
+    }
+
+    public async getCustomization<R extends MediaRecord> ( record : R ) : Promise<DeepPartial<R>> {
+        const paths = await this.getExistingCustomizationPaths( record );
+        
+        const fileContents = await Promise.all( paths.map( filePath => fs.readFile( filePath, { encoding: 'utf-8' } ) ) );
+
+        const settingsObjects = fileContents.map( string => yaml.load( string ) );
+
+        return LocalSettings.getMergedCustomization( record, settingsObjects, paths );
+    }
+
+    public async saveCustomization<R extends MediaRecord> ( record : R, customization : DeepPartial<R> ) : Promise<void> {
+        const pathsList = await this.getCustomizationPaths( record );
+
+        const existingSettingsList = await Promise.all( pathsList.map( 
+            filePath => LocalSettings.read( filePath ),
+        ) );
+        
+        for ( const [ index, settings ] of existingSettingsList.entries() ) {
+            existingSettingsList[index] = LocalSettings.setLocalSettingsCustomization( 
+                record, 
+                settings || {}, 
+                customization, 
+                pathsList[ index ], 
+                false 
+            );
+        }
+
+        await Promise.all( pathsList.map( 
+            ( filePath, index ) => LocalSettings.write( filePath, existingSettingsList[ index ] )
+        ) );
     }
 
     public static normalizeConfig ( config : FileSystemScannerConfig ) : FileSystemScannerConfigNormalized {

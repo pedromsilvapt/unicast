@@ -1,5 +1,5 @@
 import { IEntity } from "../EntityFactory";
-import { UnicastServer } from "../UnicastServer";
+import { DeepPartial, UnicastServer } from "../UnicastServer";
 import { MediaKind, MediaRecord } from "../MediaRecord";
 import { ISubtitlesRepository } from "../Subtitles/SubtitlesRepository";
 import { CacheOptions } from '../MediaScrapers/ScraperCache';
@@ -57,6 +57,10 @@ export interface IMediaRepository {
 
     setPreferredMediaArt ( kind : MediaKind, id : string, key : string, url : string ) : void;
 
+    getCustomization<R extends MediaRecord> ( record : R ) : Promise<DeepPartial<R>>;
+
+    saveCustomization<R extends MediaRecord> ( record : R, customization : DeepPartial<R> ) : Promise<void>;
+
     toJSON () : any;
 }
 
@@ -96,6 +100,10 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
     abstract setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string );
 
     abstract getPreferredMedia ( kind : MediaKind, matchedId : string ) : string;
+
+    abstract getCustomization<R extends MediaRecord> ( record : R ) : Promise<DeepPartial<R>>;
+
+    abstract saveCustomization<R extends MediaRecord> ( record : R, customization : DeepPartial<R> ) : Promise<void>;
 
     toJSON () : any {
         const json : any = {
