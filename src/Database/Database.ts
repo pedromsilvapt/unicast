@@ -412,6 +412,10 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
     onDelete : Hook<R> = new Hook( 'onDelete' );
 
+    changesHistoryEnabled : boolean = false;
+
+    changesHistory : ChangeHistoryTable<R>;
+
     get database () : Database {
         return this.pool.database;
     }
@@ -438,6 +442,18 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
         }
 
         await this.installIndexes();
+
+        if ( this.changesHistoryEnabled && this.changesHistory != null ) {
+            this.changesHistory = new ChangeHistoryTable( this.pool, this.tableName + '_history' );
+
+            this.onCreate.subscribe( record => this.changesHistory.createChange( 'create', record ) );
+            this.onUpdate.subscribe( record => this.changesHistory.createChange( 'update', record ) );
+            this.onDelete.subscribe( record => this.changesHistory.createChange( 'delete', record ) );
+        }
+
+        if ( this.changesHistoryEnabled ) {
+            await this.changesHistory.install();
+        }
     }
 
     async installIndexes () {
@@ -868,6 +884,28 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
     }
 
     async repair ( records : string[] = null ) {
+        if ( this.changesHistoryEnabled === true && this.changesHistory != null ) {
+            if ( !records ) {
+                records = ( await this.find() ).map( record => record.id );
+            }
+
+            await Promise.all( records.map( async id => {
+                const createdRecords = await this.changesHistory.getForRecord( id, 'create' );
+
+                if ( createdRecords.length === 0 ) {
+                    const tableRecord = await this.get( id );
+
+                    let date = new Date();
+
+                    if ( 'createdAt' in tableRecord ) {
+                        date = tableRecord[ 'createdAt' ];
+                    }
+
+                    await this.changesHistory.createChange( 'create', tableRecord, date );
+                }
+            } ) );
+        }
+
         if ( this.dateFields != null && this.dateFields.length > 0 ) {
             if ( !records ) {
                 records = ( await this.find() ).map( record => record.id );
@@ -891,6 +929,65 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                 }
             } ) );
         }
+    }
+}
+
+export interface ChangeHistory<R> {
+    id ?: string;
+    action : 'create' | 'update' | 'delete';
+    data : R;
+    changedAt : Date;
+}
+
+export class ChangeHistoryTable<R> extends BaseTable<ChangeHistory<R>> {
+    tableName: string;
+
+    indexesSchema: IndexSchema[] = [
+        { name: 'dataId', expression: r.row( 'data' )( 'id' ) },
+        { name: 'createdAt' }
+    ];
+
+    public constructor ( pool: ConnectionPool, tableName: string ) {
+        super( pool );
+
+        this.tableName = tableName;
+    }
+
+    public async createChange ( action: 'create' | 'update' | 'delete', data: R, date?: Date ): Promise<ChangeHistory<R>> {
+        const now = date ?? new Date();
+        
+        const change: ChangeHistory<R> = {
+            action: action,
+            data: data,
+            changedAt: now,
+        };
+
+        return await this.create( change );
+    }
+
+    public async createManyChanges ( action: 'create' | 'update' | 'delete', datas: R[] ): Promise<ChangeHistory<R>[]> {
+        const now = new Date();
+        
+        const changes: ChangeHistory<R>[] = datas.map( data => ({
+            action: action,
+            data: data,
+            changedAt: now,
+        }));
+
+        return await this.createMany( changes );
+    }
+
+    public async getForRecord ( id : string, action ?: 'create' | 'update' | 'delete' ) : Promise<ChangeHistory<R>[]> {
+        if ( action != null ) {
+            return this.findAll( [ id ], {
+                index: 'dataId',
+                query: query => query.filter( { action } ),
+            } );
+        }
+
+        return this.findAll( [ id ], {
+            index: 'dataId'
+        } );
     }
 }
 

@@ -115,8 +115,8 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
         }
     }
 
-    async parse ( scraperName : string, name : string ) : Promise<MediaRecord> {
-        
+    async parse ( scraperName : string, name : string ) : Promise<Partial<MediaRecord>> {
+        return {};
     }
 }
 
