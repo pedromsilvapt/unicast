@@ -15,8 +15,9 @@ import { ScrapersController } from "./MediaControllers/ScrapersController";
 import { PeopleController } from './MediaControllers/PeopleController';
 import { StorageController } from './MediaControllers/StorageController';
 import { RandomStream } from '../../ES2017/RandomStream';
-import * as sortBy from 'sort-by';
 import { RepositoriesController } from './MediaControllers/RepositoriesController';
+import { UserRanksController } from './UserRanksController';
+import * as sortBy from 'sort-by';
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -63,6 +64,9 @@ export class ApiController extends BaseController {
 
     @Controller( ScrapersController, '/media/scrapers' )
     scrapers : ScrapersController;
+
+    @Controller( UserRanksController, '/media/user-ranks' )
+    userRanks : UserRanksController;
 
     @Controller( StorageController, '/storage' )
     storage : StorageController;

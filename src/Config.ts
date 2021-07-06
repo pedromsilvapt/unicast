@@ -310,6 +310,19 @@ export class SchemaValidationError {
             return expectations;
         }
     }
+
+
+    public static toString ( errors ?: SchemaValidationResult ) {
+        if ( !errors ) {
+            return  null;
+        }
+
+        if ( errors instanceof Array ) {
+            return errors.map( error => error.message ).join( '\n' );
+        } else {
+            return errors.message;
+        }
+    }
 }
 
 export type SchemaValidationResult = null | SchemaValidationError | SchemaValidationError[];
@@ -319,7 +332,13 @@ export abstract class TypeSchema {
         if ( schema instanceof TypeSchema ) {
             return schema;
         } else if ( schema instanceof Array ) {
-            return ArrayTypeSchema.normalize( schema );
+            if ( schema.length == 0 ) {
+                return ArrayTypeSchema.normalize( new AnyTypeSchema() );
+            } else if ( schema.length == 1 ) {
+                return ArrayTypeSchema.normalize( schema );
+            } else {
+                return TupleTypeSchema.normalize( schema );
+            }
         } else if ( schema === String ) {
             return new StringTypeSchema();
         } else if ( schema === Number ) {
@@ -401,6 +420,90 @@ export class AnyTypeSchema extends TypeSchema {
     }
 }
 
+export class UnionTypeSchema extends TypeSchema {
+    typeSchemas: TypeSchema[];
+    
+    constructor ( ...typeSchemas: any[] ) {
+        super();
+
+        this.typeSchemas = typeSchemas.map( type => TypeSchema.normalize( type ) );
+    }
+
+    validate ( data : any ) : SchemaValidationResult {
+        const errors: SchemaValidationError[] = [];
+
+        for ( const schema of this.typeSchemas ) {
+            const schemaErrors = schema.validate( data );
+
+            if ( schemaErrors === null ) {
+                return null;
+            }
+
+            if ( schemaErrors instanceof Array ) {
+                errors.push( ...schemaErrors );
+            } else {
+                errors.push( schemaErrors );
+            }
+        }
+
+        if ( errors.length === 0 ) {
+            return null;
+        }
+
+        return errors;
+    }
+
+    run ( data : any ) {
+        for ( const schema of this.typeSchemas ) {
+            const schemaErrors = schema.validate( data );
+
+            if ( schemaErrors === null ) {
+                return schema.run( schema );
+            }
+        }
+
+        return data;
+    }
+}
+
+export class IntersectionTypeSchema extends TypeSchema {
+    typeSchemas: TypeSchema[];
+    
+    constructor ( ...typeSchemas: any[] ) {
+        super();
+
+        this.typeSchemas = typeSchemas.map( type => TypeSchema.normalize( type ) );
+    }
+
+    validate ( data : any ) : SchemaValidationResult {
+        const errors: SchemaValidationError[] = [];
+
+        for ( const schema of this.typeSchemas ) {
+            const schemaErrors = schema.validate( data );
+
+            if ( schemaErrors instanceof Array ) {
+                errors.push( ...schemaErrors );
+            } else if ( schemaErrors != null ) {
+                errors.push( schemaErrors );
+            }
+        }
+
+        if ( errors.length === 0 ) {
+            return null;
+        }
+
+        return errors;
+    }
+
+    run ( data : any ) {
+        for ( const schema of this.typeSchemas ) {
+            data = schema.run( data );
+        }
+
+        return data;
+    }
+}
+
 export class StringTypeSchema extends TypeSchema {
     validate ( data : any ) : SchemaValidationResult {
         if ( typeof data === 'string' ) {
@@ -444,23 +547,31 @@ export class BooleanTypeSchema extends TypeSchema {
     }
 }
 
-export class ArrayTypeSchema extends TypeSchema {
-    static normalize ( schema : any ) : TypeSchema {
-        return new ArrayTypeSchema( TypeSchema.normalize( schema[ 0 ] ) );
+export class TupleTypeSchema extends TypeSchema {
+    static normalize ( schema : any ) : TupleTypeSchema {
+        return new TupleTypeSchema( schema );
     }
 
-    subSchema : TypeSchema;
+    subSchema : TypeSchema[];
 
-    constructor ( subSchema : any ) {
+    constructor ( schema : any[] ) {
         super();
 
-        this.subSchema = TypeSchema.normalize( subSchema );
+        this.subSchema = [];
+
+        for ( let type of schema ) {
+            this.subSchema.push( TypeSchema.normalize( type ) );
+        }
     }
 
     validate ( data : any ) : SchemaValidationResult {
         if ( data instanceof Array ) {
             const errors = data.map( ( item, index ) => {
-                    const errors = this.subSchema.validate( item );
+                    if ( this.subSchema.length <= index ) {
+                        return new SchemaValidationError( 'Undefined', typeof item );
+                    }
+
+                    const errors = this.subSchema[ index ].validate( item );
 
                     if ( errors instanceof Array ) {
                         return errors.map( err => err.prefix( index.toString() ) );
@@ -485,7 +596,67 @@ export class ArrayTypeSchema extends TypeSchema {
                 return errors;
         }
 
-        return new SchemaValidationError( 'Array', typeof data );;
+        return new SchemaValidationError( 'Array', typeof data );
+    }
+
+    run ( data : any ) {
+        if ( data instanceof Array ) {
+            return data.map( ( entry, index ) => {
+                if ( index < this.subSchema.length ) {
+                    return this.subSchema[ index ].run( entry )
+                }
+
+                return entry;
+            } );
+        }
+        
+        return data;
+    }
+}
+
+export class ArrayTypeSchema extends TypeSchema {
+    static normalize ( schema : any ) : TypeSchema {
+        return new ArrayTypeSchema( TypeSchema.normalize( schema[ 0 ] ) );
+    }
+
+    subSchema : TypeSchema;
+
+    constructor ( subSchema : any ) {
+        super();
+
+        this.subSchema = TypeSchema.normalize( subSchema );
+    }
+
+    validate ( data : any ) : SchemaValidationResult {
+        if ( data instanceof Array ) {
+            const errors = data.map( ( item, index ) => {
+                    const errors = this.subSchema.validate( item );
+
+                    if ( errors instanceof Array ) {
+                        return errors.map( err => err.prefix( index.toString() ) );
+                    } else if ( errors !== null ) {
+                        return errors.prefix( index.toString() );
+                    }
+                } )
+                .filter( error => error != null )
+                .reduce( ( arr, errors ) => {
+                    if ( errors instanceof Array ) {
+                        arr.push( ...errors );
+                    } else {
+                        arr.push( errors )
+                    }
+
+                    return arr;
+                }, [] as any[] );
+
+                if ( errors.length === 0 ) {
+                    return null;
+                }
+
+                return errors;
+        }
+
+        return new SchemaValidationError( 'Array', typeof data );
     }
 
     run ( data : any ) {
@@ -584,8 +755,49 @@ export class ObjectTypeSchema extends TypeSchema {
     }
 }
 
-export class ConfigTemplate {
-    schema : TypeSchema;
+// Functional DSL
+export function any () {
+    return new AnyTypeSchema();
+}
+
+export function array ( subSchema : any ) {
+    return new ArrayTypeSchema( subSchema );
+}
+
+export function object ( subSchema : any = {}, strict : boolean = false ) {
+    return new ObjectTypeSchema( subSchema, strict );
+}
+
+export function union ( ...typeSchemas : any[] ) {
+    return new UnionTypeSchema( ...typeSchemas );
+}
+
+export function intersection ( ...typeSchemas : any[] ) {
+    return new IntersectionTypeSchema( ...typeSchemas );
+}
+
+export function tuple ( subSchema : any ) {
+    return new TupleTypeSchema( subSchema );
+}
+
+export function constant ( constant : any ) {
+    return new ConstantTypeSchema( constant );
+}
+
+export function number () {
+    return new NumberTypeSchema();
+}
+
+export function boolean () {
+    return new BooleanTypeSchema();
+}
+
+export function optional ( subSchema : any, defaultValue : any = null ) {
+    return new OptionalTypeSchema( subSchema, defaultValue );
+}
+
+export function string () {
+    return new StringTypeSchema();
 }
 
 /* DYNAMIC CONFIG */

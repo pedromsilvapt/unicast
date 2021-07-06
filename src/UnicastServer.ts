@@ -1,7 +1,7 @@
 import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord, isTvEpisodeRecord, isTvSeasonRecord, isMovieRecord, isTvShowRecord, isCustomRecord } from "./MediaRecord";
-import { Database, BaseTable, CollectionRecord, MediaTable } from "./Database/Database";
+import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
@@ -21,7 +21,7 @@ import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
 import { Hookable, Hook } from "./Hookable";
 import * as r from 'rethinkdb';
 import * as itt from 'itt';
-import { Semaphore } from "data-semaphore";
+import { ReadWriteSemaphore, Semaphore } from "data-semaphore";
 import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
 import { serveMedia } from "./ES2017/HttpServeMedia";
 import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
@@ -38,6 +38,7 @@ import { TIMESTAMP_SHORT } from 'clui-logger/lib/Backends/ConsoleBackend';
 import { Relation } from './Database/Relations/Relation';
 import { max } from './ES2017/Date';
 import * as crypto from 'crypto';
+import { collect, first, groupingBy } from 'data-collectors';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -423,6 +424,9 @@ export class MediaManager {
 
     watchTracker : MediaWatchTracker;
 
+
+    userRanks : MediaUserRanks;
+
     get database () : Database {
         return this.server.database;
     }
@@ -435,6 +439,7 @@ export class MediaManager {
         this.server = server;
 
         this.watchTracker = new MediaWatchTracker( this );
+        this.userRanks = new MediaUserRanks( this );
     }
 
     getTable ( kind : MediaKind ) : MediaTable<MediaRecord> {
@@ -698,6 +703,334 @@ export class MediaManager {
         } else {
             return record.title;
         }
+    }
+}
+
+
+export class MediaUserRanks {
+    public mediaManager: MediaManager;
+
+    public lists: Map<string, MediaUserRanksList> = new Map();
+
+    public constructor ( mediaManager: MediaManager ) {
+        this.mediaManager = mediaManager;
+    }
+
+    public getList (id: string): MediaUserRanksList {
+        if (this.lists.has(id)) {
+            return this.lists.get(id);
+        } else {
+            const list = new MediaUserRanksList(this.mediaManager, id);
+
+            this.lists.set(id, list);
+
+            return list;
+        }
+    }
+}
+
+export class MediaUserRanksList {
+    public mediaManager: MediaManager;
+
+    public id: string;
+
+    public semaphore: ReadWriteSemaphore;
+
+    public constructor ( mediaManager: MediaManager, id: string ) {
+        this.mediaManager = mediaManager;
+        this.id = id;
+        this.semaphore = new ReadWriteSemaphore( 1 );
+    }
+
+    public async getRecordInRank ( rank: number ) : Promise<MediaRecord> {
+        if (rank == 0) {
+            throw new Error(`Invalid record rank: 0`);
+        }
+
+        const userRank = await this.mediaManager.database.tables.userRanks.findOne( query => query.filter( {
+            list: this.id,
+            position: rank,
+        } ) );
+
+        if ( userRank == null ) {
+            return null;
+        }
+
+        const { kind, id } = userRank.reference;
+        
+        return await this.mediaManager.get( kind, id );
+    }
+
+    public async getRecordRank ( record: MediaRecord ) : Promise<number> {
+        const userRank = await this.mediaManager.database.tables.userRanks.findOne( query => query.filter( {
+            list: this.id,
+            reference: { kind: record.kind, id: record.id },
+        } ) );
+
+        if ( userRank == null ) {
+            return 0;
+        }
+
+        return userRank.position;
+    }
+
+    protected async getModifiedRange ( ranks: number[] ): Promise<Map<number, UserRankRecord>> {
+        ranks = ranks.filter( n => n > 0 );
+
+        if ( ranks.length == 0 ) {
+            return new Map();
+        }
+
+        const min = Math.max( ...ranks );
+        const max = Math.max( ...ranks );
+
+        const records = await this.mediaManager.database.tables.userRanks.find( query => {
+            return query.between( min, max, { index: 'position' } ).filter( { list: this.id } );
+        } );
+
+        return collect( records, groupingBy( rank => rank.position, first() ) );
+    }
+
+    public async getTopRank () : Promise<number> {
+        return await this.mediaManager.database.tables.userRanks.findStream( query => {
+            return query.orderBy( { index: r.desc( 'position' ) } )
+                .filter( { list: this.id } )
+                .limit( 1 );
+        } ).map( row => row.position ).first() ?? 0;
+    }
+
+    protected async getRecordAndRank ( recordOrRank: MediaRecord | number ): Promise<[MediaRecord, number]> {
+        if ( typeof recordOrRank === 'number' ) {
+            return [ await this.getRecordInRank( recordOrRank ), recordOrRank ];
+        } else {
+            return [ recordOrRank, await this.getRecordRank( recordOrRank ) ];
+        }
+    }
+
+    /**
+     * Placing some records after another one.
+     * The positions are in descending order, meaning the greatest position is
+     * the first one. Position 1 is the last.
+     * The position zero is reserved for all media records not ordered. It is
+     * the only position in a list that can contain multiple records.
+     * 
+     * To place (or set the rank of) something AFTER something else means (anchor), 
+     * to put their ranks, if anchor rank is N, as N + 1, N + 2, etc...
+     * 
+     * When performing this update there are some possible states. To understand them
+     * let's consider the following list:
+     *    id : A B C D E F G H
+     *    pos: 8 7 6 5 4 3 2 1
+     * 
+     * If we call setRankAfter(D, [ B, F, G, I ] ), the resulting list ought to be:
+     *    id : A C D B F G I E H
+     *    pos: 9 8 7 6 5 4 3 2 1
+     * 
+     * There are some things to note:
+     *   1. Since we added I to the list, everything to the right of D had to
+     *      be incremented by 1 (the number or new elements)
+     *   2. Since we moved B (which was before D) to after D, then D's position
+     *      has to be incremented by 1 (the number of elements shifted that sides)
+     *   3. D's new position will be `PositionD + BeforeD + NewElements`
+     *   4. All the items in the list will have new positions calculated as:
+     *      `NewPositionD - index + 1`
+     *   5. All the items between B and G, that were not in the list, will have
+     *      their positions updated
+     *       5.1. If their original position is < PositionD, then their new position
+     *            is NewPositionD + 1 + index  
+     *      
+     * 
+     * @param anchor 
+     * @param trailings 
+     */
+    public async setRankBefore ( anchorOrPosition: MediaRecord | number, trailings: MediaRecord[] ) {
+        const [ anchor, anchorRank ] = await this.getRecordAndRank( anchorOrPosition );
+        
+        const table = this.mediaManager.database.tables.userRanks;
+
+        // Validate if there are duplicate records in the trailings/anchor
+        const allRecords = [ ...trailings ];
+
+        if ( anchor != null ) allRecords.push( anchor );
+
+        const recordsById = collect( allRecords, groupingBy( record => record.kind + '-' + record.id ) );
+
+        for ( const [ id, records ] of recordsById.entries() ) {
+            if ( records.length > 1 ) {
+                throw new Error( `Cannot move the rank of the same record more than once in the same op: ${ id }` );
+            }
+        }
+
+        const trailingsRanks = await Promise.all( trailings.map( record => this.getRecordRank( record ) ) );
+
+        if ( anchorRank == 0 ) {
+            throw new Error( `Anchor rank cannot be zero por positional ranking` );
+        }
+
+        const modifiedRange = await this.getModifiedRange( [ anchorRank, ...trailingsRanks ] );
+
+        // How many of the ones we're moving have rank zero, i.e. are not yet in the list
+        const zerosCount = trailingsRanks.reduce( (acc, n) => acc + Number( n == 0 ), 0 );
+        // How many records were already on the list, but before the anchor
+        const beforeCount = trailingsRanks.reduce( (acc, n) => acc + Number( n > anchorRank ), 0 );
+
+        // 1. If we are creating new positions into the list, we must update all
+        // user ranks >= anchorRank to be += zerosCount
+        if ( zerosCount > 0 ) {
+            const filter = row => row( 'list' ).eq( this.id )
+                .and( row( 'position' ).gte( anchorRank ) );
+
+            const change = { 
+                age: r.row( 'position' ).add( zerosCount )
+            };
+
+            await table.updateMany( filter, change );
+        }
+
+        const changes = new RankChangeSet();
+
+        // 3. Calculate (and update) the new achor position
+        const anchorRankNew = anchorRank + zerosCount + beforeCount;
+
+        if ( modifiedRange.has( anchorRank ) ) {   
+            // Move the Anchor
+            changes.move( modifiedRange.get( anchorRank ).id, anchorRankNew - anchorRank );
+            
+            modifiedRange.delete( anchorRank )
+        }
+
+        // 4. Update the positions of the records that were explicitly moved
+        for ( const [ index, record ] of trailings.entries() ) {
+            const oldPosition = trailingsRanks[ index ];
+            const newPosition = anchorRank + beforeCount - index - 1;
+
+            if ( oldPosition == 0 ) {
+                changes.create( {
+                    list: this.id,
+                    reference: { kind: record.kind, id: record.id },
+                    position: newPosition,
+                } )
+            } else {
+                const rank = modifiedRange.get( oldPosition );
+
+                modifiedRange.delete( oldPosition );
+
+                changes.move( rank.id, newPosition - oldPosition );
+            }
+        }
+
+        // 5. If there are still any 
+        if ( modifiedRange.size > 0 ) {
+            const recordsBeforeAnchor = Array.from( modifiedRange.values() )
+                .filter( row => row.position > anchorRank )
+                .sort( sortBy( '-position' ) );
+
+            // Records higher (to the left) of the anchor
+            for ( const [ index, rank ] of recordsBeforeAnchor.entries() ) {
+                const newPosition = anchorRankNew + recordsBeforeAnchor.length - index;
+
+                changes.move( rank.id, newPosition - rank.position );
+            }
+
+            const recordsAfterAnchor = Array.from( modifiedRange.values() )
+                .filter( row => row.position < anchorRank )
+                .sort( sortBy( '-position' ) );
+
+            // Records lower (to the right) of the last moved item and the anchor
+            for ( const [ index, rank ] of recordsAfterAnchor.entries() ) {
+                const newPosition = anchorRankNew - trailings.length - index - 1;
+
+                changes.move( rank.id, newPosition - rank.position );
+            }
+        }
+
+        await changes.apply( table );
+    }
+
+    public async setRankAfter ( anchor: MediaRecord, leadings: MediaRecord[] ) {
+        const anchorRank = await this.getRecordRank( anchor );
+
+        // TODO What if the data in the database is messed up and not contiguous?
+        const beforeAnchor = await this.getRecordInRank( anchorRank + 1 );
+
+        if ( beforeAnchor == null ) {
+            return await this.setRankBefore( anchorRank + 1, leadings );
+        } else {
+            return await this.setRankBefore( beforeAnchor, leadings );
+        }
+    }
+
+    public async setRankToBottom ( records: MediaRecord[] ) {
+        return await this.setRankBefore( 1, records );
+    }
+
+    public async setRankToTop ( records: MediaRecord[] ) {
+        const topRank = await this.getTopRank();
+
+        return await this.setRankBefore( topRank + 1, records );
+    }
+
+    public async getRanks () : Promise<UserRankRecord[]> {
+        return await this.mediaManager.server.database.tables.userRanks.find( query => {
+            return query.orderBy( { index: 'position' } );
+        } );
+    }
+
+    public async getRecords () : Promise<MediaRecord[]> {
+        const ranks = await this.getRanks();
+
+        await this.mediaManager.server.database.tables.userRanks.relations.record.applyAll( ranks );
+
+        return ranks.map( rank => ( rank as any ).record );
+    }
+
+    public async truncate () {
+        const table = this.mediaManager.database.tables.userRanks;
+
+        return await table.deleteMany({ list: this.id });
+    }
+}
+
+export class RankChangeSet {
+    protected moves = new Map<number, string[]>();
+
+    protected creations: UserRankRecord[] = [];
+
+    public move ( id: string, offset: number ) {
+        if ( offset == 0 ) {
+            return;
+        }
+
+        let idArray = this.moves.get( offset );
+
+        if ( idArray == null ) {
+            idArray = [ id ];
+
+            this.moves.set( offset, idArray );
+        } else {
+            idArray.push( id );
+        }
+    }
+
+    public create ( rank: UserRankRecord ): void {
+        this.creations.push( rank );
+    }
+
+    public async apply ( table: UserRanksTable ): Promise<void> {
+        const updates = Array.from( this.moves ).map( tuple => {
+            const [ offset, ids ] = tuple;
+
+            return table.updateMany( doc => r.expr( ids ).contains( doc( 'id' ) ), {
+                position: r.row( 'position' ).add( offset )
+            } );
+        } );
+
+        const inserts = table.createMany( this.creations );
+
+        await Promise.all( [
+            Promise.all( updates ), 
+            inserts 
+        ] );
     }
 }
 

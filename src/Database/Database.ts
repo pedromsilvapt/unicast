@@ -138,6 +138,10 @@ export class Database {
 
         await task.run( 'history', () => this.tables.history.repair() );
 
+        await task.run( 'people', () => this.tables.people.repair() );
+
+        await task.run( 'mediaCast', () => this.tables.mediaCast.repair() );
+
         return task;
     }
 
@@ -170,6 +174,8 @@ export class DatabaseTables {
 
     collectionsMedia : CollectionMediaTable;
 
+    userRanks : UserRanksTable;
+
     people : PeopleTable;
 
     mediaCast : MediaCastTable;
@@ -198,6 +204,8 @@ export class DatabaseTables {
         this.collections = new CollectionsTable( pool );
 
         this.collectionsMedia = new CollectionMediaTable( pool );
+
+        this.userRanks = new UserRanksTable( pool );
 
         this.people = new PeopleTable( pool );
 
@@ -228,6 +236,8 @@ export class DatabaseTables {
         await this.collections.install();
 
         await this.collectionsMedia.install();
+
+        await this.userRanks.install();
 
         await this.people.install();
 
@@ -951,6 +961,9 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         { name: 'playCount' },
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
+        { name: 'qualityResolutions', expression: r.row( 'quality' )( 'resolution' ) },
+        { name: 'qualitySources', expression: r.row( 'quality' )( 'source' ) },
+        { name: 'qualityColorGamuts', expression: r.row( 'quality' )( 'colorGamut' ) },
     ];
 
     dateFields = [ 'addedAt', 'lastPlayedAt' ];
@@ -1506,6 +1519,34 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
             }
         } ) );
     }
+}
+
+export class UserRanksTable extends BaseTable<UserRankRecord> {
+    readonly tableName : string = 'user_ranks';
+
+    indexesSchema : IndexSchema[] = [
+        { name: 'position' },
+        { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
+    ];
+
+    relations: {
+        record: BelongsToOnePolyRelation<UserRankRecord, MediaRecord>;
+    }
+    
+    installRelations ( tables : DatabaseTables ) {
+        const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
+    
+        return {
+            record: new BelongsToOnePolyRelation( 'record', map, 'reference.kind', 'reference.id' )
+        };
+    }
+}
+
+export interface UserRankRecord  {
+    id?: string;
+    list: string;
+    reference: {kind: MediaKind, id: string};
+    position: number;
 }
 
 export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {

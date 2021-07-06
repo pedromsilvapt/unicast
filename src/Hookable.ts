@@ -57,7 +57,7 @@ export class Hookable {
 }
 
 export interface HookSubscription<T> {
-    ( arg : T ) : void | Promise<void>;
+    ( arg : T ) : unknown | Promise<unknown>;
 }
 
 export interface HookSubscriptionCancellation {

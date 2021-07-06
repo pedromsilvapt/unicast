@@ -42,7 +42,10 @@ export class FileSystemMediaSource extends MediaSource {
                 .filter( file => file.startsWith( filePrefix ) )
                 .filter( file => isSubtitle( file ) );
 
-            for ( let file of matchingFiles ) {
+            const exactMatches = matchingFiles.filter( file => path.basename( file, path.extname( file ) ) === filePrefix );
+            const partialMatches = matchingFiles.filter( file => path.basename( file, path.extname( file ) ) !== filePrefix );
+
+            for ( let file of [ ...exactMatches, ...partialMatches ] ) {
                 streams.push( new FileSystemSubtitlesMediaStream( path.join( folder, file ), this ) );
             }
         }
