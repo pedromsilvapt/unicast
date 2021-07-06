@@ -119,7 +119,7 @@ export class MediaRecordFactory {
             scraper: this.scraper.name,
             kind: MediaKind.TvShow,
             addedAt: null,
-            episodesCount: summary[ boxSet + 'Episodes'],
+            episodesCount: +summary[ boxSet + 'Episodes'],
             external: {
                 imdb: show.imdbId,
                 zap2it: show.zap2itId,

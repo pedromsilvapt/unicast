@@ -200,11 +200,6 @@ export class KodiConnection {
     }
 
     async status () : Promise<any> {
-        // console.log( ( await this.call( 'Settings.GetSections', { level: 'expert' } ) ).sections.map( s => s.id ) );
-        // console.log( ( await this.call( 'Settings.GetCategories', { level: 'expert' } ) ).categories.map( s => s.id ) );
-        // console.log( ( await this.call( 'Settings.GetSettings', { level: 'expert' } ) ).settings.map( s => s.id ).filter( s => s.includes( 'subt' ) ) );
-        // console.log( await this.call( 'Settings.GetSettingValue', { setting: 'subtitles.height' } ) );
-
         const player = await this.getActiveVideoPlayer();
 
         if ( player == null ) return null;

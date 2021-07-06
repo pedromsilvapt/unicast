@@ -11,8 +11,7 @@ import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord, isPlayableRec
 import { LoadOptions } from 'unicast-mpv/lib/Player';
 import { KodiHttpSender } from './KodiHttpSender';
 import { NoMediaFound } from '../../../Controllers/ApiControllers/PlayerController';
-import { CircuitBreaker } from '../../../ES2017/Resilient';
-  
+
 // create a client
 export interface KodiConfig {
     username ?: string;
