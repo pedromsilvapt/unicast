@@ -88,7 +88,7 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
     }
 
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        return query.filter( { device: req.params.device } );
+        return super.getQuery( req, res, query ).filter( { device: req.params.device } );
     }
 
     @Route( 'get', '/last' )

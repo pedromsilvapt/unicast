@@ -1,5 +1,5 @@
 import { UnicastServer } from "../UnicastServer";
-import { ISubtitlesProvider, ISubtitle } from "./Providers/ISubtitlesProvider";
+import { ISubtitlesProvider, ISubtitle, SearchOptions } from "./Providers/ISubtitlesProvider";
 import { EntityManager } from "../EntityManager";
 import { PlayableMediaRecord } from "../MediaRecord";
 import { SubtitlesCache } from "./SubtitlesCache";
@@ -7,6 +7,13 @@ import * as sortBy from 'sort-by';
 
 export function flatten<T> ( items : T[][] ) : T[] {
     return items.reduce( ( a, b ) => a.concat( b ), [] );
+}
+
+export interface ManagerSearchOptions {
+    langs?: string[];
+    seasonOffset?: number;
+    episodeOffset?: number;
+    providersNames?: string[];
 }
 
 export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider, string> {
@@ -35,28 +42,38 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
         return this.server.config.get( 'secondaryLanguages', [] );
     }
 
-    async search ( media : PlayableMediaRecord, langs : string[], providersNames : string[] = null ) : Promise<ISubtitle[]> {
-        if ( !providersNames ) {
-            providersNames = this.entities.map( provider => provider.name );
+    async search ( media : PlayableMediaRecord, options: ManagerSearchOptions = {} ) : Promise<ISubtitle[]> {
+        if ( !options.providersNames ) {
+            options = {
+                ...options,
+                providersNames: this.entities.map( provider => provider.name ),
+            };
         }
 
-        if ( !langs || langs.length == 0 ) {
-            langs = this.getDefaultLanguages();
+        if ( !options.langs || options.langs.length == 0 ) {
+            options = {
+                ...options,
+                langs: this.getDefaultLanguages(),
+            };
         }
 
-        const invalid = providersNames.filter( name => !this.hasKeyed( name ) );
+        const invalid = options.providersNames.filter( name => !this.hasKeyed( name ) );
 
         if ( invalid.length ) {
             throw new Error( `Could not find providers named ${ invalid.join( ', ' ) }.` );
         }
 
-        const providers = providersNames.map( name => this.get( name ) );
+        const providers = options.providersNames.map( name => this.get( name ) );
 
-        const providersAndLangs = flatten( providers.map( provider => langs.map( lang => [ provider, lang ] as [ ISubtitlesProvider, string ] ) ) );
+        const { episodeOffset, seasonOffset } = options;
+
+        const providersAndOptions = providers.flatMap( provider => 
+            options.langs.map( lang => [ provider, { episodeOffset, seasonOffset, lang } ] as [ ISubtitlesProvider, SearchOptions ] )
+        );
 
         return flatten<ISubtitle>( await Promise.all( 
-            providersAndLangs.map( ( [ provider, lang ] ) => this.cache.wrapSearch( provider.name, lang, media, () => {
-                return provider.search( media, lang ).catch( error => {
+            providersAndOptions.map( ( [ provider, providerOptions ] ) => this.cache.wrapSearch( provider.name, providerOptions, media, () => {
+                return provider.search( media, providerOptions ).catch( error => {
                     this.server.logger.error( 
                         'subtitles', 
                         error.message ? `Provider ${provider.name}: ${ error.message }` : `Error with subtitles provider "${ provider.name }" for record "${ media.title }".`,

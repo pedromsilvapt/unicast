@@ -1,5 +1,5 @@
 import * as subtitler from 'subtitler';
-import { ISubtitlesProvider, ISubtitle } from '../ISubtitlesProvider';
+import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../ISubtitlesProvider';
 import { MediaKind, TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, PlayableMediaRecord, isTvEpisodeRecord, isMovieRecord, MediaSources } from '../../../MediaRecord';
 import * as yauzl from 'yauzl';
 import * as iconv from 'iconv-lite';
@@ -29,7 +29,7 @@ export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesR
 
     protected api : any = subtitler.api;
 
-    protected async getQueryForMedia ( media : PlayableMediaRecord, lang : string ) {
+    protected async getQueryForMedia ( media : PlayableMediaRecord, searchOptions: SearchOptions ) {
         if ( isMovieRecord( media ) ) {
             if ( media.external.imdb ) {
                 return { imdbid: media.external.imdb.slice( 2 ) };
@@ -44,8 +44,8 @@ export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesR
             return {
                 imdbid: show.external.imdb.slice( 2 ),
                 query: show.title,
-                season: media.seasonNumber,
-                episode: media.number
+                season: media.seasonNumber + ( searchOptions.seasonOffset ?? 0 ),
+                episode: +media.number + ( searchOptions.episodeOffset ?? 0 )
             };
         } else {
             return {
@@ -67,15 +67,15 @@ export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesR
         }, 29 * 60 * 1000 );
     }
 
-    async search ( media : PlayableMediaRecord, lang : string ) : Promise<IOpenSubtitlesResult[]> {
+    async search ( media : PlayableMediaRecord, options : SearchOptions ) : Promise<IOpenSubtitlesResult[]> {
         if ( !this.token ) {
             await this.getToken();
         }
 
         try {
-            const query = await this.getQueryForMedia( media, lang );
+            const query = await this.getQueryForMedia( media, options );
             
-            let results : any[] = await this.api.search( this.token, lang, query );
+            let results : any[] = await this.api.search( this.token, options.lang, query );
     
             const mediaSource = media.quality.source;
 

@@ -13,10 +13,16 @@ export interface ISubtitle {
     score : number;
 }
 
+export interface SearchOptions {
+    lang: string;
+    episodeOffset?: number;
+    seasonOffset?: number;
+}
+
 export interface ISubtitlesProvider<S extends ISubtitle = ISubtitle> extends IEntity {
     readonly name : string;
 
-    search ( media : PlayableMediaRecord, lang : string ) : Promise<S[]>;
+    search ( media : PlayableMediaRecord, searchOptions : SearchOptions ) : Promise<S[]>;
 
     download ( subtitle : S ) : Promise<NodeJS.ReadableStream>;
 }

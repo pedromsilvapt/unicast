@@ -1,4 +1,4 @@
-import { ISubtitle } from "./Providers/ISubtitlesProvider";
+import { ISubtitle, SearchOptions } from "./Providers/ISubtitlesProvider";
 import { MediaRecord } from "../MediaRecord";
 import * as cacheStream from 'cache-stream';
 
@@ -9,30 +9,35 @@ export class SubtitlesCache {
 
     searches : Map<string, Promise<ISubtitle[]>> = new Map;
 
-    getSearchKey ( provider : string, lang : string, media : MediaRecord ) : string {
-        return provider + '|' + lang + '|' + media.kind + '|' + media.id;
+    getSearchKey ( provider : string, options : SearchOptions, media : MediaRecord ) : string {
+        return provider + 
+            '|' + options.lang + 
+            '|' + media.kind + 
+            '|' + media.id + 
+            '|' + ( options.seasonOffset ?? 0 ) + 
+            '|' + ( options.episodeOffset ?? 0 );
     }
 
-    hasSearch ( provider : string, lang : string, media : MediaRecord ) : boolean {
-        return this.searches.has( this.getSearchKey( provider, lang, media ) );
+    hasSearch ( provider : string, options : SearchOptions, media : MediaRecord ) : boolean {
+        return this.searches.has( this.getSearchKey( provider, options, media ) );
     }
 
-    getSearch ( provider : string, lang : string, media : MediaRecord ) : Promise<ISubtitle[]> {
-        return this.searches.get( this.getSearchKey( provider, lang, media ) );
+    getSearch ( provider : string, options : SearchOptions, media : MediaRecord ) : Promise<ISubtitle[]> {
+        return this.searches.get( this.getSearchKey( provider, options, media ) );
     }
 
-    setSearch ( provider : string, lang : string, media : MediaRecord, subtitles : Promise<ISubtitle[]> ) : this {
-        this.searches.set( this.getSearchKey( provider, lang, media ), subtitles );
+    setSearch ( provider : string, options : SearchOptions, media : MediaRecord, subtitles : Promise<ISubtitle[]> ) : this {
+        this.searches.set( this.getSearchKey( provider, options, media ), subtitles );
 
         return this;
     }
 
-    wrapSearch ( provider : string, lang : string, media : MediaRecord, supplier : () => Promise<ISubtitle[]> ) : Promise<ISubtitle[]> {
-        if ( !this.hasSearch( provider, lang, media ) ) {
-            this.setSearch( provider, lang, media, supplier() );
+    wrapSearch ( provider : string, options : SearchOptions, media : MediaRecord, supplier : () => Promise<ISubtitle[]> ) : Promise<ISubtitle[]> {
+        if ( !this.hasSearch( provider, options, media ) ) {
+            this.setSearch( provider, options, media, supplier() );
         }
         
-        return this.getSearch( provider, lang, media );
+        return this.getSearch( provider, options, media );
     }
 
     hasDownload ( subtitle : ISubtitle ) : boolean {

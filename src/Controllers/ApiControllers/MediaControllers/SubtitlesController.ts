@@ -11,6 +11,8 @@ import * as sortBy from 'sort-by';
 import { MpvSynchronizerController } from "../../../Subtitles/Validate/MPV/SynchronizerController";
 import { InvalidArgumentError, NotFoundError } from "restify-errors";
 import { measure } from '../../../Diagnostics';
+import { ExternalSynchronize, ExternalSynchronizeCommand } from '../../../Subtitles/Validate/ExternalSynchronize';
+import { ManagerSearchOptions } from '../../../Subtitles/ProvidersManager';
 
 export class SubtitlesController extends BaseController {
     protected validateSemaphore : Semaphore = new Semaphore( 1 );
@@ -25,6 +27,22 @@ export class SubtitlesController extends BaseController {
         return langs;
     }
 
+    protected getRequestOptions ( req : Request ) : ManagerSearchOptions {
+        const options: ManagerSearchOptions = {
+            langs: this.getRequestLanguages( req ),
+        };
+
+        if ( typeof req.query.episodeOffset === 'number' ) {
+            options.episodeOffset = req.query.episodeOffset;
+        }
+
+        if ( typeof req.query.seasonOffset === 'number' ) {
+            options.seasonOffset = req.query.seasonOffset;
+        }
+
+        return options;
+    }
+
     @Route( 'get', '/:kind/:id/local' )
     async listLocal ( req : Request, res : Response ) : Promise<ILocalSubtitle[]> {
         const media = await this.server.media.get( req.params.kind, req.params.id );
@@ -32,7 +50,7 @@ export class SubtitlesController extends BaseController {
         return await this.server.subtitles.list( media );
     }
 
-    protected async listRemotePredict ( episode : TvEpisodeMediaRecord, langs : string[] = null ) {
+    protected async listRemotePredict ( episode : TvEpisodeMediaRecord, options : ManagerSearchOptions = {} ) {
         const season = await this.server.database.tables.seasons.get( episode.tvSeasonId );
         
         const episodes = await this.server.media.getEpisodes( season.tvShowId );
@@ -42,13 +60,13 @@ export class SubtitlesController extends BaseController {
         const index = episodes.findIndex( ep => ep.id === episode.id );
 
         if ( index + 1 < episodes.length ) {
-            await this.server.subtitles.providers.search( episodes[ index + 1 ], langs );
+            await this.server.subtitles.providers.search( episodes[ index + 1 ], options );
         }
     }
 
     @Route( 'get', '/:kind/:id/remote' )
     async listRemote ( req : Request, res : Response ) : Promise<ISubtitle[]> {
-        const langs = this.getRequestLanguages( req );
+        const options = this.getRequestOptions( req );
 
         const media = await this.server.media.get( req.params.kind as MediaKind, req.params.id );
 
@@ -57,14 +75,14 @@ export class SubtitlesController extends BaseController {
         }
 
         const result = await measure( this.server.logger, 'subtitles/search', 
-            () => this.server.subtitles.providers.search( media, langs )
+            () => this.server.subtitles.providers.search( media, options )
         );
         
         // When searching for subtitles for an episode, try to predict the next episode we might search
         // (right now just means the next episode number) and start searching so that the results get cached
         // and when the user actually searches for them, the results come faster
         if ( media.kind === MediaKind.TvEpisode ) {
-            this.listRemotePredict( media as TvEpisodeMediaRecord, langs )
+            this.listRemotePredict( media as TvEpisodeMediaRecord, options )
                 .catch( err => this.server.onError.notify( err ) );
         }
 
@@ -92,7 +110,7 @@ export class SubtitlesController extends BaseController {
         return await this.server.subtitles.rename( media, subtitles, req.body.releaseName );
     }
 
-    protected async synchronizeSubtitle ( media : PlayableMediaRecord, subtitleFile : string ) : Promise<boolean> {
+    protected async synchronizeSubtitle ( media : PlayableMediaRecord, subtitleFile : string, additionalSubtitles: ILocalSubtitle[], mode: string ) : Promise<boolean> {
         const streams = await this.server.providers.streams( media.sources, { writeCache: false } );
 
         const video = streams.find( stream => stream.type === MediaStreamType.Video ) as FileSystemVideoMediaStream;
@@ -100,25 +118,58 @@ export class SubtitlesController extends BaseController {
         const release = await this.validateSemaphore.acquire();
 
         try {
-            const player = new MpvSynchronizerController( this.server );
-    
-            return await player.play( video.file, subtitleFile );
+            if ( mode === 'binary' ) {
+                const player = new MpvSynchronizerController( this.server );
+        
+                return await player.play( video.file, subtitleFile );
+            } else {
+                const allConfigs = this.server.config.get<ExternalSynchronizeCommand[]>( 'subtitles.synchronize', [] );
+                
+                const config = allConfigs.find( config => config.name === mode );
+
+                if ( config != null ) {
+                    const resolveSubtitle = async subtitle => {
+                        const file = await this.server.storage.getRandomFile( 'synchronize-additional-', 'srt', 'temp/subtitles' );
+                        
+                        await this.server.subtitles.storeLocalToFile( media, subtitle, file );
+
+                        return file;
+                    };
+
+                    const player = new ExternalSynchronize( config, resolveSubtitle );
+
+                    return await player.run( {
+                        video: video.file,
+                        subtitle: subtitleFile,
+                        additionalSubtitles: additionalSubtitles,
+                    } );
+                } else {
+                    const expectedModes = [ 'binary' ].concat( allConfigs.map( config => config.name ) );
+
+                    throw new InvalidArgumentError( `Invalid mode, expected ${ expectedModes.join( ', ' ) }, got "${mode}"` );
+                }
+            }
         } finally {
             release();
         }
     }
     
-    @Route( 'get', '/:kind/:id/local/:sub/synchronize' )
+    @Route( 'get', '/:kind/:id/local/:sub/synchronize/:mode' )
     async synchronizeLocal ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
         
         const subtitle = await this.server.subtitles.get( media, req.params.sub );
+
+        const mode = req.params.mode as string;
 
         if ( !subtitle ) {
             throw new NotFoundError( 'Requested subtitle was not found.' );
         }
 
         const file = await this.server.storage.getRandomFile( 'synchronize-local-', 'srt', 'temp/subtitles' );
+
+        const additionalSubtitles = ( await this.server.subtitles.list( media ) )
+            .filter( additionalSub => additionalSub.id != subtitle.id );
         
         await this.server.subtitles.storeLocalToFile( media, subtitle, file );
 
@@ -126,22 +177,24 @@ export class SubtitlesController extends BaseController {
         // if the synchronization is commited (the user sees it through)
         // When it is canceled in the middle (returning false)
         // ignore the changes
-        if ( await this.synchronizeSubtitle( media, file ) ) {
+        if ( await this.synchronizeSubtitle( media, file, additionalSubtitles, mode ) ) {
             await this.server.subtitles.delete( media, subtitle );
-    
+            
             await this.server.subtitles.updateFromFile( media, subtitle, file );
         }
 
         return this.server.subtitles.list( media );
     }
 
-    @Route( 'get', '/:kind/:id/remote/:sub/synchronize' )
+    @Route( 'get', '/:kind/:id/remote/:sub/synchronize/:mode' )
     async synchronizeRemote ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
         
-        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestLanguages( req ) );
+        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestOptions( req ) );
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        const mode = req.params.mode as string;
 
         if ( !subtitle ) {
             throw new NotFoundError( 'Requested subtitle was not found.' );
@@ -149,13 +202,15 @@ export class SubtitlesController extends BaseController {
 
         const file = await this.server.storage.getRandomFile( 'synchronize-remote-', 'srt', 'temp/subtitles' );
         
-        await this.server.subtitles.storeRemoteToFile( subtitle, file )
+        await this.server.subtitles.storeRemoteToFile( subtitle, file );
+
+        const additionalSubtitles = await this.server.subtitles.list( media );
 
         // Only update the subtitles in the media repository
         // if the synchronization is commited (the user sees it through)
         // When it is canceled in the middle (returning false)
         // ignore the changes
-        if ( await this.synchronizeSubtitle( media, file ) ) {
+        if ( await this.synchronizeSubtitle( media, file, additionalSubtitles, mode ) ) {
             await this.server.subtitles.storeFromFile( media, subtitle, file );
         }
 
@@ -203,7 +258,7 @@ export class SubtitlesController extends BaseController {
     async validateRemote ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
         
-        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestLanguages( req ) );
+        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestOptions( req ) );
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 

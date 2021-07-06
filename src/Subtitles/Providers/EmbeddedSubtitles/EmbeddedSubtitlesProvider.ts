@@ -3,7 +3,7 @@ import { FileSystemRepository } from '../../../Extensions/MediaRepositories/File
 import { PlayableMediaRecord } from '../../../MediaRecord';
 import { MediaTools } from '../../../MediaTools';
 import { UnicastServer } from '../../../UnicastServer';
-import { ISubtitlesProvider, ISubtitle } from '../ISubtitlesProvider';
+import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../ISubtitlesProvider';
 import { fs } from 'mz';
 import { spawn } from 'child_process';
 import { waitForProcess } from '../../../ES2017/ChildProcess';
@@ -28,7 +28,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
         this.logger = this.server.logger.service( `Subtitles/Providers/${ this.name }` );
     }
 
-    async search ( media: PlayableMediaRecord, lang: string ): Promise<IEmbeddedSubtitlesResult[]> {
+    async search ( media: PlayableMediaRecord, searchOptions: SearchOptions ): Promise<IEmbeddedSubtitlesResult[]> {
         const repository = this.server.repositories.get( media.repository );
 
         if ( repository instanceof FileSystemRepository ) {
@@ -43,7 +43,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
                     const stat = await fs.stat( videoPath );
 
                     return subtitles
-                        .filter( subtitle => !subtitle.language || subtitle.language == lang )
+                        .filter( subtitle => !subtitle.language || subtitle.language == searchOptions.lang )
                         .map( subtitle => ( {
                             id: this.server.hash( videoPath + subtitle.index.toString() ),
                             releaseName : subtitle.title || `Track ${subtitle.typeIndex + 1}`,
