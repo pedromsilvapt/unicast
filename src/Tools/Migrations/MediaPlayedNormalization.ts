@@ -73,7 +73,7 @@ export class MediaPlayedNormalizationTool extends Tool<MediaPlayedNormalizationO
                     var changes = {
                         ...await this.server.media.watchTracker.onPlayRepairChanges( record ),
                         lastPlayedAtLegacy,
-                        lastPlayed: r.literal(),
+                        lastPlayed: (r as any).literal(),
                     }
     
                     logCounter( table, ++recordsChanged );

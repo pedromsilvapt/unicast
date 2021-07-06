@@ -1,6 +1,6 @@
 import { BaseController, Route } from "../../BaseController";
 import { Request, Response } from "restify";
-import { MediaSync, MediaSyncOptions, MediaSyncTask } from "../../../MediaSync";
+import { MediaSync, MediaSyncOptions, MediaSyncRepairMode, MediaSyncTask } from "../../../MediaSync";
 import { BackgroundTask, Stopwatch } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
 
@@ -26,6 +26,7 @@ export class ProvidersController extends BaseController {
                     writeCache: !req.query.cache || req.query.cache.write != 'false'
                 },
                 autoFinishTask: false,
+                repairMode: req.query.repairMode,
             };
 
             this.server.logger.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );

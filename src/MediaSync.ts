@@ -1,8 +1,8 @@
 import { Database, MediaTable } from './Database/Database';
 import { RepositoriesManager } from './MediaRepositories/RepositoriesManager';
-import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord, isTvSeasonRecord } from './MediaRecord';
+import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord, isTvSeasonRecord, isTvShowRecord, isCustomRecord } from './MediaRecord';
 import { BackgroundTask } from './BackgroundTask';
-import { MediaManager } from './UnicastServer';
+import { MediaManager, UnicastServer } from './UnicastServer';
 import { Future } from '@pedromsilva/data-future';
 import { IMediaRepository } from './MediaRepositories/MediaRepository';
 import { CacheOptions } from './MediaScrapers/ScraperCache';
@@ -23,6 +23,7 @@ export interface MediaSyncOptions {
     dryRun : boolean;
     cache : CacheOptions;
     autoFinishTask : boolean;
+    repairMode : MediaSyncRepairMode;
 }
 
 export class MediaSync {
@@ -62,7 +63,9 @@ export class MediaSync {
      * @param media 
      * @param snapshot 
      */
-    async runRecord ( task : MediaSyncTask, media : MediaRecord, snapshot : MediaSyncSnapshot, cache ?: CacheOptions ) {
+    async runRecord ( context: MediaSyncContext, media : MediaRecord ) {
+        const { task, snapshot, repair, cache } = context;
+
         // !! IMPORTANT !! This function must always, at some point, call snapshot.scanBarrier.ready();
         snapshot.scanBarrier.increase();
 
@@ -105,7 +108,7 @@ export class MediaSync {
 
             await this.runRecordForeigns( table, media, snapshot );
 
-            await this.updateRecord( task, match, media, snapshot.options.dryRun, true, cache );
+            await this.updateRecord( context, match, media, true );
         } else {
             const existingMatch = snapshot.getAnyExternal( media.external );
             
@@ -118,26 +121,30 @@ export class MediaSync {
 
                 await this.runRecordForeigns( table, media, snapshot );
 
-                match = await this.createRecord( task, media, snapshot.options.dryRun );
+                match = await this.createRecord( context, media );
     
                 future.resolve( match.id );
             }
         }
     }
 
-    async runDuplicate ( task : MediaSyncTask, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
+    async runDuplicate ( context: MediaSyncContext, media : MediaRecord ) {
+        const { task, snapshot, repair } = context;
+
         const table = this.media.getTable( media.kind );
 
         await this.runRecordForeigns( table, media, snapshot );
 
-        media = await this.createRecord( task, media, snapshot.options.dryRun );
+        media = await this.createRecord( context, media );
 
         snapshot.association.get( media.kind ).get( media.internalId ).resolve( media.id );
     }
 
-    async createRecord ( task : MediaSyncTask, media : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) : Promise<MediaRecord> {
+    async createRecord ( context: MediaSyncContext, media : MediaRecord ) : Promise<MediaRecord> {
+        const { task, snapshot, repair } = context;
+
         // Create
-        if ( !dryRun ) {
+        if ( !snapshot.options.dryRun ) {
             const table = this.media.getTable( media.kind );
 
             const now = new Date();
@@ -148,18 +155,22 @@ export class MediaSync {
                 createdAt: now,
                 updatedAt: now
             }, { durability: 'soft' } );
+
+            await repair.onCreate( media );
         } else {
             media.id = media.internalId;
         }
 
-        task.reportCreate( media );
+        task.reportCreate( media, context.repository );
         
-        await this.runCast( task, media, dryRun, cache );
+        await this.runCast( context, media );
         
         return media;
     }
 
-    async updateRecord ( task : MediaSyncTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false, reportChanges : boolean = true, cache ?: CacheOptions ) {
+    async updateRecord ( context: MediaSyncContext, oldRecord : MediaRecord, newRecord : MediaRecord, reportChanges : boolean = true ) {
+        const { task, snapshot, repair } = context;
+
         const table = this.media.getTable( newRecord.kind );
         
         newRecord = { ...newRecord };
@@ -174,26 +185,34 @@ export class MediaSync {
 
         const changed = table.isChanged( oldRecord, newRecord );
         
-        if ( !dryRun ) newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
-            
+        if ( changed && !snapshot.options.dryRun ) {
+            newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
+
+            await repair.onUpdate( oldRecord );
+        }
+        
         if ( changed && reportChanges ) {
             const changes = table.getLocalChanges( oldRecord, newRecord );
 
             task.reportUpdate( oldRecord, newRecord, changes );
         } 
 
-        await this.runCast( task, newRecord, dryRun, cache );
+        await this.runCast( context, newRecord );
     }
 
-    async moveRecord ( task : MediaSyncTask, oldRecord : MediaRecord, newRecord : MediaRecord, dryRun : boolean = false, cache ?: CacheOptions ) {
-        await this.updateRecord( task, oldRecord, newRecord, dryRun, false, cache );
+    async moveRecord ( context: MediaSyncContext, oldRecord : MediaRecord, newRecord : MediaRecord ) {
+        await this.updateRecord( context, oldRecord, newRecord, false );
 
-        task.reportMove( oldRecord, newRecord );
+        context.task.reportMove( oldRecord, newRecord );
     }
 
-    async deleteRecord ( task : MediaSyncTask, record : MediaRecord, dryRun : boolean = false ) {
-        if ( !dryRun ) {
+    async deleteRecord ( context: MediaSyncContext, record : MediaRecord ) {
+        const { task, snapshot, repair } = context;
+
+        if ( !snapshot.options.dryRun ) {
             const table = this.media.getTable( record.kind );
+
+            await repair.onRemove( record );
 
             await table.delete( record.id, { durability: 'soft' } );
         }
@@ -201,7 +220,11 @@ export class MediaSync {
         task.reportRemove( record );
     }
 
-    async runCast<R extends MediaRecord> ( task : MediaSyncTask, media : R, dryRun : boolean = false, cache ?: CacheOptions ) {
+    async runCast<R extends MediaRecord> ( context: MediaSyncContext, media : R ) {
+        const { task, cache } = context;
+
+        const dryRun = context.snapshot.options.dryRun;
+
         let existingPeopleCount = 0;
         
         let createdPeopleCount = 0;
@@ -403,6 +426,8 @@ export class MediaSync {
 
         task.addTotal( options.cleanMissing ? 2 : 1 );
 
+        const repair = new MediaPostSyncRepair( this.database, options.repairMode ?? MediaSyncRepairMode.OnlyChanged );
+
         for ( let repositoryName of options.repositories ) {
             const repository = this.repositories.get( repositoryName );
 
@@ -410,7 +435,11 @@ export class MediaSync {
 
             if ( repository.indexable ) {
                 const snapshot = await MediaSyncSnapshot.from( this.media, options, repository.name );
-                
+
+                const context: MediaSyncContext = {
+                    repository, task, snapshot, repair, cache: options.cache || {}
+                };
+
                 // Allows setting up special conditions for refreshing particular media records
                 const conditions : MediaRecordFilter[] = options.refetchIncomplete
                     ? await this.findIncompleteRecords( repository )
@@ -432,7 +461,7 @@ export class MediaSync {
                     
                     updating.push(
                         task.do(
-                            this.runRecord( task, media, snapshot, options.cache || {} ), 
+                            this.runRecord( context, media ), 
                         1 )
                     );
                 }
@@ -485,16 +514,16 @@ export class MediaSync {
                         if ( options.updateMoved && duplicate != null ) {
                             snapshot.association.get( record.kind ).get( duplicate.internalId ).resolve( record.id );
 
-                            moving.push( task.do( this.moveRecord( task, record, duplicate, snapshot.options.dryRun ), 1 ) );
+                            moving.push( task.do( this.moveRecord( context, record, duplicate ), 1 ) );
                         } else if ( options.cleanMissing ) {
-                            deleting.push( task.do( this.deleteRecord( task, record, options.dryRun ), 1 ) );
+                            deleting.push( task.do( this.deleteRecord( context, record ), 1 ) );
                         }
                     }
 
                     for ( let record of snapshot.duplicated ) {
                         updating.push( 
                             task.do(
-                                this.runDuplicate( task, record, snapshot ), 
+                                this.runDuplicate( context, record ), 
                             1 )
                         );
                     }
@@ -512,6 +541,14 @@ export class MediaSync {
             task.setStateFinish();
         }
     }
+}
+
+export interface MediaSyncContext {
+    repository: IMediaRepository;
+    task: MediaSyncTask;
+    snapshot: MediaSyncSnapshot;
+    cache: CacheOptions;
+    repair: MediaPostSyncRepair;
 }
 
 export class MediaSyncSnapshot {
@@ -776,7 +813,7 @@ export class Barrier {
 }
 
 export class MediaSyncTask extends BackgroundTask {
-    reports : MediaSyncReport[] = [];
+    reports : MediaSyncReportConfigurable[] = [];
 
     statusMessage : string;
 
@@ -804,8 +841,14 @@ export class MediaSyncTask extends BackgroundTask {
         }
     }
 
-    reportCreate ( record : MediaRecord ) {
-        this.reports.push( { type: 'create', record } );
+    reportCreate ( record : MediaRecord, repository: IMediaRepository ) {
+        const userConfig: MediaSyncConfiguration = {
+            repository: repository.name,
+            // TODO
+            key: null,
+        };
+
+        this.reports.push( { type: 'create', record, userConfig } );
 
         if ( this.reportsLogger != null ) {
             this.reportsLogger.info( 'CREATE ' + this.recordToString( record ) );
@@ -841,9 +884,127 @@ export class MediaSyncTask extends BackgroundTask {
     }
 }
 
+export type MediaSyncConfiguration = {
+    repository: string;
+    key: unknown;
+    data?: unknown;
+}
+
 export type MediaSyncReport = 
       { type: 'error', kind : MediaKind, label : string, file ?: string, media ?: MediaRecord, new : boolean }
     | { type: 'create', record : MediaRecord }
     | { type: 'update', oldRecord : MediaRecord, newRecord : MediaRecord, changes : any }
     | { type: 'move', oldRecord : MediaRecord, newRecord : MediaRecord }
     | { type: 'remove', record : MediaRecord };
+
+export type MediaSyncReportConfigurable = MediaSyncReport & {
+    userConfig?: MediaSyncConfiguration
+};
+
+export enum MediaSyncRepairMode {
+    // Does not run repair after syncing media
+    Disabled = 0,
+    // Run repair only on the rows affected by the changes executed during sync
+    OnlyChanged = 1,
+    // Run full database repair
+    Full = 2,
+}
+
+export class MediaPostSyncRepair {
+    public database : Database;
+
+    public repairMode: MediaSyncRepairMode;
+
+    /// The id of all the shows who were changed (directly, or indirectly, through
+    /// their seasons and episodes) during the sync process
+    public touchedShows: Set<string> = new Set();
+
+    /// The ids of all the movies that were changed during the sync process
+    public touchedMovies: Set<string> = new Set();
+
+    /// The ids of all the custom media that were changed during the sync process
+    public touchedCustom: Set<string> = new Set();
+
+    /// If the collections should be repaired. Usually is only needed when a media record
+    /// is removed
+    public touchedCollections: boolean = false;
+
+    /// A cached map between a season's ID and the show's ID, to avoid redundant calls
+    /// to the database
+    protected tvSeasonShowIds: Map<string, string> = new Map();
+
+    protected tvSeasonShowLock: SemaphorePool<string> = new SemaphorePool( 1, true );
+
+    public constructor ( database: Database, repairMode: MediaSyncRepairMode = MediaSyncRepairMode.OnlyChanged ) {
+        this.database = database;
+        this.repairMode = repairMode;
+    }
+
+    protected async getTvShowIdForTvSeason ( tvSeasonId: string ) {
+        if ( this.tvSeasonShowIds.has( tvSeasonId ) ) {
+            return this.tvSeasonShowIds.get( tvSeasonId );
+        }
+
+        const release = await this.tvSeasonShowLock.acquire( tvSeasonId );
+
+        try {
+            const season = await this.database.tables.seasons.get( tvSeasonId );
+
+            this.tvSeasonShowIds.set( tvSeasonId, season.tvShowId );
+
+            return season.tvShowId;
+        } finally {
+            release();
+        }
+    }
+
+    public async onCreate ( record: MediaRecord ) {
+        if ( isMovieRecord( record ) ) {
+            this.touchedMovies.add( record.id );
+        } else if ( isCustomRecord( record ) ) {
+            this.touchedCustom.add( record.id );
+        } else if ( isTvShowRecord( record ) ) {
+            this.touchedShows.add( record.id );
+        } else if ( isTvSeasonRecord( record ) ) {
+            if ( !this.tvSeasonShowIds.has( record.id ) ) {
+                this.tvSeasonShowIds.set( record.id, record.tvShowId );
+            }
+
+            this.touchedShows.add( record.tvShowId );
+        } else if ( isTvEpisodeRecord( record ) ) {
+            this.touchedShows.add( await this.getTvShowIdForTvSeason( record.tvSeasonId ) );
+        }
+    }
+
+    public onUpdate ( record: MediaRecord ) {
+        return this.onCreate( record );
+    }
+
+    public onRemove ( _record: MediaRecord ) {
+        this.touchedCollections = true;
+    }
+
+    public async run () {
+        if ( this.repairMode === MediaSyncRepairMode.Disabled ) return;
+
+        if ( this.repairMode === MediaSyncRepairMode.Full ) {
+            await this.database.repair();
+        } else if ( this.repairMode === MediaSyncRepairMode.OnlyChanged ) {
+            await this.database.tables.movies.repair( Array.from( this.touchedMovies ) );
+
+            await this.database.tables.shows.repair( Array.from( this.touchedShows ) );
+
+            await this.database.tables.custom.repair( Array.from( this.touchedCustom ) );
+
+            if ( this.touchedCollections ) {
+                this.database.tables.collections.repair();
+
+                this.database.tables.collectionsMedia.repair();
+            }
+
+            await this.database.tables.people.repair();
+
+            await this.database.tables.mediaCast.repair();
+        }
+    }
+}

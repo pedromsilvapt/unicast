@@ -5,18 +5,18 @@ import { format } from 'date-fns';
 import * as r from 'rethinkdb';
 import { FileSystemRepository } from '../../Extensions/MediaRepositories/FileSystem/FileSystemRepository';
 
-export interface RepositoryPathOptions {
+export interface AddRepositoryPathOptions {
     dryRun : boolean;
 }
 
-export class RepositoryPathTool extends Tool<RepositoryPathOptions> {
+export class AddRepositoryPathTool extends Tool<AddRepositoryPathOptions> {
     getOptions () {
         return [
             new ToolOption( 'dryRun' ).setRequired( false ).setType( ToolValueType.Boolean ).setDefaultValue( false )
         ]
     }
 
-    async run ( options : RepositoryPathOptions ) {
+    async run ( options : AddRepositoryPathOptions ) {
         await this.server.database.install();
 
         const logger = this.logger;

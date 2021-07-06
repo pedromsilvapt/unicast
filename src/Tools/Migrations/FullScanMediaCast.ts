@@ -1,6 +1,6 @@
 import { Tool, ToolOption, ToolValueType } from "../Tool";
 import { MediaKind } from '../../MediaRecord';
-import { MediaSync, MediaSyncTask } from '../../MediaSync';
+import { MediaSync, MediaSyncContext, MediaSyncSnapshot, MediaSyncTask } from '../../MediaSync';
 import * as chalk from 'chalk';
 
 export interface FullScanMediaCastOptions {
@@ -35,7 +35,16 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
 
         const task = new MediaSyncTask();
 
+        const snapshot = new MediaSyncSnapshot( {
+            dryRun: options.dryRun,
+        }, null );
+
         task.reportsLogger = logger.static();
+
+        const context: MediaSyncContext = {
+            repository: null, repair: null, cache: {},
+            task, snapshot,
+        };
 
         for ( let kind of [ MediaKind.Movie, MediaKind.TvShow ] ) {
             let updatedPeople = 0;
@@ -54,7 +63,7 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
                 try {
                     logger.info( `[${ kind } ${record.title}] ${ doneCount }/${ total }` );
 
-                    const stats = await sync.runCast( task, record, options.dryRun );
+                    const stats = await sync.runCast( context, record );
 
                     if ( stats ) {
                         updatedPeople += stats.existingPeopleCount;
