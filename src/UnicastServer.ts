@@ -453,9 +453,21 @@ export class MediaManager {
             case MediaKind.TvSeason: return tables.seasons;
             case MediaKind.TvEpisode: return tables.episodes;
             case MediaKind.Custom: return tables.custom;
+            default: return null;
+        }
         }
 
-        return null;
+    getKind ( table: BaseTable<unknown> ) : MediaKind {
+        const tables = this.server.database.tables;
+
+        switch ( table.tableName ) {
+            case tables.movies.tableName: return MediaKind.Movie;
+            case tables.shows.tableName: return MediaKind.TvShow;
+            case tables.seasons.tableName: return MediaKind.TvSeason;
+            case tables.episodes.tableName: return MediaKind.TvEpisode;
+            case tables.custom.tableName: return MediaKind.Custom;
+            default: return null;
+        }
     }
 
     get ( kind : MediaKind.Movie, id : string ) : Promise<MovieMediaRecord>;
@@ -861,11 +873,11 @@ export class MediaUserRanksList {
             return new Map();
         }
 
-        const min = Math.max( ...ranks );
+        const min = Math.min( ...ranks );
         const max = Math.max( ...ranks );
 
         const records = await this.mediaManager.database.tables.userRanks.find( query => {
-            return query.between( min, max, { index: 'position' } ).filter( { list: this.id } );
+            return query.between( min, max, { index: 'position', rightBound: 'closed' } as any ).filter( { list: this.id } );
         } );
 
         return collect( records, groupingBy( rank => rank.position, first() ) );
@@ -958,13 +970,20 @@ export class MediaUserRanksList {
         // user ranks >= anchorRank to be += zerosCount
         if ( zerosCount > 0 ) {
             const filter = row => row( 'list' ).eq( this.id )
-                .and( row( 'position' ).gte( anchorRank ) );
+                .and( row( 'position' ).ge( anchorRank ) );
 
             const change = { 
-                age: r.row( 'position' ).add( zerosCount )
+                position: r.row( 'position' ).add( zerosCount )
             };
 
             await table.updateMany( filter, change );
+
+            // Replicate the changes of the DB on our memory slice of it
+            for ( const rank of modifiedRange.values() ) {
+                if ( rank.position >= anchorRank ) {
+                    rank.position += zerosCount;
+                }
+            }
         }
 
         const changes = new RankChangeSet();
@@ -974,7 +993,7 @@ export class MediaUserRanksList {
 
         if ( modifiedRange.has( anchorRank ) ) {   
             // Move the Anchor
-            changes.move( modifiedRange.get( anchorRank ).id, anchorRankNew - anchorRank );
+            changes.move( modifiedRange.get( anchorRank ).id, anchorRankNew - modifiedRange.get( anchorRank ).position );
             
             modifiedRange.delete( anchorRank )
         }
@@ -982,7 +1001,7 @@ export class MediaUserRanksList {
         // 4. Update the positions of the records that were explicitly moved
         for ( const [ index, record ] of trailings.entries() ) {
             const oldPosition = trailingsRanks[ index ];
-            const newPosition = anchorRank + beforeCount - index - 1;
+            const newPosition = anchorRankNew - index - 1;
 
             if ( oldPosition == 0 ) {
                 changes.create( {
@@ -995,7 +1014,7 @@ export class MediaUserRanksList {
 
                 modifiedRange.delete( oldPosition );
 
-                changes.move( rank.id, newPosition - oldPosition );
+                changes.move( rank.id, newPosition - rank.position );
             }
         }
 

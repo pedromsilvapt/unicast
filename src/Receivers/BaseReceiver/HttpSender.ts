@@ -52,7 +52,7 @@ export class HttpSender {
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
             
             reader.on( 'error', err => {
-                this.logger.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stack }`, err );
+                this.logger.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stackTrace }`, err );
 
                 if ( reader ) {
                     stream.close( reader );

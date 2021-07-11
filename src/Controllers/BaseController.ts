@@ -87,7 +87,7 @@ export abstract class BaseController implements Annotated {
     }
 
     install () {
-        this.router().applyRoutes( this.server.http );
+        this.router().applyRoutes( this.server.http as any );
     }
 }
 

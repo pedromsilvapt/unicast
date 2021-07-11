@@ -13,6 +13,17 @@ export class UserRanksController extends BaseController {
             () => list.getRecords() 
         );
     }
+
+    @Route( 'del', '/:listId/' )
+    public deleteList ( req : Request, res : Response ) {
+        const id = req.params.listId;
+
+        const list = this.server.media.userRanks.getList( id );
+
+        return list.semaphore.write.use( 
+            () => list.truncate() 
+        );
+    }
     
     @Route( 'post', '/:listId/set-rank-before' )
     public setRankBefore ( req : Request, res : Response  ) {
@@ -22,11 +33,9 @@ export class UserRanksController extends BaseController {
 
         const { anchor, records } = req.body;
 
-        // TODO Input Validation
-
         return list.semaphore.write.use( 
             anchor != null
-                ? () => list.setRankAfter( anchor, records ) 
+                ? () => list.setRankBefore( anchor, records ) 
                 : () => list.setRankToBottom( records ) 
         );
     }
@@ -43,7 +52,7 @@ export class UserRanksController extends BaseController {
 
         return list.semaphore.write.use( 
             anchor != null
-                ? () => list.setRankBefore( anchor, records )
+                ? () => list.setRankAfter( anchor, records )
                 : () => list.setRankToTop( records )
         );
     }

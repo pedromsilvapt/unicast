@@ -9,7 +9,7 @@ import { InvalidArgumentError } from 'restify-errors';
 export class MoviesController extends MediaTableController<MovieMediaRecord> {
     sortingFields: string[] = [ 
         'title', 'rating', 'runtime', 'parentalRating', 
-        'year', 'lastPlayedAt', 'playCount', 'addedAt' 
+        'year', 'lastPlayedAt', 'playCount', 'addedAt', '$userRank'
     ];
     
     get table () : MediaTable<MovieMediaRecord> {

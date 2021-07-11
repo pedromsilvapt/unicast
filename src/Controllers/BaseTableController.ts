@@ -42,19 +42,25 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         } );
     }
 
+    getQueryCustomOrder ( query: r.Sequence, field: string, direction: 'asc' |  'desc', list: string ) : r.Sequence {
+        throw new InvalidArgumentError( `Custom ordering not supported.` );
+    }
+
     getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
         const reqQuery: RequestQuery<R> = req.query;
 
         if ( reqQuery.filterSort ) {
             let sort = typeof reqQuery.filterSort === 'string' ?
-                { field: reqQuery.filterSort, direction: 'asc' } :
-                { direction: 'asc', ...reqQuery.filterSort };
+                { direction: 'asc' as const, field: reqQuery.filterSort, list: null } :
+                { direction: 'asc' as const, ...reqQuery.filterSort };
 
             if ( !this.sortingFields.includes( sort.field ) ) {
                 throw new InvalidArgumentError( `Invalid sort field "${ sort.field }" requested.` );
             }
 
-            if ( sort.direction == 'desc' ) {
+            if ( sort.field.startsWith( '$' ) ) {
+                query = this.getQueryCustomOrder( query, sort.field, sort.direction, sort.list );
+            } else if ( sort.direction == 'desc' ) {
                 query = query.orderBy( { index: r.desc( sort.field ) } );
             } else {
                 query = query.orderBy( { index: r.asc( sort.field ) } );
@@ -289,5 +295,6 @@ export interface RequestQuery<R> {
     filterSort?: string | {
         direction?: 'asc' | 'desc';
         field?: string;
+        list?: string;
     }
 };
