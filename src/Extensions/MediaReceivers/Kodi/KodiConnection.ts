@@ -255,11 +255,13 @@ export class KodiConnection {
     }
 
     subtitleDelayPlus () : Promise<void> {
-        return this.call( 'Input.ExecuteAction', { action: 'subtitledelayplus' } );
-    }
-
-    subtitleDelayMinus () : Promise<void> {
+        // WARN Switched up
         return this.call( 'Input.ExecuteAction', { action: 'subtitledelayminus' } );
+    }
+    
+    subtitleDelayMinus () : Promise<void> {
+        // WARN Switched down
+        return this.call( 'Input.ExecuteAction', { action: 'subtitledelayplus' } );
     }
 
     subtitleScale ( scale : number ) : Promise<void> {

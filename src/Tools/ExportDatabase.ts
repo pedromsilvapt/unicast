@@ -58,6 +58,7 @@ export class ExportDatabaseTool extends Tool<ExportDatabaseOptions> {
             this.server.database.tables.subtitles,
             this.server.database.tables.people,
             this.server.database.tables.mediaCast,
+            this.server.database.tables.userRanks,
             this.server.database.tables.storage,
         ];
     
