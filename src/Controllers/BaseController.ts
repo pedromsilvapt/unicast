@@ -1,9 +1,10 @@
-import { UnicastServer } from "../UnicastServer";
+import { Route, UnicastServer } from "../UnicastServer";
 import { Router } from 'restify-router';
 import { Request, Response, Next } from "restify";
 import { Logger } from 'clui-logger';
 import { AccessCard, IpIdentity, ScopeResource } from '../AccessControl';
-import { InvalidCredentialsError  } from 'restify-errors';
+import { InvalidArgumentError, InvalidCredentialsError  } from 'restify-errors';
+import { SchemaValidationError, TypeSchema } from '../Config';
 
 export type RoutesDeclarations = { 
     methods: string[], 
@@ -11,7 +12,9 @@ export type RoutesDeclarations = {
     propertyKey: string, 
     handler: RouteTransform, 
     appendLast: boolean,
-    authScope: string
+    authScope: string,
+    querySchema?: TypeSchema,
+    bodySchema?: TypeSchema,
 }[];
 
 export abstract class BaseController implements Annotated {
@@ -46,13 +49,22 @@ export abstract class BaseController implements Annotated {
 
             const routes = [ ...firsts, ...lasts ];
 
-            for ( let { methods, path, propertyKey, handler, authScope } of routes ) {
+            for ( let { methods, path, propertyKey, handler, authScope, ...route } of routes ) {
                 for ( let method of methods ) {
                     if ( typeof( router[ method ] ) !== 'function' ) {
                         throw new Error( `Method ${ method } is not an HTTP verb.` );
                     }
 
-                    router[ method ]( path, AuthenticationMiddleware( this, authScope ), ( handler || JsonResponse )( this, propertyKey ) );
+                    router[ method ](
+                        { 
+                            path,
+                            querySchema: route.querySchema,
+                            bodySchema: route.bodySchema,
+                        },
+                        AuthenticationMiddleware( this, authScope ),
+                        SchemaMiddleware( this, route.querySchema, route.bodySchema ),
+                        ( handler || JsonResponse )( this, propertyKey )
+                    );
                 }
             }
         }
@@ -102,6 +114,36 @@ export function AuthenticationMiddleware ( controller : { server : UnicastServer
         } else {
             return next( new InvalidCredentialsError( "IP Address " + ip + " not atuhorized for scope: " + authScope ) );
         }
+    };
+}
+
+export function SchemaMiddleware ( controller : { server : UnicastServer, logger : Logger }, querySchema : TypeSchema, bodySchema : TypeSchema ) {
+    return async function ( req : Request, res : Response, next : Next ) {
+        try {
+            if ( querySchema != null ) {
+                const errors = querySchema.validate( req.query );
+    
+                if ( errors != null ) {
+                    const errorMessage = SchemaValidationError.toString( SchemaValidationError.prefix( errors, 'query' ) );
+
+                    return next( new InvalidArgumentError( errorMessage ) );
+                }
+            }
+    
+            if ( bodySchema != null ) {
+                const errors = bodySchema.validate( req.body );
+    
+                if ( errors != null ) {
+                    const errorMessage = SchemaValidationError.toString( SchemaValidationError.prefix( errors, 'body' ) );
+
+                    return next( new InvalidArgumentError( errorMessage ) );
+                }
+            }
+        } catch ( error ) {
+            return next( new InvalidArgumentError( error ) );
+        }
+
+        return next();
     };
 }
 
@@ -204,6 +246,34 @@ export function AuthScope ( scope : string ) {
         }
 
         route.authScope = scope;
+
+        return descriptor;
+    };
+}
+
+export function ValidateBody ( schema : TypeSchema ) {
+    return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
+        const route = target.routes.find( ( { propertyKey: p } ) => propertyKey == p );
+
+        if ( route == null ) {
+            throw new Error( `Could not find a route defined to set the body schema of: "${ propertyKey }"` );
+        }
+
+        route.bodySchema = schema;
+
+        return descriptor;
+    };
+}
+
+export function ValidateQuery ( schema : TypeSchema ) {
+    return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
+        const route = target.routes.find( ( { propertyKey: p } ) => propertyKey == p );
+
+        if ( route == null ) {
+            throw new Error( `Could not find a route defined to set the body schema of: "${ propertyKey }"` );
+        }
+
+        route.querySchema = schema;
 
         return descriptor;
     };

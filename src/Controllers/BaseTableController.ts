@@ -1,11 +1,22 @@
 import { CompiledQuery, QueryAst, QueryLang, QuerySemantics } from '../QueryLang';
-import { BaseController, Route } from "./BaseController";
+import { BaseController, Route, ValidateQuery } from "./BaseController";
 import { BaseTable } from "../Database/Database";
 import { Response, Request } from "restify";
 import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from "restify-errors";
 import * as regexEscape from 'regex-escape';
 import * as r from 'rethinkdb';
 import { EntityResource } from '../AccessControl';
+import { constant, NumberTypeSchema, ObjectTypeSchema, OptionalTypeSchema, StringTypeSchema, UnionTypeSchema } from '../Config';
+
+export const TableListQuerySchema = new ObjectTypeSchema({
+    skip: new OptionalTypeSchema(new NumberTypeSchema(false)),
+    take: new OptionalTypeSchema(new NumberTypeSchema(false)),
+    filterSort: new OptionalTypeSchema(new UnionTypeSchema(new StringTypeSchema(), new ObjectTypeSchema({
+        field: new StringTypeSchema(),
+        direction: new OptionalTypeSchema(new UnionTypeSchema(constant("asc"), constant("desc")), "asc"),
+        list: new OptionalTypeSchema(new StringTypeSchema()),
+    })), "title")
+});
 
 export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<R>> extends BaseController {
     abstract readonly table : T;
@@ -162,6 +173,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         return this.table.find( query );
     }
 
+    @ValidateQuery(TableListQuerySchema)
     @Route( 'get', '/' )
     async list ( req : Request, res : Response ) : Promise<R[]> {
         if ( !this.allowedActions.includes( 'list' ) ) {

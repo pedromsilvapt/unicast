@@ -4,6 +4,7 @@ import * as fs from 'mz/fs';
 import * as ObjectPath from 'object-path';
 import * as extend from 'extend';
 import * as os from 'os';
+import * as ts from 'typescript';
 
 function loadYamlFile ( file : string ) : any {
     if ( fs.existsSync( file ) ) {
@@ -311,8 +312,19 @@ export class SchemaValidationError {
         }
     }
 
+    public static prefix ( errors : SchemaValidationResult, property : string ) : SchemaValidationResult {
+        if ( !errors ) {
+            return  null;
+        }
 
-    public static toString ( errors ?: SchemaValidationResult ) {
+        if ( errors instanceof Array ) {
+            return errors.map( error => error.prefix( property ) );
+        } else {
+            return errors.prefix( property );
+        }
+    }
+
+    public static toString ( errors ?: SchemaValidationResult ) : string {
         if ( !errors ) {
             return  null;
         }
@@ -352,11 +364,93 @@ export abstract class TypeSchema {
         }
     }
 
+    public static toCodeAst ( value : unknown ) : ts.Expression {
+        if ( value === null ) {
+            return ts.createNull();
+        } else if ( value === void 0 ) {
+            return ts.createVoidZero();
+        } else if ( value instanceof TypeSchema ) {
+            return value.toCodeAst();
+        } else if ( value instanceof Array ) {
+            return ts.createArrayLiteral(
+                value.map( subValue => TypeSchema.toCodeAst( subValue ) ),
+                true
+            );
+        } else if ( typeof value === 'boolean' || typeof value === 'string' || typeof value === 'number' ) {
+            return ts.createLiteral( value );
+        } else if ( typeof value === 'object' ) {
+            return ts.createObjectLiteral( 
+                Object.keys( value ).map( 
+                    key => ts.createPropertyAssignment( key, TypeSchema.toCodeAst( value[ key ] ) )
+                )
+            );
+        } else {
+            throw new Error(`Cannot convert ${ value } into a code AST.`);
+        }
+    }
+
+    public toCodeAst () : ts.Expression {
+        const parameters = this.getFactoryParameters();
+
+        return ts.createNew(
+            ts.createIdentifier( this.constructor.name ),
+            [],
+            parameters.map( value => TypeSchema.toCodeAst( value ) ),
+        );
+    }
+
+    public toCode () : string {
+        const resultFile = ts.createSourceFile(
+            "schema.ts",
+            "",
+            ts.ScriptTarget.Latest,
+            /*setParentNodes*/ false,
+            ts.ScriptKind.TS
+        );
+
+        const printer = ts.createPrinter( {
+            newLine: ts.NewLineKind.LineFeed,
+        } );
+
+        const result = printer.printNode(
+            ts.EmitHint.Unspecified,
+            this.toCodeAst(),
+            resultFile,
+        );
+        
+        return result;
+    }
+
+    public toType () : string {
+        const resultFile = ts.createSourceFile(
+            "schema.ts",
+            "",
+            ts.ScriptTarget.Latest,
+            /*setParentNodes*/ false,
+            ts.ScriptKind.TS
+        );
+
+        const printer = ts.createPrinter( {
+            newLine: ts.NewLineKind.LineFeed,
+        } );
+
+        const result = printer.printNode(
+            ts.EmitHint.Unspecified,
+            this.toTypeAst(),
+            resultFile,
+        );
+        
+        return result;
+    }
+
+    abstract getFactoryParameters () : unknown[];
+
+    abstract toTypeAst () : ts.TypeNode;
+
     abstract validate ( data : any ) : SchemaValidationResult;
 
     abstract run ( data : any ) : any;
 }
-
 
 export class ConstantTypeSchema extends TypeSchema {
     constant : any = null;
@@ -365,6 +459,14 @@ export class ConstantTypeSchema extends TypeSchema {
         super();
 
         this.constant = constant;
+    }
+
+    getFactoryParameters () {
+        return [ this.constant ];
+    }
+
+    toTypeAst () {
+        return ts.createLiteralTypeNode( ts.createLiteral( this.constant ) );
     }
 
     validate ( data : any ) : SchemaValidationResult {
@@ -393,6 +495,21 @@ export class OptionalTypeSchema extends TypeSchema {
         this.defaultValue = defaultValue;
     }
 
+    getFactoryParameters () {
+        return [ this.subSchema, this.defaultValue ];
+    }
+
+    toTypeAst () {
+        if ( this.defaultValue === null ) {
+            return this.subSchema.toTypeAst();
+        }
+
+        return ts.createIntersectionTypeNode( [
+            this.subSchema.toTypeAst(),
+            ts.createTypeReferenceNode( "Default", [ ts.createLiteralTypeNode( ts.createLiteral( this.defaultValue ) ) ] )
+        ] );
+    }
+
     validate ( data : any ) : SchemaValidationResult {
         if ( data === null || data === void 0 ) {
             return null;
@@ -411,6 +528,14 @@ export class OptionalTypeSchema extends TypeSchema {
 }
 
 export class AnyTypeSchema extends TypeSchema {
+    getFactoryParameters () {
+        return [];
+    }
+
+    toTypeAst () {
+        return ts.createKeywordTypeNode( ts.SyntaxKind.AnyKeyword );
+    }
+
     validate () {
         return null;
     }
@@ -427,6 +552,16 @@ export class UnionTypeSchema extends TypeSchema {
         super();
 
         this.typeSchemas = typeSchemas.map( type => TypeSchema.normalize( type ) );
+    }
+    
+    getFactoryParameters () {
+        return this.typeSchemas;
+    }
+
+    toTypeAst () {
+        const types = this.typeSchemas.map( schema => schema.toTypeAst() );
+        
+        return ts.createUnionTypeNode( types );
     }
 
     validate ( data : any ) : SchemaValidationResult {
@@ -475,6 +610,16 @@ export class IntersectionTypeSchema extends TypeSchema {
         this.typeSchemas = typeSchemas.map( type => TypeSchema.normalize( type ) );
     }
 
+    getFactoryParameters () {
+        return this.typeSchemas;
+    }
+
+    toTypeAst () {
+        const types = this.typeSchemas.map( schema => schema.toTypeAst() );
+        
+        return ts.createIntersectionTypeNode( types );
+    }
+
     validate ( data : any ) : SchemaValidationResult {
         const errors: SchemaValidationError[] = [];
 
@@ -505,6 +650,14 @@ export class IntersectionTypeSchema extends TypeSchema {
 }
 
 export class StringTypeSchema extends TypeSchema {
+    getFactoryParameters () {
+        return [];
+    }
+
+    toTypeAst () {
+        return ts.createKeywordTypeNode( ts.SyntaxKind.StringKeyword );
+    }
+
     validate ( data : any ) : SchemaValidationResult {
         if ( typeof data === 'string' ) {
             return null;
@@ -519,9 +672,33 @@ export class StringTypeSchema extends TypeSchema {
 }
 
 export class NumberTypeSchema extends TypeSchema {
+    public strict: boolean;
+    
+    public constructor (strict: boolean = true) {
+        super();
+
+        this.strict = strict;
+    }
+
+    getFactoryParameters () {
+        return [];
+    }
+
+    toTypeAst () {
+        return ts.createKeywordTypeNode( ts.SyntaxKind.NumberKeyword );
+    }
+
     validate ( data : any ) {
         if ( typeof data === 'number' ) {
             return null;
+        }
+
+        if ( this.strict === false && typeof data === 'string' ) {
+            try {
+                parseInt(data);
+
+                return null;
+            } catch {}
         }
 
         return new SchemaValidationError( 'Number', typeof data );
@@ -534,6 +711,14 @@ export class NumberTypeSchema extends TypeSchema {
 
 
 export class BooleanTypeSchema extends TypeSchema {
+    getFactoryParameters () {
+        return [];
+    }
+
+    toTypeAst () {
+        return ts.createKeywordTypeNode( ts.SyntaxKind.BooleanKeyword );
+    }
+
     validate ( data : any ) {
         if ( typeof data === 'boolean' ) {
             return null;
@@ -562,6 +747,16 @@ export class TupleTypeSchema extends TypeSchema {
         for ( let type of schema ) {
             this.subSchema.push( TypeSchema.normalize( type ) );
         }
+    }
+
+    getFactoryParameters () {
+        return [ this.subSchema ];
+    }
+
+    toTypeAst () {
+        const types = this.subSchema.map( schema => schema.toTypeAst() );
+        
+        return ts.createTupleTypeNode( types );
     }
 
     validate ( data : any ) : SchemaValidationResult {
@@ -627,6 +822,14 @@ export class ArrayTypeSchema extends TypeSchema {
         this.subSchema = TypeSchema.normalize( subSchema );
     }
 
+    getFactoryParameters () {
+        return [ this.subSchema ];
+    }
+
+    toTypeAst () {
+        return ts.createArrayTypeNode( this.subSchema.toTypeAst() );
+    }
+
     validate ( data : any ) : SchemaValidationResult {
         if ( data instanceof Array ) {
             const errors = data.map( ( item, index ) => {
@@ -688,6 +891,37 @@ export class ObjectTypeSchema extends TypeSchema {
         }
 
         this.strict = strict;
+    }
+
+    getFactoryParameters () {
+        return [ this.subSchema, this.strict ];
+    }
+
+    toTypeAst () {
+        const properties = Object.keys( this.subSchema )
+            .map( key => {
+                const schema = this.subSchema[ key ];
+
+                if ( schema instanceof OptionalTypeSchema ) {
+                    return ts.createPropertySignature( 
+                        void 0,
+                        ts.createIdentifier( key ),
+                        ts.createToken(ts.SyntaxKind.QuestionToken),
+                        schema.subSchema.toTypeAst(),
+                        TypeSchema.toCodeAst( schema.defaultValue ),
+                    );
+                }
+                
+                return ts.createPropertySignature( 
+                    void 0,
+                    ts.createIdentifier( key ),
+                    void 0,
+                    schema.toTypeAst(),
+                    void 0,
+                );
+            } );
+        
+        return ts.createTypeLiteralNode( properties );
     }
 
     validate ( data : any ) : SchemaValidationResult {

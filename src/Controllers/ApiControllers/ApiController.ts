@@ -83,7 +83,24 @@ export class ApiController extends BaseController {
 
     @Route( 'get', '/sitemap' )
     async sitemap () {
-        return Array.from( this.server.http.routes ).sort( sortBy( 'path' ) );
+        return Array.from( this.server.http.routes )
+            .map( route => {
+                const jsonRoute: any = {
+                    method: route.method,
+                    path: route.path,
+                };
+
+                if ( route.querySchema != null ) {
+                    jsonRoute.querySchema = route.querySchema.toType();
+                }
+
+                if ( route.bodySchema != null ) {
+                    jsonRoute.bodySchema = route.bodySchema.toType();
+                }
+
+                return jsonRoute;
+            } )
+            .sort( sortBy( 'path' ) );
     }
     
     @Route( 'get', '/close' )

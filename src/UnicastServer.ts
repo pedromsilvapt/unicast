@@ -2,7 +2,7 @@ import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersMan
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord, isTvEpisodeRecord, isTvSeasonRecord, isMovieRecord, isTvShowRecord, isCustomRecord } from "./MediaRecord";
 import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable } from "./Database/Database";
-import { Config } from "./Config";
+import { Config, TypeSchema } from "./Config";
 import * as restify from 'restify';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
 import { routes } from 'unicast-interface';
@@ -455,7 +455,7 @@ export class MediaManager {
             case MediaKind.Custom: return tables.custom;
             default: return null;
         }
-        }
+    }
 
     getKind ( table: BaseTable<unknown> ) : MediaKind {
         const tables = this.server.database.tables;
@@ -1613,6 +1613,9 @@ export interface PlayRepairChangesContext {
 
 export interface Route extends restify.RouteOptions {
     method : string;
+    childRoutes ?: restify.Route[]
+    querySchema ?: TypeSchema;
+    bodySchema ?: TypeSchema;
 }
 
 export class MultiServer extends EventEmitter {
@@ -1662,7 +1665,7 @@ export class MultiServer extends EventEmitter {
         return this.servers.reduce( ( s, server ) => s + server.inflightRequests(), 0 );
     }
 
-    protected addRoute ( opts: string | RegExp | restify.RouteOptions, method : string = null ) {
+    protected addRoute ( opts: string | RegExp | restify.RouteOptions, method : string = null ): Route {
         let route : restify.RouteOptions = null;
 
         if ( typeof opts === 'string' ) {
@@ -1673,52 +1676,56 @@ export class MultiServer extends EventEmitter {
             route = opts;
         }
 
-        this.routes.push( {
+        const createdRoute: Route = {
             ...route,
-            method: method || 'all' 
-        } );
+            method: method || 'all',
+        };
+
+        this.routes.push( createdRoute );
+
+        return createdRoute;
     }
 
-    del ( opts: string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'del' );
+    del ( opts: string | RegExp | Route, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.del( opts, ...handlers ) );
 
-        return this.servers.map( server => server.del( opts, ...handlers ) );
+        return this.addRoute( opts, 'del' );
     }
 
-    get ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'get' );
+    get ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.get( opts, ...handlers ) );
 
-        return this.servers.map( server => server.get( opts, ...handlers ) );
+        return this.addRoute( opts, 'get' );
     }
 
-    head ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'head' );
+    head ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.head( opts, ...handlers ) );
 
-        return this.servers.map( server => server.head( opts, ...handlers ) );
+        return this.addRoute( opts, 'head' );
     }
 
-    opts ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'opts' );
+    opts ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.opts( opts, ...handlers ) );
 
-        return this.servers.map( server => server.opts( opts, ...handlers ) );
+        return this.addRoute( opts, 'opts' );
     }
 
-    post ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'post' );
+    post ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.post( opts, ...handlers ) );
 
-        return this.servers.map( server => server.post( opts, ...handlers ) );
+        return this.addRoute( opts, 'post' );
     }
 
-    put ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'put' );
+    put ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.put( opts, ...handlers ) );
 
-        return this.servers.map( server => server.put( opts, ...handlers ) );
+        return this.addRoute( opts, 'put' );
     }
 
-    patch ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) : Array<boolean | restify.Route> {
-        this.addRoute( opts, 'patch' );
+    patch ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        this.servers.map( server => server.patch( opts, ...handlers ) );
 
-        return this.servers.map( server => server.patch( opts, ...handlers ) );
+        return this.addRoute( opts, 'patch' );
     }
 
     param ( name : string, fn : restify.RequestHandler ) : this {

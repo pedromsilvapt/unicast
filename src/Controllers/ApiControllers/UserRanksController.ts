@@ -1,6 +1,17 @@
-import { BaseController, Route } from "../BaseController";
+import { BaseController, Route, ValidateBody } from "../BaseController";
 import { Response, Request } from "restify";
 import * as r from 'rethinkdb';
+import { ArrayTypeSchema, constant, ObjectTypeSchema, OptionalTypeSchema, StringTypeSchema, UnionTypeSchema } from '../../Config';
+
+const MinimalMediaRecordSchema = new ObjectTypeSchema( {
+    id: new StringTypeSchema(),
+    kind: new UnionTypeSchema( ...[ 'movie', 'show', 'season', 'episode', 'custom' ].map( constant ) )
+}, false );
+
+const SetRankBodySchema = new ObjectTypeSchema( {
+    anchor: new OptionalTypeSchema( MinimalMediaRecordSchema ),
+    records: new ArrayTypeSchema( MinimalMediaRecordSchema ),
+} )
 
 export class UserRanksController extends BaseController {
     @Route( 'get', '/:listId/' )
@@ -25,6 +36,7 @@ export class UserRanksController extends BaseController {
         );
     }
     
+    @ValidateBody( SetRankBodySchema )
     @Route( 'post', '/:listId/set-rank-before' )
     public setRankBefore ( req : Request, res : Response  ) {
         const id = req.params.listId;
@@ -40,6 +52,7 @@ export class UserRanksController extends BaseController {
         );
     }
     
+    @ValidateBody( SetRankBodySchema )
     @Route( 'post', '/:listId/set-rank-after' )
     public setRankAfter ( req : Request, res : Response  ) {
         const id = req.params.listId;
@@ -48,8 +61,6 @@ export class UserRanksController extends BaseController {
 
         const { anchor, records } = req.body;
     
-        // TODO Input Validation
-
         return list.semaphore.write.use( 
             anchor != null
                 ? () => list.setRankAfter( anchor, records )
