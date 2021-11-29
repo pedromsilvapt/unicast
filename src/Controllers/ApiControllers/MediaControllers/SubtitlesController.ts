@@ -32,11 +32,11 @@ export class SubtitlesController extends BaseController {
             langs: this.getRequestLanguages( req ),
         };
 
-        if ( typeof req.query.episodeOffset === 'number' ) {
-            options.episodeOffset = req.query.episodeOffset;
+        if ( typeof req.query.episodeOffset === 'number' || typeof req.query.episodeOffset === 'string' ) {
+            options.episodeOffset = +req.query.episodeOffset;
         }
 
-        if ( typeof req.query.seasonOffset === 'number' ) {
+        if ( typeof req.query.seasonOffset === 'number' || typeof req.query.seasonOffset === 'string' ) {
             options.seasonOffset = req.query.seasonOffset;
         }
 

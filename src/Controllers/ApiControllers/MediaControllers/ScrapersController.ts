@@ -4,8 +4,8 @@ import { MediaKind, ExternalReferences, ArtRecord, RoleRecord } from "../../../M
 import { InvalidArgumentError } from "restify-errors";
 import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { CacheOptions } from "../../../MediaScrapers/ScraperCache";
-import * as parseTorrentName from 'parse-torrent-name';
 import { IScraperQuery } from '../../../MediaScrapers/IScraper';
+import { MediaTools } from '../../../MediaTools';
 
 export class ScrapersController extends BaseController {
     protected parseCacheOptions ( input : any ) : CacheOptions {
@@ -47,6 +47,10 @@ export class ScrapersController extends BaseController {
 
         const query : IScraperQuery = {};
 
+        if ( 'year' in input ) {
+            query.year = +input.year;
+        }
+
         if ( 'boxSet' in input ) {
             query.boxSet = input.boxSet;
         }
@@ -61,9 +65,9 @@ export class ScrapersController extends BaseController {
     @Route( 'get', '/parse' )
     async parse ( req : Request, res : Response ) : Promise<any> {
         if ( req.query.name instanceof Array ) {
-            return req.query.name.map( name => parseTorrentName( name ) || {} );
+            return req.query.name.map( name => MediaTools.parseName( name ) );
         } else {
-            return parseTorrentName( req.query.name ) || {};
+            return MediaTools.parseName( req.query.name );
         }
     }
 
@@ -261,7 +265,6 @@ export class ScrapersController extends BaseController {
 
         const cache = this.parseCacheOptions( req.query.cache );
 
-        console.log( query, cache );
         const records = await this.server.scrapers.getMediaRelation( name, kind, relation, id, query, cache );
         
         const url = this.server.getMatchingUrl( req );
@@ -274,7 +277,7 @@ export class ScrapersController extends BaseController {
     }
 
     
-    @Route( 'get', '/:scraper/:kind/:id/cast' )
+    @Route( 'get', '/:scraper/:kind/internal/:id/cast' )
     async getCast ( req : Request, res : Response ) : Promise<RoleRecord[]> {
         const name : string = req.params.scraper;
         const kind : MediaKind = req.params.kind;

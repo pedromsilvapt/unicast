@@ -86,7 +86,7 @@ export class ArtworkCache {
 
         for ( let key of Object.keys( art ) ) {
             if ( typeof art[ key ] === 'string' ) {
-                cached[ key ] = `${url}/api/media/artwork/scrapers/${ scraper }/${ kind }/${ id }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
+                cached[ key ] = `${url}/api/media/artwork/scrapers/${ scraper }/${ kind }/${ encodeURIComponent( id ) }/${ [ ...(prefix || [] ), key ].join( '.' ) }`;
             } else if ( art[ key ] && typeof art[ key ] === 'object' ) {
                 cached[ key ] = this.getCachedScraperObject( url, scraper, kind, id, art[ key ], [ ...( prefix || [] ), key ] );
             } else {

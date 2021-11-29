@@ -3,6 +3,8 @@ import { spawn } from 'child_process'
 import { Config } from "./Config";
 import * as os from 'os';
 import { UnicastServer } from './UnicastServer';
+import * as parseTorrentName from 'parse-torrent-name';
+import { MediaSources } from './MediaRecord';
 
 export class MediaTools {
     protected static probeNormalizeTracks ( tracks : any[] ) : TrackMediaMetadata[] {
@@ -87,6 +89,26 @@ export class MediaTools {
         }
 
         return command;
+    }
+
+    static parseName ( name: string ) {
+        const details = parseTorrentName( name ) ??  {};
+        
+        details.source = MediaSources.normalize( details.details );
+
+        if ( details.source == null ) {
+            details.source = MediaSources.findAny( name );
+        }
+
+        return details;
+    }
+
+    static parseBaseName ( filePath : string ) {
+        return MediaTools.parseName( path.basename( filePath, path.extname( filePath ) ) );
+    }
+
+    static parseDirName ( filePath: string ) {
+        return MediaTools.parseName( path.dirname( filePath ) );
     }
 }
 

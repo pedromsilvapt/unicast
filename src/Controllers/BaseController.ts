@@ -4,7 +4,7 @@ import { Request, Response, Next } from "restify";
 import { Logger } from 'clui-logger';
 import { AccessCard, IpIdentity, ScopeResource } from '../AccessControl';
 import { InvalidArgumentError, InvalidCredentialsError  } from 'restify-errors';
-import { SchemaValidationError, TypeSchema } from '../Config';
+import * as schema from '@gallant/schema';
 
 export type RoutesDeclarations = { 
     methods: string[], 
@@ -13,8 +13,9 @@ export type RoutesDeclarations = {
     handler: RouteTransform, 
     appendLast: boolean,
     authScope: string,
-    querySchema?: TypeSchema,
-    bodySchema?: TypeSchema,
+    querySchema?: schema.Type,
+    bodySchema?: schema.Type,
+    description?: string;
 }[];
 
 export abstract class BaseController implements Annotated {
@@ -60,6 +61,7 @@ export abstract class BaseController implements Annotated {
                             path,
                             querySchema: route.querySchema,
                             bodySchema: route.bodySchema,
+                            description: route.description,
                         },
                         AuthenticationMiddleware( this, authScope ),
                         SchemaMiddleware( this, route.querySchema, route.bodySchema ),
@@ -117,14 +119,14 @@ export function AuthenticationMiddleware ( controller : { server : UnicastServer
     };
 }
 
-export function SchemaMiddleware ( controller : { server : UnicastServer, logger : Logger }, querySchema : TypeSchema, bodySchema : TypeSchema ) {
+export function SchemaMiddleware ( controller : { server : UnicastServer, logger : Logger }, querySchema : schema.Type, bodySchema : schema.Type ) {
     return async function ( req : Request, res : Response, next : Next ) {
         try {
             if ( querySchema != null ) {
                 const errors = querySchema.validate( req.query );
     
                 if ( errors != null ) {
-                    const errorMessage = SchemaValidationError.toString( SchemaValidationError.prefix( errors, 'query' ) );
+                    const errorMessage = schema.errorsToString( schema.ValidationError.prefix( errors, 'query' ) );
 
                     return next( new InvalidArgumentError( errorMessage ) );
                 }
@@ -134,7 +136,7 @@ export function SchemaMiddleware ( controller : { server : UnicastServer, logger
                 const errors = bodySchema.validate( req.body );
     
                 if ( errors != null ) {
-                    const errorMessage = SchemaValidationError.toString( SchemaValidationError.prefix( errors, 'body' ) );
+                    const errorMessage = schema.errorsToString( schema.ValidationError.prefix( errors, 'body' ) );
 
                     return next( new InvalidArgumentError( errorMessage ) );
                 }
@@ -251,7 +253,7 @@ export function AuthScope ( scope : string ) {
     };
 }
 
-export function ValidateBody ( schema : TypeSchema ) {
+export function ValidateBody ( schema : schema.Type ) {
     return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
         const route = target.routes.find( ( { propertyKey: p } ) => propertyKey == p );
 
@@ -265,7 +267,9 @@ export function ValidateBody ( schema : TypeSchema ) {
     };
 }
 
-export function ValidateQuery ( schema : TypeSchema ) {
+export function ValidateQuery ( schemaType : schema.Type );
+export function ValidateQuery ( schemaType : string, options?: schema.AstOptions );
+export function ValidateQuery ( schemaType : schema.Type | string, options?: schema.AstOptions ) {
     return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
         const route = target.routes.find( ( { propertyKey: p } ) => propertyKey == p );
 
@@ -273,7 +277,21 @@ export function ValidateQuery ( schema : TypeSchema ) {
             throw new Error( `Could not find a route defined to set the body schema of: "${ propertyKey }"` );
         }
 
-        route.querySchema = schema;
+        if ( typeof schemaType === 'string' ) {
+            if ( options == null ) {
+                options = schema.createDefaultOptions( {
+                    defaultNumberStrict: false,
+                    defaultBooleanStrict: false,
+                } );
+            } else {
+                options.defaultNumberStrict = false;
+                options.defaultBooleanStrict = false;
+            }
+
+            schemaType = schema.parse( schemaType, options );
+        }
+
+        route.querySchema = schemaType;
 
         return descriptor;
     };

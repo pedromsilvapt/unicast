@@ -7,12 +7,14 @@ import { FileSystemRepository } from '../../Extensions/MediaRepositories/FileSys
 
 export interface AddRepositoryPathOptions {
     dryRun : boolean;
+    onlyEmpty : boolean;
 }
 
 export class AddRepositoryPathTool extends Tool<AddRepositoryPathOptions> {
     getOptions () {
         return [
-            new ToolOption( 'dryRun' ).setRequired( false ).setType( ToolValueType.Boolean ).setDefaultValue( false )
+            new ToolOption( 'dryRun' ).setRequired( false ).setType( ToolValueType.Boolean ).setDefaultValue( false ),
+            new ToolOption( 'onlyEmpty' ).setRequired( false ).setType( ToolValueType.Boolean ).setDefaultValue( true )
         ]
     }
 
@@ -44,8 +46,14 @@ export class AddRepositoryPathTool extends Tool<AddRepositoryPathOptions> {
 
         for ( let table of tables ) {
             for await ( let record of table.findStream() ) {
-                if ( record.repository == null || record.repositoryPaths != null ) {
+                if ( record.repository == null ) {
                     // this.log( 'repo null', table.constructor.name, record.kind, record.title );
+                    continue;
+                }
+
+                // If the user provided the option onlyEmpty, skip records that already have
+                // a repositoryPath
+                if ( options.onlyEmpty == true && record.repositoryPaths != null ) {
                     continue;
                 }
                                 
@@ -58,6 +66,8 @@ export class AddRepositoryPathTool extends Tool<AddRepositoryPathOptions> {
                 if ( !( repository instanceof FileSystemRepository ) ) {
                     continue;
                 }
+
+                const oldPaths = [ ...( record.repositoryPaths ?? [] ) ];
                 
                 if ( isMovieRecord( record ) || isCustomRecord( record ) ) {
                     const repoPath = repository.findVirtualRepositoryForPath( record.sources[ 0 ].id )?.name;
@@ -103,10 +113,16 @@ export class AddRepositoryPathTool extends Tool<AddRepositoryPathOptions> {
                     record.repositoryPaths = showPaths.get( record.id ) ?? [];
                 }
 
-                this.log( record.kind, record.title, record.repositoryPaths );
+                const changed = oldPaths.some( name => !record.repositoryPaths.includes( name ) );
                 
-                if ( !options.dryRun ) {
-                    await table.update( record.id, { repositoryPaths: record.repositoryPaths } );
+                if ( changed ) {
+                    recordsChanged += 1;
+                    
+                    this.log( record.kind, record.title, record.repositoryPaths );
+
+                    if ( !options.dryRun ) {
+                        await table.update( record.id, { repositoryPaths: record.repositoryPaths } );
+                    }
                 }
             }
         }

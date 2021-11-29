@@ -84,6 +84,7 @@ export interface PersonRecord {
 export interface RoleRecord extends PersonRecord {
     role : string;
     order : number;
+    appearances ?: number;
     internalId : string;
 }
 
@@ -93,6 +94,7 @@ export interface MediaCastRecord extends EntityRecord {
     personId : string;
     role : string;
     order : number;
+    appearences ?: number;
     createdAt : Date;
     updatedAt : Date;
 
@@ -255,7 +257,7 @@ export class MediaSources {
 
         source = source.toLowerCase();
 
-        const pool = this.list.find( pool => pool.some( each => each.toLowerCase() == source ) );
+        const pool = MediaSources.list.find( pool => pool.some( each => each.localeCompare( source, undefined, { sensitivity: 'accent' } ) ) );
 
         if ( pool ) {
             return pool[ 0 ];

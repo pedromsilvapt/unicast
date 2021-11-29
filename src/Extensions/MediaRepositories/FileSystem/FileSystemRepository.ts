@@ -1,6 +1,6 @@
 import { IVirtualRepository, MediaRepository, VirtualRepositoryState } from "../../../MediaRepositories/MediaRepository";
 import { MediaRecord, MediaKind, isPlayableRecord, PlayableMediaRecord, isMovieRecord, isTvEpisodeRecord, TvEpisodeMediaRecord, MovieMediaRecord, isTvShowRecord, isTvSeasonRecord } from "../../../MediaRecord";
-import { FileSystemMountConfig, FileSystemScanner, FileSystemScannerConfig, FileSystemScannerConfigNormalized, MediaScanContent } from "./FileSystemScanner";
+import { CommonLocalRecord, FileSystemMountConfig, FileSystemScanner, FileSystemScannerConfig, FileSystemScannerConfigNormalized, LocalRecord, MediaScanContent } from "./FileSystemScanner";
 import { filter, map } from "data-async-iterators";
 import { Settings } from "../../../MediaScrapers/Settings";
 import { FileSystemSubtitlesRepository } from "./FileSystemSubtitlesRepository";
@@ -216,6 +216,18 @@ export class FileSystemRepository extends MediaRepository {
         records = map( records, record => this.placeRepositoryPaths( record ) as T );
 
         return records;
+    }
+
+    scanLocal<T extends CommonLocalRecord = LocalRecord> ( filterKind : MediaKind[] = null ) : AsyncIterable<T> {
+        const scanner = new FileSystemScanner( this.server, this.config, this.settings, null );
+
+        let records = scanner.scanLocal();
+
+        if ( filterKind ) {
+            records = filter( records, record => filterKind.includes( record.kind ) );
+        }
+
+        return records as AsyncIterable<any>;
     }
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]> {

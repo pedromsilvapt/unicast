@@ -258,7 +258,7 @@ export class BackgroundTask extends EventEmitter {
         return {};
     }
 
-    toJSON () {
+    toJSON ( filter ?: unknown ) {
         return {
             id: this.id,
             state: this.state,

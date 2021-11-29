@@ -24,6 +24,8 @@ export interface MediaSyncOptions {
     cache : CacheOptions;
     autoFinishTask : boolean;
     repairMode : MediaSyncRepairMode;
+    localArtworkPreservation : ArtworkPreservationMode;
+    incomingArtworkAcceptance : ArtworkAcceptanceMode;
 }
 
 export class MediaSync {
@@ -183,10 +185,14 @@ export class MediaSync {
             delete newRecord[ key ];
         }
 
+        newRecord = await this.applyArtworkPolicies( context, oldRecord, newRecord );
+
         const changed = table.isChanged( oldRecord, newRecord );
         
         if ( changed && !snapshot.options.dryRun ) {
-            newRecord = await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
+            await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
+
+            newRecord.id = oldRecord.id;
 
             await repair.onUpdate( oldRecord );
         }
@@ -247,6 +253,7 @@ export class MediaSync {
 
         // We get the scraper media record associated with our local `media` record (using the external object)
         // We do this so we can then get the record's internal scraper id to get the cast
+        // NOTE: We cannot use the `media.internalId` value, because that is the repository's internal ID, not the scraper.
         const scraperMedia = await this.scrapers.getMediaExternal( media.scraper, media.kind, media.external, {}, cache );
 
         if ( !scraperMedia ) {
@@ -264,7 +271,8 @@ export class MediaSync {
         // via the `.cast` property on each PersonRecord
         const existingRoles : Map<string, PersonRecord> = collect( 
             await table.relations.cast.load( media ),
-            groupingBy( role => role.cast.internalId, first() )
+            filtering( role => role.cast.scraper == media.scraper,
+                groupingBy( role => role.cast.internalId, first() ) )
         );
 
         // This will contain the internalIds of the new roles that don't
@@ -274,7 +282,7 @@ export class MediaSync {
         // And we will search OTHER media records for the same person and see what we find
         const newPeopleRoles : MediaCastRecord[] = collect( 
             await this.database.tables.mediaCast.findAll( newPeopleRolesId, { index: 'internalId' } ), 
-            filtering( p => p.personId != null, distinct( p => p.internalId ) )
+            filtering( p => p.personId != null && p.scraper == media.scraper, distinct( p => p.internalId ) )
         );
 
         // Load the people related to those records
@@ -349,6 +357,7 @@ export class MediaSync {
                     mediaId: media.id,
                     mediaKind: media.kind,
                     order: role.order,
+                    appearences: role.appearances,
                     role: role.role,
                     scraper: media.scraper,
                     personId: person.id,
@@ -376,11 +385,120 @@ export class MediaSync {
         // all roles that already exist in the database. As such, whatever is left is stale data that
         // has been removed from the remote database and as such we should sync that up
         // by removing them in our database as well
-        const toBeRemovedIds = Array.from( existingRoles.values() ).map( role => role.id );
+        const toBeRemovedIds = Array.from( existingRoles.values() ).map( person => person.cast.id );
+
+        // NOTE: There may also exist some roles associated with this media record, but from a different scraper 
+        // (might happen after an existing repository changes scrapers, for example). In such cases, these casts
+        // will not be included in the existingRoles, but we also want them to be removed, so we add them here
+        // toBeRemovedIds.
+        toBeRemovedIds.push( ...collect( 
+            await table.relations.cast.load( media ), 
+            filtering( person => person.cast.scraper != media.scraper, mapping( person => person.cast.id ) )
+        ) );
 
         const deletedCastCount = await this.database.tables.mediaCast.deleteKeys( toBeRemovedIds );
 
         return { createdPeopleCount, existingPeopleCount, deletedCastCount };
+    }
+
+    /**
+     * Applies the settings given by the user regarding local artwork 
+     * preservation and incoming artwork acceptance for the new record.
+     * 
+     * @param context The Media Sync Context object
+     * @param oldRecord The local record that already exists in the Database
+     * @param newRecord The incoming record recently scraped
+     * @returns A shallow clone of newRecord with the artwork replaced appropriately
+     */
+    async applyArtworkPolicies ( context : MediaSyncContext, oldRecord : MediaRecord, newRecord : MediaRecord ) : Promise<MediaRecord> {
+        const preservationMode = context.snapshot.options.localArtworkPreservation;
+        const acceptanceMode = context.snapshot.options.incomingArtworkAcceptance;
+
+        const artKey = 'art' as const;
+
+        const localArt = oldRecord[ artKey ];
+        const incomingArt = newRecord[ artKey ];
+
+        // Create a shallow clone of the newRecord
+        const finalRecord = { 
+            art: {},
+            ...newRecord
+        };
+
+        if ( preservationMode == ArtworkPreservationMode.Keep ) {
+            if ( artKey in oldRecord ) {
+                finalRecord[ artKey ] = oldRecord[ artKey ];
+            } else {
+                delete finalRecord[ artKey ];
+            }
+        } else {
+            // If the preservation mode is not Keep, then it is one of the Discard modes
+            
+            // Create a distinct set with all the artwork keys from both the old
+            // record and the new one
+            const keys = new Set( [
+                ...Object.keys( localArt || {} ),
+                ...Object.keys( incomingArt || {} )
+            ] );
+
+            for ( const subKey of keys ) {
+                // Default is to preserve, here we check if it is discard
+                let preserveLocal = true;
+                // Always convert undefineds to nulls
+                const oldValue = localArt[ subKey ] ?? null;
+
+                // Artwork keys that are not strings or null, are always preserved
+                if ( oldValue == null || typeof oldValue === 'string' ) {
+                    if ( preservationMode === ArtworkPreservationMode.DiscardIfEmpty ) {
+                        // Discard (not preserve) if empty (null)
+                        if ( oldValue == null ) {
+                            preserveLocal = false;
+                        }
+                    } else if ( preservationMode === ArtworkPreservationMode.DiscardIfInvalid ) {
+                        // Discard (not preserve) if empty (null) or invalid
+                        if ( oldValue == null || !await isArtworkValid( oldValue ) ) {
+                            preserveLocal = false;
+                        }
+                    }
+                }
+
+
+                // Default is to reject, here we check if it is to accept
+                let acceptIncoming = false;
+                // Always convert undefineds to nulls
+                const newValue = incomingArt[ subKey ] ?? null;
+
+                // Only accept values that are null or string                
+                if ( newValue == null || typeof newValue === 'string' ) {
+                    if ( acceptanceMode === ArtworkAcceptanceMode.Always ) {
+                        acceptIncoming = true;
+                    } else if ( acceptanceMode === ArtworkAcceptanceMode.WhenNotEmpty ) {
+                        if ( newValue != null ) {
+                            acceptIncoming = true;
+                        }
+                    } else if ( acceptanceMode === ArtworkAcceptanceMode.WhenNotInvalid ) {
+                        if ( newValue != null && await isArtworkValid( newValue ) ) {
+                            acceptIncoming = true;
+                        }
+                    }
+                }
+
+                // Apply the decision table
+                //   -  preserve &&  accept = oldValue
+                //   -  preserve && !accept = oldValue
+                //   - !preserve && !accept = null
+                //   - !preserve &&  accept = newValue
+                if ( preserveLocal ) {
+                    finalRecord[ artKey ][ subKey ] = oldValue;
+                } else if ( acceptIncoming ) {
+                    finalRecord[ artKey ][ subKey ] = newValue;
+                } else {
+                    finalRecord[ artKey ][ subKey ] = null;
+                }
+            }
+        }
+
+        return finalRecord;
     }
 
     async findRepositoryRecordsMap ( repository : IMediaRepository ) : Promise<RecordsMap<MediaRecord>> {
@@ -859,7 +977,7 @@ export class MediaSyncTask extends BackgroundTask {
         this.reports.push( { type: 'update', oldRecord, newRecord, changes } );
 
         if ( this.reportsLogger != null ) {
-            this.reportsLogger.info( 'UPDATE ' + oldRecord.id + ' ' + this.recordToString( newRecord ) + ' ' + JSON.stringify( changes ) );
+            // this.reportsLogger.info( 'UPDATE ' + oldRecord.id + ' ' + this.recordToString( newRecord ) + ' ' + JSON.stringify( changes ) );
         }
     }
 
@@ -879,9 +997,38 @@ export class MediaSyncTask extends BackgroundTask {
         }
     }
 
-    toJSON () {
-        return { ...super.toJSON(), statusMessage: this.statusMessage, reports: this.reports };
+    toJSON ( filter ?: { reportsIndex?: number } ) {
+        let reports = this.reports;
+
+        if ( filter?.reportsIndex != null ) {
+            reports = reports.slice( +filter.reportsIndex );
+        }
+
+        return { ...super.toJSON( filter ), statusMessage: this.statusMessage, reports: reports };
     }
+}
+
+export enum ArtworkPreservationMode {
+    // Always discard the artwork
+    Discard = 0,
+    // Discard the artwork only if it is empty
+    DiscardIfEmpty = 1,
+    // Update the existing artwork only if it is either missing or is invalid
+    // (the file is corrupted, for example)
+    DiscardIfInvalid = 2,
+    // Do not touch the artwork fields
+    Keep = 3,
+}
+
+export enum ArtworkAcceptanceMode {
+    // Always accept the artwork
+    Always = 0,
+    // Only accept the artwork if it is not empty
+    WhenNotEmpty = 1,
+    // Only accept the artwork if it is not empty or invalid
+    WhenNotInvalid = 2,
+    // Always reject the artwork
+    Never = 3,
 }
 
 export type MediaSyncConfiguration = {
@@ -1007,4 +1154,14 @@ export class MediaPostSyncRepair {
             await this.database.tables.mediaCast.repair();
         }
     }
+}
+
+/**
+ * TODO: Implement actual validation to verify if the artwork is valid: if it is 
+ * reachable and the data is not corrupt
+ * @param artwork The address (local file or http) to validate
+ * @returns 
+ */
+export async function isArtworkValid ( artwork: string ) {
+    return true;
 }

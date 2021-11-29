@@ -34,7 +34,7 @@ export class TasksController extends BaseController {
             throw new ResourceNotFoundError( `Could not find task with id "${ req.params.id }".` );
         }
 
-        const task = this.server.tasks.get( req.params.id ).toJSON();
+        const task = this.server.tasks.get( req.params.id ).toJSON( req.query.filter );
 
         if ( 'metricsHistory' in req.query && req.query.metricsHistory != 'true' ) {
             if ( task.metrics instanceof Array ) {

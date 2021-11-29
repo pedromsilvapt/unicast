@@ -20,6 +20,7 @@ import { collect, groupingBy, first, mapping, toSet } from 'data-collectors';
 import { ComposedTask } from '../BackgroundTask';
 import { DotNode, expandDotStrings, Relatable, tableChainDeep } from './RelationGraph';
 import type { Relation } from './Relations/Relation';
+import { LoggerInterface } from 'clui-logger';
 
 export type RethinkPredicate = r.ExpressionFunction<boolean> | r.Expression<boolean> | { [key: string]: any };
 
@@ -153,6 +154,128 @@ export class Database {
 
         return new Database( this.server, newConfig );
     }
+
+    /**
+     * Clones the currently used database into the database provided in
+     * the argument destination.
+     * 
+     * @param destination 
+     * @param logger 
+     * @returns 
+     */
+    async clone ( destination : Database | string, logger ?: LoggerInterface ) {
+        if ( typeof destination === 'string' ) {
+            destination = this.for( destination );
+        }
+
+        let srcConnection: r.Connection = null;
+        let dstConnection: r.Connection = null;
+
+        logger ??= this.server.logger.service( 'Database' ).service( 'Clone' );
+        
+        try {
+            const srcDbName = this.config.get<string>( 'database.db' );
+            const dstDbName = destination.config.get<string>( 'database.db' );
+
+            // Validate that the databases are different
+            if ( srcDbName == dstDbName ) {
+                logger.error( `Cannot clone a database onto itself: ${ srcDbName } and ${ dstDbName } are equal.` );
+                return;
+            }
+
+            // Notify the user of the operation in progress and give some time to cancel it
+            logger.info(`Begining attempt to clone database ${ srcDbName } onto ${ dstDbName }. Holding 5 seconds before proceeding...`);
+
+            await new Promise<void>( resolve => setTimeout( resolve, 5000 ) );
+            
+            // Acquire source connection
+            logger.debug( `Attempt to acquire source DB connection...` );
+            srcConnection = await this.connections.acquire();
+            logger.debug( `Source DB connection acquired!` );
+            
+            logger.debug( `Retrieving list of databases...` );
+            const databases = await r.dbList().run(srcConnection);
+            logger.debug( `List retrieved, ${ databases.length } databases found!` );
+            
+            // Drop Destination DB if it exists (wa want to clone from scratch)
+            if ( databases.includes( dstDbName ) ) {
+                try {
+                    logger.info( `Destination database ${ dstDbName } already exists. Attempting to drop...` );
+                    await r.dbDrop( dstDbName ).run( srcConnection );
+                    logger.info( `Destination database ${ dstDbName } dropped successfully!` );
+                } catch ( err ) {
+                    logger.warn( `ERROR (while dropping destination db): ${ err.message }` );
+                    logger.info( `Proceeding with clone despite previous error.` );
+                }
+            }
+
+            // Create the Destination DB empty
+            logger.info( `Attempting to create destination database ${ dstDbName }...` );
+            await r.dbCreate( dstDbName ).run( srcConnection );
+            logger.info( `Destination database ${ dstDbName } created successfully!` );
+
+            // Finally that the Dst DB is created, we can acquire a connection to it
+            dstConnection = await destination.connections.acquire();
+            
+            // Create all the tables from the Source Database in the Destination Database
+            const srcTables = await r.db( srcDbName ).tableList().run(srcConnection);
+
+            logger.info(`Beginning to create ${srcTables.length} tables on the destination database...`);
+            for ( const tableName of srcTables ) {
+                logger.info(`Beginning to create table ${tableName} on the destination database...`);
+                const primaryKey = await r.db( srcDbName ).table( tableName )["info"]()('primary_key').run( srcConnection );
+
+                await r.db( dstDbName ).tableCreate( tableName, { primaryKey: primaryKey } as any ).run( dstConnection );
+            }
+            logger.info(`All ${srcTables.length} tables created successfully!`);
+
+            // Create secondary indexes for all the tables
+            logger.info(`Beginning to create secondary indexes on the destination database...`);
+            for ( const tableName of srcTables ) {
+                logger.info(`Beginning to create secondary indexes for table ${tableName} on the destination database...`);
+                
+                let sourceIndexes = await r.db( srcDbName ).table( tableName ).indexList().run( srcConnection );
+                
+                for (let index of sourceIndexes) {
+                    let indexObj = (await r.db( srcDbName ).table( tableName )["indexStatus"]( index ).run(srcConnection))[0];
+                    
+                    await (r.db( dstDbName ).table( tableName ).indexCreate as any)(
+                        indexObj.index, indexObj.function, { geo: indexObj.geo, multi: indexObj.multi } as any
+                    ).run( dstConnection );
+                }
+
+                logger.info(`Waiting for secondary indexes on table ${tableName} to be ready...`);
+                
+                await r.db( dstDbName ).table( tableName ).indexWait().run( dstConnection );
+            }
+            logger.info(`All secondary indexes created successfully!`);
+
+            logger.info(`Beginning to copy table contents to the destination database...`);
+            for ( const tableName of srcTables ) {
+                logger.info(`Copying table ${ tableName }...`);
+                await r.db( dstDbName ).table( tableName ).insert( 
+                    r.db( srcDbName ).table( tableName )
+                ).run( dstConnection );
+                    
+                logger.info(`Table ${ tableName } copied!`);
+            }
+            logger.info(`All table's data copied!`);
+            
+            logger.info(`Clone operation has succeeded. Releasing resources and wrapping up!`);
+        } catch ( err ) {
+            logger.error( err.message || err );
+            
+            throw err;
+        } finally {
+            if ( srcConnection != null ) {
+                this.connections.release( srcConnection );
+            }
+            
+            if ( dstConnection != null ) {
+                destination.connections.release( dstConnection );
+            }
+        }
+    }
 }
 
 export class DatabaseTables {
@@ -248,6 +371,32 @@ export class DatabaseTables {
         await this.jobsQueue.install();
 
         await this.storage.install();
+    }
+
+    tables ( includeHistory: boolean = false ): BaseTable<any>[] {
+        return [
+            this.movies,
+            this.shows,
+            this.seasons,
+            this.episodes,
+            this.custom,
+            this.history,
+            this.playlists,
+            this.collections,
+            this.collectionsMedia,
+            this.userRanks,
+            this.people,
+            this.mediaCast,
+            this.subtitles,
+            this.jobsQueue,
+            this.storage,
+        ].flatMap( table => {
+            if ( includeHistory ) {
+                return [ table, table.changesHistory ];
+            } else {
+                return [ table ];
+            }
+        } );
     }
 }
 

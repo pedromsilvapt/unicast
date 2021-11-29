@@ -47,7 +47,7 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
         const scraper = this.get( scraperName );
 
         if ( kind == MediaKind.Movie ) {
-            return scraper.getMovieExternal( external,query, cache );
+            return scraper.getMovieExternal( external, query, cache );
         } else if ( kind == MediaKind.TvShow ) {
             return scraper.getTvShowExternal( external, query, cache );
         } else if ( kind === MediaKind.TvSeason ) {
@@ -78,7 +78,7 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
     async getMediaArtwork ( scraperName : string, kind : MediaKind, id : string, query ?: IScraperQuery, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         const scraper = this.get( scraperName );
 
-        const record = await this.getMedia( scraperName, kind, id );
+        const record = await this.getMedia( scraperName, kind, id, query, cache );
 
         return scraper.getMediaArt( record, null, query, cache );
     }

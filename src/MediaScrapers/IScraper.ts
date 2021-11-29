@@ -3,6 +3,7 @@ import { AsyncCache, CacheOptions } from "./ScraperCache";
 import { UnicastServer } from "../UnicastServer";
 
 export interface IScraperQuery {
+    year ?: number;
     language ?: string;
     boxSet ?: string;
 }

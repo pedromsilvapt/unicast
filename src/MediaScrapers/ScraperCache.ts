@@ -138,9 +138,11 @@ export class Cache<T> {
     protected dataChanged ( key : string, block : CacheBlock<T> ) : void {
         if ( this.autoSaveDelay > 0 && this.autoSaveTimeout == null ) {
             this.autoSaveTimeout = setTimeout( async () => {
-                this.autoSaveTimeout = null;
-
-                await this.save();
+                try {
+                    await this.save();
+                } finally {
+                    this.autoSaveTimeout = null;
+                }
             }, this.autoSaveDelay );
         }
     }

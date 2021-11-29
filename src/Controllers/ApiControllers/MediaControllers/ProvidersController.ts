@@ -1,10 +1,26 @@
-import { BaseController, Route } from "../../BaseController";
+import { BaseController, Route, ValidateQuery } from "../../BaseController";
 import { Request, Response } from "restify";
-import { MediaSync, MediaSyncOptions, MediaSyncRepairMode, MediaSyncTask } from "../../../MediaSync";
+import { ArtworkAcceptanceMode, ArtworkPreservationMode, MediaSync, MediaSyncOptions, MediaSyncRepairMode, MediaSyncTask } from "../../../MediaSync";
 import { BackgroundTask, Stopwatch } from "../../../BackgroundTask";
 import { MediaKind } from "../../../MediaRecord";
+import * as schema from '@gallant/schema';
 
 export class ProvidersController extends BaseController {
+    @ValidateQuery(`{
+        kinds?: "movie" | "show" | "season" | "episode" | "custom";
+        cleanMissing?: boolean;
+        dryRun?: boolean;
+        refetchExisting?: boolean;
+        refetchIncomplete?: boolean;
+        updateMoved?: boolean;
+        cache?: {
+            read?: boolean;
+            write?: boolean;
+        },
+        repairMode?: 0 | 1 | 2;
+        localArtworkPreservation?: 0 | 1 | 2 | 3;
+        incomingArtworkAcceptance?: 0 | 1 | 2 | 3;
+    }`)
     @Route( ['get', 'post'], '/sync' )
     async sync ( req : Request, res : Response ) : Promise<BackgroundTask> {
         const kinds : MediaKind[] = req.query.kinds || null;
@@ -26,7 +42,9 @@ export class ProvidersController extends BaseController {
                     writeCache: !req.query.cache || req.query.cache.write != 'false'
                 },
                 autoFinishTask: false,
-                repairMode: req.query.repairMode,
+                repairMode: Number( req.query.repairMode ?? MediaSyncRepairMode.OnlyChanged ),
+                localArtworkPreservation: Number( req.query.localArtworkPreservation ?? ArtworkPreservationMode.DiscardIfEmpty ),
+                incomingArtworkAcceptance: Number( req.query.incomingArtworkAcceptance ?? ArtworkAcceptanceMode.WhenNotEmpty ),
             };
 
             this.server.logger.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );

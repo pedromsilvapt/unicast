@@ -148,13 +148,26 @@ export class QueryLang {
 export class QuerySemantics<C = any> {
     properties : Record<string, PropertySemantics<C>>;
 
+    dynamicProperties: {
+        predicate: (key: string) => boolean,
+        semantics: PropertySemantics<C>
+    }[] = [];
+
     public constructor ( properties : Record<string, PropertySemantics<C>> = {} ) {
         this.properties = properties;
     }
     
     public getPropertyFor ( ast : QueryAst ) : PropertySemantics<C> | null {
-        if ( ast.kind === 'identifier' && ast.name in this.properties ) {
-            return this.properties[ ast.name ];
+        if ( ast.kind === 'identifier' ) {
+            if ( ast.name in this.properties ) {
+                return this.properties[ ast.name ];
+            }
+
+            const dynamicMatch = this.dynamicProperties.find( prop => prop.predicate( ast.name ) );
+
+            if ( dynamicMatch != null ) {
+                return dynamicMatch.semantics;
+            }
         }
         
         return null;
@@ -284,7 +297,7 @@ const EmbeddedSuffix = createToken( { name: "EmbeddedSuffix", pattern: /.+/ } );
 
 const Comma = createToken( { name: "Comma", pattern: /,/ } );
 
-const Identifier = createToken( { name: "Identifier", pattern: /[a-zA-Z_]\w*/ } );
+const Identifier = createToken( { name: "Identifier", pattern: /[a-zA-Z_][\w.]*/ } );
 
 const LogicOperator = createToken( { name: "LogicOperator", pattern: Lexer.NA } );
 
@@ -754,6 +767,11 @@ export class MediaRecordQuerySemantics<C extends PartialMediaRecord> extends Que
             cast: QuerySemantics.flagsEnum( ctx => ctx.cast?.map( p => p.name ) ?? [] ),
             genre: QuerySemantics.flagsEnum( ctx => ctx.genres ?? [] ),
             ...properties
+        } );
+
+        this.dynamicProperties.push( {
+            predicate: key => key.startsWith('external_'),
+            semantics: new PropertySemantics<C>( {}, name => ctx => ctx.external?.[name.slice('external_'.length)] ),
         } );
     }
 }

@@ -166,12 +166,17 @@ export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> ex
                 return relatedIds.map( id => {
                     const related = cache.related.get( id );
                     
+                    if ( !related ) {
+                        // TODO: Notify missing foreign keys
+                        return null;
+                    }
+
                     const pivot : MediaCastRecord = cache.pivots.get( item.id ).get( id );
 
                     related[ this.pivotField ] = pivot;
 
                     return related;
-                } );
+                } ).filter( related => related != null );
             } else {
                 return relatedIds.map( id => cache.related.get( id ) );
             }

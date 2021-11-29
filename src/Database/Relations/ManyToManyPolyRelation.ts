@@ -107,13 +107,20 @@ export class ManyToManyPolyRelation<M extends TableRecord, R extends TableRecord
         
                     const related = relatedEntries.get( key );
 
+                    if ( !related ) {
+                        // TODO: Notify missing foreign keys
+                        return null;
+                    }
+
                     if ( this.pivotField != null ) {
                         related[ this.pivotField ] = link;
                     }
 
                     return related;
+                } else {
+                    return null;
                 }
-            } );
+            } ).filter( related => related != null );
         }
 
         return [];
