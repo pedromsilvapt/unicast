@@ -39,7 +39,10 @@ export class Config {
 
     static singleton () : Config {
         if ( !this.instance ) {
-            this.instance = Config.load( path.join( process.cwd(), 'config' ) );
+            this.instance = Config.merge( [
+                Config.load( path.join( process.cwd(), 'config' ) ),
+                Config.loadEnvConfigs(),
+            ] );
         }
 
         return this.instance;
@@ -162,6 +165,63 @@ export class Config {
         }
 
         return new Config( data );
+    }
+
+    /**
+     * Reads the contents of `process.env` and finds any environments
+     * variables with names that start with 'CONFIG_'. Then it strips their prefix
+     * and stores their values. The values should also be prefixed with their
+     * types ('STR_', 'BOOL_' and 'NUMBER_' are currently supported).
+     * 
+     * CONFIG_name=STR_unicast
+     * CONFIG_server.port=NUMBER_3030
+     * CONFIG_database.autostart=BOOL_false
+     * 
+     * The environment variables above would result in a Config object with the following structure:
+     * 
+     * {
+     *   name: 'unicast',
+     *   server: {
+     *     port: 3030,
+     *   },
+     *   database: {
+     *     autostart: false,
+     *   },
+     * }
+     * 
+     * @returns A Config object with the given keys and corresponding values
+     * 
+     * 
+     * 
+     */
+    static loadEnvConfigs () : Config {
+        const data = {};
+
+        const configKeys = Object.keys( process.env )
+            .filter( key => key.startsWith( 'CONFIG_' ) );
+
+        for ( const envKey of configKeys ) {
+            let configKey = envKey.substr( 'CONFIG_'.length );
+            let configValue: unknown = process.env[envKey];
+
+            if ( configKey.startsWith( 'BOOL_' ) ) {
+                configKey = configKey.substr( 'BOOL_'.length );
+
+                configValue = configValue === 'true' ? true : false;
+            } else if ( configKey.startsWith( 'STR_' ) ) {
+                configKey = configKey.substr( 'STR_'.length );
+                // If config value is already string by default, nothing to do
+            } else if ( configKey.startsWith( 'NUMBER_' ) ) {
+                configKey = configKey.substr( 'NUMBER_'.length );
+                configValue = parseFloat( configValue as string );
+            } else {
+                throw new Error( `Invalid environment config type: ${ configKeys }` );
+            }
+
+            ObjectPath.set( data, configKey, configValue );
+        }
+
+        return Config.create( data );
     }
 
     static load ( folder : string ) : Config {

@@ -2,7 +2,7 @@ import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersMan
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord, isTvEpisodeRecord, isTvSeasonRecord, isMovieRecord, isTvShowRecord, isCustomRecord } from "./MediaRecord";
 import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable } from "./Database/Database";
-import { Config, TypeSchema } from "./Config";
+import { Config } from "./Config";
 import * as restify from 'restify';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
 import { routes } from 'unicast-interface';
@@ -30,7 +30,7 @@ import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
 import { Tool } from './Tools/Tool';
 import { Journal } from './Journal';
-import { ConsoleBackend, SharedLogger, FilterBackend, HttpRequestLogger } from 'clui-logger';
+import { ConsoleBackend, SharedLogger, FilterBackend, HttpRequestLogger, MultiBackend, FileBackend } from 'clui-logger';
 import { CommandsHistory } from './Receivers/CommandsHistory';
 import { DataStore } from './DataStore';
 import { AccessControl } from './AccessControl';
@@ -113,7 +113,10 @@ export class UnicastServer {
         
         this.loggerBackend = new FilterBackend( new ConsoleBackend( TIMESTAMP_SHORT ) );
 
-        this.logger = new SharedLogger( this.loggerBackend );
+        this.logger = new SharedLogger( new MultiBackend( [
+             this.loggerBackend,
+             new FileBackend( this.storage.getPath( 'logs', 'app-:YYYY-:MM-:DD.log' ) ),
+        ] ) );
 
         this.database = new Database( this );
 
