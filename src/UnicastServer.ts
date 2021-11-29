@@ -1088,6 +1088,44 @@ export class MediaUserRanksList {
 
         return await table.deleteMany({ list: this.id });
     }
+
+    public async checkConsistency () {
+        const duplicates: number[] = [];
+        const holes: number[] = [];
+        const invalid: number[] = [];
+
+        const positions = await this.mediaManager.server.database.tables.userRanks.findStream( query => {
+            return query.orderBy( { index: r.desc( 'position' ) } );
+        } );
+
+        let lastPosition: number = null;
+
+        for await ( const rank of positions ) {
+            if ( lastPosition !== null ) {
+                if ( lastPosition === rank.position ) {
+                    duplicates.push( lastPosition );
+                } else if ( lastPosition - 1 > rank.position ) {
+                    for ( let i = lastPosition - 1; i > rank.position; i-- ) {
+                        holes.push( i );
+                    }
+                }
+                
+                if ( rank.position <= 0 ) {
+                    invalid.push( rank.position );
+                }
+                
+                lastPosition = rank.position;
+            }
+        }
+
+        if ( lastPosition !== null && lastPosition > 1 ) {
+            for ( let i = lastPosition - 1; i > 0; i-- ) {
+                holes.push( i );
+            }
+        }
+
+        return { duplicates, holes, invalid };
+    }
 }
 
 export class RankChangeSet {
