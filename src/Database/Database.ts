@@ -1622,6 +1622,7 @@ export class UserRanksTable extends BaseTable<UserRankRecord> {
     readonly tableName : string = 'user_ranks';
 
     indexesSchema : IndexSchema[] = [
+        { name: 'list' },
         { name: 'position' },
         { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];

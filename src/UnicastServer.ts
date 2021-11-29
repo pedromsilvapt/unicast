@@ -39,6 +39,7 @@ import { Relation } from './Database/Relations/Relation';
 import { max } from './ES2017/Date';
 import * as crypto from 'crypto';
 import { collect, first, groupingBy } from 'data-collectors';
+import * as schema from '@gallant/schema';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -1652,8 +1653,9 @@ export interface PlayRepairChangesContext {
 export interface Route extends restify.RouteOptions {
     method : string;
     childRoutes ?: restify.Route[]
-    querySchema ?: TypeSchema;
-    bodySchema ?: TypeSchema;
+    querySchema ?: schema.Type;
+    bodySchema ?: schema.Type;
+    description ?: string;
 }
 
 export class MultiServer extends EventEmitter {

@@ -6,17 +6,20 @@ import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from 
 import * as regexEscape from 'regex-escape';
 import * as r from 'rethinkdb';
 import { EntityResource } from '../AccessControl';
-import { constant, NumberTypeSchema, ObjectTypeSchema, OptionalTypeSchema, StringTypeSchema, UnionTypeSchema } from '../Config';
+import * as schema from '@gallant/schema';
 
-export const TableListQuerySchema = new ObjectTypeSchema({
-    skip: new OptionalTypeSchema(new NumberTypeSchema(false)),
-    take: new OptionalTypeSchema(new NumberTypeSchema(false)),
-    filterSort: new OptionalTypeSchema(new UnionTypeSchema(new StringTypeSchema(), new ObjectTypeSchema({
-        field: new StringTypeSchema(),
-        direction: new OptionalTypeSchema(new UnionTypeSchema(constant("asc"), constant("desc")), "asc"),
-        list: new OptionalTypeSchema(new StringTypeSchema()),
-    })), "title")
-});
+export const TableListQuerySchema = schema.parse( `{
+    skip?: number;
+    take?: number;
+    filterSort?: string | {
+        field: string;
+        direction?: "asc" | "desc";
+        list?: string;
+    };
+}`, schema.createDefaultOptions( { 
+    defaultNumberStrict: false, 
+    defaultBooleanStrict: false 
+} ) );
 
 export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<R>> extends BaseController {
     abstract readonly table : T;

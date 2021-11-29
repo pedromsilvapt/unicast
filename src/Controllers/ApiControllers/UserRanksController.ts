@@ -1,13 +1,18 @@
 import { BaseController, Route, ValidateBody } from "../BaseController";
 import { Response, Request } from "restify";
+import * as schema from '@gallant/schema';
 import { TransactionalLog, Transaction } from 'data-transactional-log';
 import { MediaKind } from '../../MediaRecord';
 
-const MinimalMediaRecordSchema = new ObjectTypeSchema( {
-    id: new StringTypeSchema(),
-    kind: new UnionTypeSchema( ...[ 'movie', 'show', 'season', 'episode', 'custom' ].map( constant ) )
-}, false );
+const MinimalMediaRecordSchema = schema.parse( `{
+    id: string;
+    kind: "movie" | "show" | "season" | "episode" | "custom";
+}` );
 
+const SetRankBodySchema = schema.parse( `{
+    anchor?: ${schema.stringify(MinimalMediaRecordSchema)};
+    records: ${schema.stringify(MinimalMediaRecordSchema)}[];
+}` );
 
 export interface MediaRecordReference {
     id: string;

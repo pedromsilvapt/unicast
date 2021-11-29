@@ -1,17 +1,19 @@
 import { ReceiverFactory } from '../../../Receivers/BaseReceiver/ReceiverFactory';
 import { MpvReceiver, MpvConfig } from './MpvReceiver';
 import { CancelToken } from 'data-cancel-token';
-import { ObjectTypeSchema, OptionalTypeSchema, AnyTypeSchema } from '../../../Config';
+import * as schema from '@gallant/schema';
 
-export var MpvConfigTemplate = new ObjectTypeSchema( {
-    subtitles: new OptionalTypeSchema( {
-        lineFilters: new OptionalTypeSchema( [ new AnyTypeSchema() ], [] ),
-        style: new OptionalTypeSchema( {
-            default: new OptionalTypeSchema( {}, {} ),
-            custom: new OptionalTypeSchema( [], null )
-        }, {} )
-    }, {} )
-} );
+export var MpvConfigTemplate = schema.parse(`{
+    subtitles?: {
+        lineFilters?: any[]; // = []
+        style?: {
+            default: Object; // = {}
+            custom: Object[]; // = null
+        }; // = {}
+    }; // {}
+    [key: any]: any;
+}`);
+
 
 export class MpvReceiverFactory extends ReceiverFactory<MpvReceiver> {
     type: string = 'mpv';

@@ -1,20 +1,21 @@
 import { ReceiverFactory } from '../../../Receivers/BaseReceiver/ReceiverFactory';
 import { KodiReceiver, KodiConfig } from './KodiReceiver';
 import { CancelToken } from 'data-cancel-token';
-import { ObjectTypeSchema, OptionalTypeSchema, AnyTypeSchema, StringTypeSchema } from '../../../Config';
+import * as schema from '@gallant/schema';
 
-export var KodiConfigTemplate = new ObjectTypeSchema( {
-    username: new OptionalTypeSchema( new StringTypeSchema() ),
-    password: new OptionalTypeSchema( new StringTypeSchema() ),
-    fallback: new OptionalTypeSchema( new StringTypeSchema() ),
-    subtitles: new OptionalTypeSchema( {
-        lineFilters: new OptionalTypeSchema( [ new AnyTypeSchema() ], [] ),
-        style: new OptionalTypeSchema( {
-            default: new OptionalTypeSchema( {}, {} ),
-            custom: new OptionalTypeSchema( [], null )
-        }, {} )
-    }, {} )
-} );
+export var KodiConfigTemplate = schema.parse( `{
+    username?: string;
+    password?: string;
+    fallback?: string;
+    subtitles?: {
+        lineFilters?: any[]; // = []
+        style?: {
+            default: Object; // = {}
+            custom: Object[]; // = null
+        }; // = {}
+    }; // = {}
+    [key: any]: any;
+}` );
 
 export class KodiReceiverFactory extends ReceiverFactory<KodiReceiver> {
     type: string = 'kodi';

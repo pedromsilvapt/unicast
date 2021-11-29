@@ -18,6 +18,7 @@ import { RandomStream } from '../../ES2017/RandomStream';
 import { RepositoriesController } from './MediaControllers/RepositoriesController';
 import { UserRanksController } from './UserRanksController';
 import * as sortBy from 'sort-by';
+import * as schema from '@gallant/schema';
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -91,11 +92,15 @@ export class ApiController extends BaseController {
                 };
 
                 if ( route.querySchema != null ) {
-                    jsonRoute.querySchema = route.querySchema.toType();
+                    jsonRoute.querySchema = schema.stringify( route.querySchema );
                 }
 
                 if ( route.bodySchema != null ) {
-                    jsonRoute.bodySchema = route.bodySchema.toType();
+                    jsonRoute.bodySchema = schema.stringify( route.bodySchema );
+                }
+
+                if ( route.description != null ) {
+                    jsonRoute.description = route.description;
                 }
 
                 return jsonRoute;

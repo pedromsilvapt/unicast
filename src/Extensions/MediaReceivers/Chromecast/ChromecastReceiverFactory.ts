@@ -2,22 +2,22 @@ import { ChromecastReceiver, ChromecastConfig } from "./ChromecastReceiver";
 import { ReceiverFactory } from "../../../Receivers/BaseReceiver/ReceiverFactory";
 import { ChromecastReceiverMDNSScanner } from "./ChromecastReceiverScanner";
 import { CancelToken } from "data-cancel-token";
-import { ObjectTypeSchema, OptionalTypeSchema, AnyTypeSchema } from "../../../Config";
+import * as schema from '@gallant/schema';
 
-export var ChromecastConfigTemplate = new ObjectTypeSchema( {
-    subtitles: new OptionalTypeSchema( {
-        lineFilters: new OptionalTypeSchema( [ new AnyTypeSchema() ], [] ),
-        delay: new OptionalTypeSchema( {
-            preloadCount: new OptionalTypeSchema( Number, 0 ),
-            duration: new OptionalTypeSchema( Number, 250 ),
-            rollback: new OptionalTypeSchema( Number, 2 )
-        }, {} ),
-        style: new OptionalTypeSchema( {
-            default: new OptionalTypeSchema( {}, {} ),
-            custom: new OptionalTypeSchema( [], null )
-        }, {} )
-    }, {} )
-} );
+export var ChromecastConfigTemplate = schema.parse(`{
+    subtitles?: {
+        lineFilters?: any[]; // = []
+        delay?: {
+            preloadCount?: number; // = 0
+            duration?: number; // = 250
+            rollback?: number; // = 250
+        }; // = {}
+        style?: {
+            default: Object; // = {}
+            custom: Object[]; // = null
+        }; // = {}
+    }; // {}
+}`);
 
 export class ChromecastReceiverFactory extends ReceiverFactory<ChromecastReceiver> {
     type: string = 'chromecast';

@@ -1,10 +1,10 @@
 import { isMovieRecord, isTvEpisodeRecord, isTvSeasonRecord, isTvShowRecord, MediaKind, MediaRecord, MovieMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord } from '../../../MediaRecord';
-import * as Sch from '../../../Config';
 import { DeepPartial } from '../../../UnicastServer';
 import * as extend from 'extend';
 import * as path from 'path';
 import * as fs from 'mz/fs';
 import * as yaml from 'js-yaml' 
+import * as schema from '@gallant/schema';
 
 export interface TvShowLocalSettings {
     show?: {
@@ -26,20 +26,23 @@ export interface TvEpisodeLocalSettings {
     ignore?: boolean,
 }
 
-export const TvShowLocalSettingsSchema = Sch.object({
-    show: Sch.optional({
-        name: Sch.optional(String),
-        id: Sch.optional(Sch.union(String, Number)),
-    }),
-    episodes: Sch.optional([
-        {
-            file: String,
-            id: Sch.optional(Sch.union(String, Number)),
-            override: Sch.optional(Sch.any()),
-            ignore: Sch.optional(Boolean),
-        },
-    ]),
-});
+export const TvShowLocalSettingsSchema = schema.parse(`{
+    show?: {
+        name?: string;
+        id?: string | number;
+        override?: Object;
+    };
+    seasons?: {
+        number: number;
+        override?: Object;
+    }[];
+    episodes?: {
+        file: string;
+        id?: string | number;
+        override?: Object;
+        ignore?: boolean;
+    }[];
+}`);
 
 export interface MovieLocalSettings {
     id?: string;
@@ -48,12 +51,12 @@ export interface MovieLocalSettings {
     override?: DeepPartial<MovieMediaRecord>
 }
 
-export const MovieLocalSettingsSchema = Sch.object({
-    id: Sch.optional(String),
-    name: Sch.optional(String),
-    year: Sch.optional(Number),
-    override: Sch.optional(Sch.any())
-});
+export const MovieLocalSettingsSchema = schema.parse(`{
+    id?: string;
+    name?: string;
+    year?: number;
+    override?: Object;
+}`);
 
 export class LocalSettings {
     static async read<S = MovieLocalSettings | TvShowLocalSettings> ( filePath: string ): Promise<S> {
