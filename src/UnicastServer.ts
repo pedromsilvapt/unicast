@@ -25,6 +25,7 @@ import { ReadWriteSemaphore, Semaphore } from "data-semaphore";
 import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
 import { serveMedia } from "./ES2017/HttpServeMedia";
 import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
+import { SmartCollectionsManager } from './SmartCollections/SmartCollectionsManager';
 import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
@@ -65,6 +66,8 @@ export class UnicastServer {
     readonly providers : ProvidersManager;
     
     readonly media : MediaManager;
+
+    readonly smartCollections : SmartCollectionsManager;
 
     readonly streams : HttpRawMediaServer;
 
@@ -136,8 +139,11 @@ export class UnicastServer {
 
         this.repositories = new RepositoriesManager( this );
 
-        this.media = new MediaManager( this );        
+        this.media = new MediaManager( this );
+
+        this.smartCollections = new SmartCollectionsManager( this );
    
+
         this.subtitles = new SubtitlesManager( this );
 
         this.artwork = new ArtworkCache( this );
@@ -486,7 +492,7 @@ export class MediaManager {
         return table.get( id );
     }
 
-    getAll ( refs : [ MediaKind, string ][] ) : Promise<MediaRecord[]> {
+    getAll ( refs : (readonly [ MediaKind, string ])[] ) : Promise<MediaRecord[]> {
         return Promise.all( refs.map( ( [ kind, id ] ) => this.get( kind, id ) ) );
     }
 
@@ -660,14 +666,71 @@ export class MediaManager {
         return this.server.database.tables.collections.findAll( ids );
     }
 
-    async getCollectionItems ( id : string ) : Promise<MediaRecord[]> {
+    async getCollectionNamed ( name : string ) : Promise<CollectionRecord> {
+        return this.server.database.tables.collections.findOne( query => query.filter( { title: name } ) );
+    }
+
+    async getCollectionItems ( collectionId : string ) : Promise<MediaRecord[]> {
         const items = await this.database.tables.collectionsMedia.find( query => {
-            return query.filter( doc => doc( 'collectionId' ).eq( id ) );
+            return query.filter( doc => doc( 'collectionId' ).eq( collectionId ) );
         } );
 
         const ids = items.map<[MediaKind, string]>( r => ( [ r.mediaKind, r.mediaId ] ) );
 
         return this.getAll( ids );
+    }
+
+    async syncCollection ( collectionId : string, newItems : MediaRecord[] ) : Promise<void> {
+        const oldItems = await this.getCollectionItems( collectionId );
+
+        const newItemsByKind = collect( newItems, groupingBy( item => item.kind ) );
+        const oldItemsByKind = collect( oldItems, groupingBy( item => item.kind ) );
+
+        const kinds = new Set( [ ...newItemsByKind.keys(), ...oldItemsByKind.keys() ] );
+
+        const itemsToRemove: MediaRecord[] = [];
+        const itemsToAdd: MediaRecord[] = [];
+
+        for ( const kind of kinds ) {
+            const oldItemsById = collect( oldItemsByKind.get( kind ) ?? [], groupingBy( item => item.id, first() ) );
+
+            for ( const record of newItemsByKind.get( kind ) ) {
+                // If this record does not already belong to the collection
+                if ( !oldItemsById.has( record.id ) ) {
+                    itemsToAdd.push( record );
+                } else {
+                    oldItemsById.delete( record.id );
+                }
+            }
+
+            // Add to the "remove" list any records that were already in this collection
+            // but were not touched by the previous for loop (which iterated over the new
+            // records that should belong to the collection, and removes them from this map
+            // when finds a match, leaving only the unmatched ones)
+            for ( const record of oldItemsById.values() ) {
+                itemsToRemove.push( record );
+            }
+        }
+
+        if ( itemsToAdd.length > 0 ) {
+            const now = new Date();
+    
+            await this.server.database.tables.collectionsMedia.createMany( itemsToAdd.map( record => ( {
+                collectionId: collectionId,
+                mediaKind: record.kind,
+                mediaId: record.id,
+                createdAt: now,
+            } ) ) );
+        }
+
+        if ( itemsToRemove.length > 0 ) {
+            const keys = itemsToRemove.map( record => [ record.kind, record.id ] );
+
+            await this.server.database.tables.collectionsMedia.deleteKeys( keys, { 
+                index: 'reference',
+                query: query => query.filter( { collectionId } ),
+            } );
+        }
     }
 
     async setArtwork ( media : MediaRecord, property : string, url : string ) {

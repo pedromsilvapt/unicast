@@ -284,3 +284,100 @@ export class MediaSources {
         return source;
     }
 }
+
+export class MediaExternalMap<T extends MediaRecord = MediaRecord> {    
+    /**
+     * This variable will hold all media records stored in the database, indexed by their external keys.
+     */
+    public externals : Map<string, Map<string, T[]>> = new Map();
+
+    public add ( type : string, id : string, media : T ) {
+        let dictionary = this.externals.get( type );
+
+        if ( dictionary == null ) {
+            dictionary = new Map();
+            
+            this.externals.set( type, dictionary );
+        }
+
+        const array = dictionary.get( id );
+
+        if ( array == null ) {
+            dictionary.set( id, [ media ] );
+        } else {
+            array.push( media );
+        }
+    }
+
+    public has ( type : string, id : string ) : boolean {
+        const dictionary = this.externals.get( type );
+
+        if ( dictionary == null ) {
+            return false;
+        }
+
+        const array = dictionary.get( id );
+
+        return array != null && array.length > 0;
+    }
+
+    public get ( type : string, id : string ) : T[] {
+        const dictionary = this.externals.get( type );
+
+        if ( dictionary == null ) {
+            return null;
+        }
+
+        return dictionary.get( id );
+    }
+
+    public addAll ( external : any, record : T ) {
+        for ( let key of Object.keys( external || {} ) ) {
+            if ( external[ key ] ) {
+                this.add( key, external[ key ], record );
+            }
+        }
+    }
+
+    public getAny ( external : any ) : T {
+        for ( let key of Object.keys( external || {} ) ) {
+            const records = this.get( key, external[ key ] );
+
+            if ( records && records.length > 0 ) {
+                return records[ 0 ];
+            }
+        }
+    }
+
+    public deleteRecord ( record : T ) {
+        for ( let key of Object.keys( record.external || {} ) ) {
+            if ( record[ key ] != null ) {
+                const dictionary = this.externals.get( key );
+
+                if ( dictionary != null ) {
+                    let matched = dictionary.get( record.external[ key ] );
+
+                    if ( matched != null ) {
+                        if ( matched.length == 1 && matched[ 0 ].id == record.id ) {
+                            dictionary.delete( record.external[ key ] );
+                        } else if ( matched.length > 1 ) {
+                            matched = matched.filter( r => r.id != record.id );
+
+                            if ( matched.length == 0 ) {
+                                dictionary.delete( record.external[ key ] );
+                            } else {
+                                dictionary.set( record.external[ key ], matched );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public * values () : IterableIterator<T[]> {
+        for ( const map of this.externals.values() ) {
+            yield * map.values();
+        }
+    }
+}

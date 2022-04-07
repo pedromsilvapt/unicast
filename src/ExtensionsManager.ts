@@ -11,6 +11,11 @@ import { Logger } from 'clui-logger';
 
 let ts = null;
 
+// Type Polyfill
+declare module "module" {
+    var _extensions: string[];
+}
+
 // Utility module loading functions
 
 export function loadTextFile ( module, filename ) {
