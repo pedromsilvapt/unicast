@@ -29,7 +29,7 @@ export class HasOneRelation<M extends TableRecord, R extends TableRecord> extend
     subRelations : Relation<R, any>[] = [];
 
     public with ( ...subRelations : Relation<R, any>[] ) : HasOneRelation<M, R> {
-        const relation = new HasOneRelation( 
+        const relation = new HasOneRelation<M, R>( 
             this.member, 
             this.relatedTable, 
             this.foreignKey, 
@@ -66,9 +66,9 @@ export class HasOneRelation<M extends TableRecord, R extends TableRecord> extend
 // The foreign key is stored in this record
 export class BelongsToOneRelation<M extends TableRecord, R extends TableRecord, E = {}> extends OneToOneRelation<M, R, E> {
     subRelations : Relation<R, any>[] = [];
-    
+
     public with ( ...subRelations : Relation<R, any>[] ) : BelongsToOneRelation<M, R> {
-        const relation = new BelongsToOneRelation( 
+        const relation = new BelongsToOneRelation<M, R, E>( 
             this.member, 
             this.relatedTable, 
             this.foreignKey, 

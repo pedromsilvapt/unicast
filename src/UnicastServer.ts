@@ -26,6 +26,7 @@ import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
 import { serveMedia } from "./ES2017/HttpServeMedia";
 import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
 import { SmartCollectionsManager } from './SmartCollections/SmartCollectionsManager';
+import { CustomActionsManager } from './CustomActions/CustomActionsManager';
 import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
@@ -68,6 +69,8 @@ export class UnicastServer {
     readonly media : MediaManager;
 
     readonly smartCollections : SmartCollectionsManager;
+
+    readonly customActions : CustomActionsManager;
 
     readonly streams : HttpRawMediaServer;
 
@@ -143,6 +146,7 @@ export class UnicastServer {
 
         this.smartCollections = new SmartCollectionsManager( this );
    
+        this.customActions = new CustomActionsManager( this );
 
         this.subtitles = new SubtitlesManager( this );
 

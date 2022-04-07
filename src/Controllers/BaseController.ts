@@ -253,15 +253,31 @@ export function AuthScope ( scope : string ) {
     };
 }
 
-export function ValidateBody ( schema : schema.Type ) {
+export function ValidateBody ( schemaType : schema.Type );
+export function ValidateBody ( schemaType : string, options?: schema.AstOptions );
+export function ValidateBody ( schemaType : schema.Type | string, options?: schema.AstOptions ) {
     return ( target : { routes: RoutesDeclarations }, propertyKey : string, descriptor : TypedPropertyDescriptor<any> ) => {
         const route = target.routes.find( ( { propertyKey: p } ) => propertyKey == p );
 
         if ( route == null ) {
             throw new Error( `Could not find a route defined to set the body schema of: "${ propertyKey }"` );
         }
+        
+        if ( typeof schemaType === 'string' ) {
+            if ( options == null ) {
+                options = schema.createDefaultOptions( {
+                    defaultNumberStrict: false,
+                    defaultBooleanStrict: false,
+                } );
+            } else {
+                options.defaultNumberStrict = false;
+                options.defaultBooleanStrict = false;
+            }
 
-        route.bodySchema = schema;
+            schemaType = schema.parse( schemaType, options );
+        }
+
+        route.bodySchema = schemaType;
 
         return descriptor;
     };

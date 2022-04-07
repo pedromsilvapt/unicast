@@ -92,11 +92,17 @@ export class ApiController extends BaseController {
                 };
 
                 if ( route.querySchema != null ) {
-                    jsonRoute.querySchema = schema.stringify( route.querySchema );
+                    jsonRoute.querySchema = schema.stringify( route.querySchema, schema.createDefaultOptions( {
+                        defaultNumberStrict: false,
+                        defaultObjectStrict: false,
+                    } ) );
                 }
 
                 if ( route.bodySchema != null ) {
-                    jsonRoute.bodySchema = schema.stringify( route.bodySchema );
+                    jsonRoute.bodySchema = schema.stringify( route.bodySchema, schema.createDefaultOptions( {
+                        defaultNumberStrict: false,
+                        defaultObjectStrict: false,
+                    } ) );
                 }
 
                 if ( route.description != null ) {

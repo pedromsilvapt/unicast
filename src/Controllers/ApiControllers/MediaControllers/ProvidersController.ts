@@ -20,6 +20,10 @@ export class ProvidersController extends BaseController {
         repairMode?: 0 | 1 | 2;
         localArtworkPreservation?: 0 | 1 | 2 | 3;
         incomingArtworkAcceptance?: 0 | 1 | 2 | 3;
+        refreshRecords?: {
+            kind: "movie" | "show" | "season" | "episode" | "custom";
+            id: string;
+        }[];
     }`)
     @Route( ['get', 'post'], '/sync' )
     async sync ( req : Request, res : Response ) : Promise<BackgroundTask> {
@@ -45,6 +49,7 @@ export class ProvidersController extends BaseController {
                 repairMode: Number( req.query.repairMode ?? MediaSyncRepairMode.OnlyChanged ),
                 localArtworkPreservation: Number( req.query.localArtworkPreservation ?? ArtworkPreservationMode.DiscardIfEmpty ),
                 incomingArtworkAcceptance: Number( req.query.incomingArtworkAcceptance ?? ArtworkAcceptanceMode.WhenNotEmpty ),
+                refreshRecords: req.query.refreshRecords,
             };
 
             this.server.logger.info( 'repositories/sync', 'starting sync with ' + JSON.stringify( options ) );
