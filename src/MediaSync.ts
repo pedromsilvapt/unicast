@@ -26,6 +26,7 @@ export interface MediaSyncOptions {
     repairMode : MediaSyncRepairMode;
     localArtworkPreservation : ArtworkPreservationMode;
     incomingArtworkAcceptance : ArtworkAcceptanceMode;
+    refreshRecords: {kind: MediaKind, id: string}[];
 }
 
 export class MediaSync {
@@ -546,6 +547,20 @@ export class MediaSync {
 
         const repair = new MediaPostSyncRepair( this.database, options.repairMode ?? MediaSyncRepairMode.OnlyChanged );
 
+        // Media Record Conditions that are shared by all the repositories
+        let globalConditions: MediaRecordFilter[] = [];
+        
+        if ( options.refreshRecords != null ) {
+            // Convert the array of objects {kind, id} into the array of tuples [kind, id]
+            const refs = options.refreshRecords.map( ( { kind, id } ) => [ kind, id ] as const );
+            
+            // Convert the array of tuples into an array of MediaRecords, by fetching them from the database
+            const records = await this.media.getAll( refs );
+
+            // Finally create a MediaRecordFilter from the list of records
+            globalConditions.push( await MediaSetFilter.list( records, this.media ) );
+        }
+
         for ( let repositoryName of options.repositories ) {
             const repository = this.repositories.get( repositoryName );
 
@@ -559,9 +574,15 @@ export class MediaSync {
                 };
 
                 // Allows setting up special conditions for refreshing particular media records
-                const conditions : MediaRecordFilter[] = options.refetchIncomplete
-                    ? await this.findIncompleteRecords( repository )
-                    : [];
+                const conditions : MediaRecordFilter[] = [];
+                
+                if ( options.refetchIncomplete ) {
+                    conditions.push( ...await this.findIncompleteRecords( repository ) );
+                }
+
+                if ( globalConditions.length > 0 ) {
+                    conditions.push( ...globalConditions );
+                }
 
                 snapshot.scanBarrier.freeze();
 
@@ -1001,7 +1022,11 @@ export class MediaSyncTask extends BackgroundTask {
         let reports = this.reports;
 
         if ( filter?.reportsIndex != null ) {
-            reports = reports.slice( +filter.reportsIndex );
+            if ( +filter.reportsIndex < reports.length ) {
+                reports = reports.slice( +filter.reportsIndex );
+            } else {
+                reports = [];
+            }
         }
 
         return { ...super.toJSON( filter ), statusMessage: this.statusMessage, reports: reports };

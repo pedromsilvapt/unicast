@@ -1,4 +1,5 @@
 import * as Case from "case";
+import * as ObjectPath from 'object-path';
 
 export class InvalidOpError extends Error {
     public constructor ( kind : string, op : string = null ) {
@@ -41,7 +42,7 @@ export class QueryLang {
         semantics = semantics ?? new QuerySemantics<C>();
         
         if ( query.kind === 'binaryOperator' ) {
-            let customSemantics = semantics.getPropertyOperatorFor( query );
+            let customSemantics = semantics.getPropertyBinaryOperatorFor( query );
 
             if ( customSemantics != null ) {
                 return customSemantics( query.lhs, query.op, query.rhs, semantics );
@@ -92,6 +93,8 @@ export class QueryLang {
             
             if ( customSemantics?.lookup != null ) {
                 return customSemantics.lookup( name, semantics );
+            } else if ( name.includes( '.' ) ) {
+                return ( c ) => ObjectPath.get( c, name );
             } else {
                 return ( c ) => c[ name ];
             }
@@ -173,7 +176,7 @@ export class QuerySemantics<C = any> {
         return null;
     }
 
-    public getPropertyOperatorFor ( ast : QueryAst ) : BinaryOperatorSemantics<C> | null {
+    public getPropertyBinaryOperatorFor ( ast : QueryAst ) : BinaryOperatorSemantics<C> | null {
         if ( ast.kind === 'binaryOperator' ) {
             let propertySemantics = this.getPropertyFor( ast.lhs );
 
@@ -184,7 +187,6 @@ export class QuerySemantics<C = any> {
 
         return null;
     }
-
 
     public static computed<C extends object> ( computed : ( ctx : C ) => unknown ) : PropertySemantics<C> {
         return new PropertySemantics<C>( {}, (_, __) => computed );
@@ -215,6 +217,14 @@ export class QuerySemantics<C = any> {
                 const result = rhs( childContext );
     
                 return !!result;
+            };
+        };
+        
+        propertySemantics.binaryOperators[ BinaryOperator.NotEqualTo ] = ( lhsAst, op, rhsAst, semantics ) => {
+            const equalTo = propertySemantics.binaryOperators[ BinaryOperator.EqualTo ]( lhsAst, op, rhsAst, semantics );
+            
+            return ( context : C ) : boolean => {
+                return !equalTo( context );
             };
         };
     
@@ -775,3 +785,41 @@ export class MediaRecordQuerySemantics<C extends PartialMediaRecord> extends Que
         } );
     }
 }
+
+// Chave: 77a4b81c63322453035d23f5f24027b0
+// Token: b75539200c6255483a46b352f5586c214ff9403e0ea510e00dd8d416f12a0bba
+if ( false ) {
+    console.log(QueryLang.embeddedParse("ola \\\\ adeus ? ola = true"));
+    console.log(QueryLang.embeddedParse("? ola = true"));
+    console.log(QueryLang.embeddedParse("ola \\\\ adeus ?"));
+    console.log(QueryLang.embeddedParse("?"));
+    console.log(QueryLang.embeddedParse("aol \\? ?"));
+    console.log(QueryLang.embeddedParse("aol \\?"));
+
+    console.log(QueryLang.compile<void>("true => true")());
+    console.log(QueryLang.compile<void>("false => true")());
+    console.log(QueryLang.compile<void>("false => false")());
+    console.log(QueryLang.compile<void>("true => false")());
+    console.log(QueryLang.compile<void>("(quality.resolution = '2160p') and year > (2015 + 1)")());
+    
+    const input = QueryLang.embeddedParse( "  ola   \\\\   adeus    ? " );
+    
+    const ast = QueryLang.parse( input.embeddedQuery );
+    // const ast = QueryLang.parse(`
+    //     ( kind = 'show' and collection = (Weekend or Mother) )
+    //     or
+    //     ( kind = 'movie' and collection = not (Excluded or UnderReview) )
+    // `);
+    
+    const ctx = { categories: [ 'Class B', 'hdd-media-6', 'Rewatch' ], Saturdays: false };
+    
+    const expr = QueryLang.compile( ast, new QuerySemantics<typeof ctx>( {
+        category: QuerySemantics.flagsEnum( ctx => ctx.categories )
+    } ) );
+    
+    // console.log( expr( ctx ) );
+    
+    process.exit();
+}
+
+import './RethinkQueryLang';

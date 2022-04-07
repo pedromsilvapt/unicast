@@ -91,16 +91,30 @@ export class MediaTools {
         return command;
     }
 
-    static parseName ( name: string ) {
-        const details = parseTorrentName( name ) ??  {};
-        
-        details.source = MediaSources.normalize( details.details );
-
-        if ( details.source == null ) {
-            details.source = MediaSources.findAny( name );
+    static parseName ( names: string | Iterable<string> ): Partial<{ codec: string, group: string, resolution: string, quality: string, source: string }> {
+        if ( typeof names == 'string' ) {
+            names = [ names ];
         }
 
-        return details;
+        const globalDetails = {};
+
+        for ( const name of names ) {
+            const details = parseTorrentName( name ) ?? {};
+            
+            details.source = MediaSources.normalize( details.quality );
+    
+            if ( details.source == null ) {
+                details.source = MediaSources.findAny( name, true );
+            }
+    
+            for ( const key of Object.keys( details ) ) {
+                if ( globalDetails[ key ] == null ) {
+                    globalDetails[ key ] = details[ key ];
+                }
+            }
+        }
+
+        return globalDetails;
     }
 
     static parseBaseName ( filePath : string ) {
@@ -108,8 +122,38 @@ export class MediaTools {
     }
 
     static parseDirName ( filePath: string ) {
-        return MediaTools.parseName( path.dirname( filePath ) );
+        return MediaTools.parseName( path.basename( path.dirname( filePath ) ) );
     }
+
+    static parseDirAndBaseName ( filePath: string ) {
+        const segments = [
+            path.basename( filePath, path.extname( filePath ) )
+        ];
+
+        const dirname = path.basename( path.dirname( filePath ) );
+
+        if ( dirname != null && dirname != '' && dirname != '.' && dirname != '..' ) {
+            segments.push( dirname );
+        }
+
+        return MediaTools.parseName( segments );
+    }
+
+    static parsePath ( path : string, mode : ParsePathMode ) {
+        if ( mode == ParsePathMode.Both ) {
+            return MediaTools.parseDirAndBaseName( path );
+        } else if ( mode == ParsePathMode.BaseName ) {
+            return MediaTools.parseBaseName( path );
+        } else if ( mode == ParsePathMode.DirName ) {
+            return MediaTools.parseDirName( path );
+        }
+    }
+}
+
+export enum ParsePathMode {
+    BaseName,
+    DirName,
+    Both
 }
 
 export interface TrackMediaMetadata {

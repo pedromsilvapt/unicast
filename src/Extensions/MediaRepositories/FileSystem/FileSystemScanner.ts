@@ -16,6 +16,7 @@ import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 import * as yaml from 'js-yaml' 
 import { isSameFile, MovieLocalSettings, TvEpisodeLocalSettings, TvShowLocalSettings } from './LocalSettings';
+import { MediaTools, ParsePathMode } from '../../../MediaTools';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
     if ( obj == null ) {
@@ -212,14 +213,14 @@ export class FileSystemScanner {
         }
     }
 
-    parseQuality ( file : string ) : PlayableQualityRecord {
-        const quality = parseTorrentName( path.basename( file, path.extname( file ) ) ) || {};
-
+    public static parseQuality ( file : string, mode : ParsePathMode = ParsePathMode.BaseName ) : PlayableQualityRecord {
+        const quality = MediaTools.parsePath( file, mode );
+        
         return {
             codec: quality.codec || null,
             releaseGroup: quality.group || null,
             resolution: quality.resolution || null,
-            source: quality.quality || null
+            source: quality.source || null
         };
     }
 
@@ -356,7 +357,7 @@ export class FileSystemScanner {
                         id: id,
                         internalId: movie.id,
                         sources: [ { "id": fullVideoFile } ],
-                        quality: this.parseQuality( videoFile ),
+                        quality: FileSystemScanner.parseQuality( fullVideoFile, ParsePathMode.Both ),
                         addedAt: stats.mtime,
                         ...localSettings?.override ?? {},
                     } as MovieMediaRecord;
@@ -579,7 +580,7 @@ export class FileSystemScanner {
             internalId: episode.id,
             tvSeasonId: season.id,
             sources: [ { "id": fullVideoFile } ],
-            quality: this.parseQuality( videoFile ),
+            quality: FileSystemScanner.parseQuality( videoFile ),
             addedAt: stats.mtime,
             ...localSettingsEpisode?.override ?? {},
         } as TvEpisodeMediaRecord;

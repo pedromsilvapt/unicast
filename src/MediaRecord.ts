@@ -255,9 +255,7 @@ export class MediaSources {
             return null;
         }
 
-        source = source.toLowerCase();
-
-        const pool = MediaSources.list.find( pool => pool.some( each => each.localeCompare( source, undefined, { sensitivity: 'accent' } ) ) );
+        const pool = MediaSources.list.find( pool => pool.some( each => each.localeCompare( source, undefined, { sensitivity: 'base' } ) == 0 ) );
 
         if ( pool ) {
             return pool[ 0 ];
@@ -266,17 +264,23 @@ export class MediaSources {
         return null;
     }
 
-    static findAny ( string : string ) : string {
+    static findAny ( string : string, normalized: boolean = false ) : string {
         if ( !string ) {
             return null;
         }
 
         let source : string = null;
 
+        const strLower = string.toLowerCase();
+
         for ( let pool of MediaSources.list ) {
-            source = pool.find( each => string.toLowerCase().includes( each.toLowerCase() ) )
+            source = pool.find( each => strLower.includes( each.toLowerCase() ) )
 
             if ( source ) {
+                if ( normalized ) {
+                    source = pool[ 0 ];
+                }
+
                 break;
             }
         }
