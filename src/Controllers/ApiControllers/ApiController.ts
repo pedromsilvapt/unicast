@@ -16,6 +16,7 @@ import { PeopleController } from './MediaControllers/PeopleController';
 import { StorageController } from './MediaControllers/StorageController';
 import { RandomStream } from '../../ES2017/RandomStream';
 import { RepositoriesController } from './MediaControllers/RepositoriesController';
+import { CustomActionsController } from './CustomActionsController';
 import { UserRanksController } from './UserRanksController';
 import * as sortBy from 'sort-by';
 import * as schema from '@gallant/schema';
@@ -71,6 +72,9 @@ export class ApiController extends BaseController {
 
     @Controller( StorageController, '/storage' )
     storage : StorageController;
+
+    @Controller( CustomActionsController, '/custom-actions' )
+    customActionsController : CustomActionsController;
 
     @Route( 'get', '/ping' )
     ping () {
