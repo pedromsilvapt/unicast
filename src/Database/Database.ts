@@ -1,4 +1,5 @@
 import * as r from 'rethinkdb';
+import * as Case from 'case';
 import { MovieMediaRecord, TvShowMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, CustomMediaRecord, MediaKind, MediaRecord, PersonRecord, MediaCastRecord } from "../MediaRecord";
 import { Semaphore } from 'data-semaphore';
 import { Config } from "../Config";
@@ -565,6 +566,8 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
     changesHistory : ChangeHistoryTable<R>;
 
+    identifierFields : Array<string> = null;
+
     get database () : Database {
         return this.pool.database;
     }
@@ -765,6 +768,42 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
         } );
     }
 
+    public getIdentifier ( record : R ) : string {
+        if ( this.identifierFields == null || this.identifierFields.length == 0 ) {
+            return null;
+        }
+
+        let identifier = '';
+
+        for ( const field of this.identifierFields ) {
+            identifier += '' + record[ field ];
+        }
+
+        if ( identifier.length > 0 ) {
+            // Remove from the string anything that is invalid as an identifier:
+            //  - every character at the start that is not [a-zA-Z_]
+            //  - every character anywhere that is not [\w]
+            return Case.pascal( identifier.replace(/(^[^a-zA-Z_])|[^\w]+/g, '-') );
+        }
+        
+        return null;
+    }
+
+    public applyIdentifier ( record: R, clone: boolean = false ) : R {
+        const identifier = this.getIdentifier( record );
+        
+        if ( identifier != null && identifier != record[ 'identifier' ] ) {
+            // If requested, clone the source object before making any changes to it
+            if ( clone ) {
+                record = { ...record };
+            }
+
+            record[ 'identifier' ] = identifier;
+        }
+
+        return record;
+    }
+
     async create ( record : R, options : Partial<r.OperationOptions> = {} ) : Promise<R> {
         const connection = await this.pool.acquire();
 
@@ -774,6 +813,8 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                     record[ field ] = null;
                 }
             }
+
+            this.applyIdentifier( record );
     
             const res = await this.query().insert( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
     
@@ -799,6 +840,8 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                         record[ field ] = null;
                     }
                 }
+
+                this.applyIdentifier( record );
             }
     
             const res = await this.query().insert( records ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
@@ -1226,7 +1269,6 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
         transient: false
     }
 
-    
     async repair ( movies : string[] = null ) {
         if ( !movies ) {
             movies = ( await this.find() ).map( movie => movie.id );
@@ -1641,7 +1683,8 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
     readonly tableName : string = 'collections';
 
     indexesSchema : IndexSchema[] = [ 
-        { name: 'title' }
+        { name: 'title' },
+        { name: 'identifier' }
     ];
     
     relations: {
@@ -1657,6 +1700,8 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
             parent: new BelongsToOneRelation( 'parent', this, 'parentId' ),
         };
     }
+
+    identifierFields: string[] = [ 'title' ];
 
     protected static buildTreeNode ( record : CollectionTreeRecord, collectionsDictionary : Map<string, CollectionTreeRecord[]> ) : CollectionTreeRecord {
         if ( record.children != null ) {
@@ -1827,12 +1872,15 @@ export class PeopleTable extends BaseTable<PersonRecord> {
     
     indexesSchema : IndexSchema[] = [ 
         { name: 'internalId' },
-        { name: 'name' }
+        { name: 'name' },
+        { name: 'identifier' }
     ];
 
     relations: {
         credits: ManyToManyPolyRelation<PersonRecord, MediaRecord>;
     };
+
+    identifierFields: string[] = [ 'name' ];
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );

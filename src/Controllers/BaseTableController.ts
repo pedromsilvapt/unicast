@@ -1,11 +1,12 @@
-import { CompiledQuery, QueryAst, QueryLang, QuerySemantics } from '../QueryLang';
+import { QueryAst, QueryLang, QuerySemantics } from '../QueryLang';
 import { BaseController, Route, ValidateQuery } from "./BaseController";
 import { BaseTable } from "../Database/Database";
 import { Response, Request } from "restify";
 import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from "restify-errors";
-import * as regexEscape from 'regex-escape';
-import * as r from 'rethinkdb';
 import { EntityResource } from '../AccessControl';
+import { RethinkLang, RethinkCompiledQuery } from '../RethinkQueryLang';
+import * as r from 'rethinkdb';
+import * as regexEscape from 'regex-escape';
 import * as schema from '@gallant/schema';
 
 export const TableListQuerySchema = schema.parse( `{
@@ -87,8 +88,12 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             }
         }
 
-        if ( reqQuery.search?.body ) {
+        if ( reqQuery.search?.body && reqQuery.search.body != '' ) {
             query = this.getSearchQuery( reqQuery.search.body, query );
+        }
+
+        if ( reqQuery.search?.embeddedQuery ) {
+            query = reqQuery.search.embeddedQuery( query );
         }
 
         return query;
@@ -123,7 +128,8 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             if ( parsedQuery.embeddedQuery != null ) {
                 query.search.embeddedQueryAst = QueryLang.parse( parsedQuery.embeddedQuery );
                 query.search.embeddedQuerySemantics = this.createCustomQuerySemantics( req, query.search.embeddedQueryAst ) || new QuerySemantics();
-                query.search.embeddedQuery = QueryLang.compile( query.search.embeddedQueryAst, query.search.embeddedQuerySemantics );
+                // query.search.embeddedQuery = QueryLang.compile( query.search.embeddedQueryAst, query.search.embeddedQuerySemantics );
+                query.search.embeddedQuery = await new RethinkLang( this.server.database, query.search.embeddedQueryAst ).analyzeAndCompile();
             }
         }
     };
@@ -157,14 +163,6 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
     }
 
     public async runCustomQuery ( req : Request, items : R[] ) : Promise<R[]> {
-        const query: RequestQuery<R> = req.query;
-
-        const embeddedQuery = query?.search?.embeddedQuery;
-
-        if ( embeddedQuery ) {
-            items = items.filter( record => embeddedQuery( record ) != false );
-        }
-
         items = items.filter( record => 
             this.server.accessControl.authenticate( req.identity, new EntityResource( this.table.tableName, record ) ) 
         );
@@ -303,7 +301,7 @@ export interface RequestQuery<R> {
     take?: number;
     search?: {
         body: string;
-        embeddedQuery?: CompiledQuery<R>;
+        embeddedQuery?: RethinkCompiledQuery;
         embeddedQueryAst?: QueryAst;
         embeddedQuerySemantics?: QuerySemantics<R>;
     };

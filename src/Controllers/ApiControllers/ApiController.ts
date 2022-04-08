@@ -20,6 +20,7 @@ import { CustomActionsController } from './CustomActionsController';
 import { UserRanksController } from './UserRanksController';
 import * as sortBy from 'sort-by';
 import * as schema from '@gallant/schema';
+import { Request, Response } from "restify";
 
 export class ApiController extends BaseController {
     @Controller( TasksController, '/tasks' )
@@ -84,6 +85,13 @@ export class ApiController extends BaseController {
     @Route( 'get', '/speedtest', BinaryResponse )
     speedtest () {
         return { data: new RandomStream() };
+    }
+
+    @Route( 'post', '/execute-tool/:name' )
+    async executeTool ( req: Request, res: Response ) {
+        await this.server.tools.run( req.params.name, req.body.options );
+
+        return { success: true };
     }
 
     @Route( 'get', '/sitemap' )
