@@ -114,7 +114,7 @@
     "rpc-websockets": "^4.3.5",
     "safe-file-write": "^1.1.0",
     "sha1": "^1.1.1",
-    "sharp": "^0.28.3",
+    "sharp": "^0.30.5",
     "shorthash": "0.0.2",
     "sort-by": "^1.2.0",
     "srt-to-vtt": "^1.1.1",
