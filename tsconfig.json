@@ -1,8 +1,9 @@
 {
     "compilerOptions": {
-        "target": "es2016",
+        "target": "es2017",
         "module": "commonjs",
         "moduleResolution": "node",
+        "forceConsistentCasingInFileNames": true,
         "experimentalDecorators": true,
         "skipLibCheck": true,
         "noImplicitAny": false,

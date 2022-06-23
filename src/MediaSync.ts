@@ -588,7 +588,9 @@ export class MediaSync {
 
                 task.reportsLogger = this.logger.service( repository.name )
                 
-                for await ( let media of repository.scan( options.kinds, snapshot, conditions, options.cache || {}, task ) ) {
+                const recordsStream = repository.scan( options.kinds, snapshot, conditions, options.cache || {}, task );
+
+                for await ( let media of AsyncStream.from( recordsStream ).observe( { onError: err => this.logger.error( err ) } ).dropErrors() ) {
                     task.addTotal( 1 );
                     
                     media = { ...media };

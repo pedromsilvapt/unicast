@@ -56,7 +56,13 @@ export class TheMovieDB implements IScraper {
             return cached;
         }
 
-        return this.cache.set<T>( key, runner(), options );
+        var promise = Promise.resolve( runner() ).catch( error => {
+            this.logger.error(`(cached:${ key }) ${ error?.message ?? error ?? 'Undefined error' }`);
+
+            throw error;
+        } );
+
+        return this.cache.set<T>( key, promise, options );
     }
 
     protected moviedbRequest<T = any> ( url : string, params: object = {}, options: CacheOptions = {} ) {
@@ -113,31 +119,45 @@ export class TheMovieDB implements IScraper {
 
         if ( !kinds ) kinds = AllMediaKinds;
 
+        let aggregateErrors: any[] | null = null;
+
         return this.runCachedTask<MovieMediaRecord>( 'getExternal', externalString, query, async () => {
             for ( let source of Object.keys( external ) ) {
-                if ( source === 'moviedb' && kinds.length > 0 ) {
-                    return recordsMapper[ kinds[ 0 ] ]( external[ source ] );
-                } else if ( source in keysMapper ) {
-                    // The method `find` returns an object of arrays: each key of the object is a kind (movie, show, etc...) and its 
-                    // value is the list of media of that kind that matched the query
-                    const results = await this.moviedbCall( 'find', { id: external[ source ], external_source: keysMapper[ source ] }, cache );
-        
-                    for ( let kind of kinds ) {
-                        const kindResult = results?.[ kindsMapper[ kind ] ];
-
-                        if ( kindResult && kindResult.length > 0 ) {
-                            let id = kindResult[ 0 ].id.toString();
-
-                            if ( kind === MediaKind.TvSeason ) {
-                                id = MediaRecordFactory.toTvSeasonId( kindResult[ 0 ].show_id, kindResult[ 0 ].season_number );
-                            } else if ( kind === MediaKind.TvEpisode ) {
-                                id = MediaRecordFactory.toTvEpsiodeId( kindResult[ 0 ].show_id, kindResult[ 0 ].season_number, kindResult[ 0 ].episode_number );
+                try {
+                    if ( source === 'moviedb' && kinds.length > 0 ) {
+                        return recordsMapper[ kinds[ 0 ] ]( external[ source ] );
+                    } else if ( source in keysMapper ) {
+                        // The method `find` returns an object of arrays: each key of the object is a kind (movie, show, etc...) and its 
+                        // value is the list of media of that kind that matched the query
+                        const results = await this.moviedbCall( 'find', { id: external[ source ], external_source: keysMapper[ source ] }, cache );
+            
+                        for ( let kind of kinds ) {
+                            const kindResult = results?.[ kindsMapper[ kind ] ];
+    
+                            if ( kindResult && kindResult.length > 0 ) {
+                                let id = kindResult[ 0 ].id.toString();
+    
+                                if ( kind === MediaKind.TvSeason ) {
+                                    id = MediaRecordFactory.toTvSeasonId( kindResult[ 0 ].show_id, kindResult[ 0 ].season_number );
+                                } else if ( kind === MediaKind.TvEpisode ) {
+                                    id = MediaRecordFactory.toTvEpsiodeId( kindResult[ 0 ].show_id, kindResult[ 0 ].season_number, kindResult[ 0 ].episode_number );
+                                }
+    
+                                return await recordsMapper[ kind ]( id, cache );
                             }
-
-                            return recordsMapper[ kind ]( id, cache );
                         }
                     }
+                } catch (error) {
+                    if ( aggregateErrors == null ) {
+                        aggregateErrors = [ error ];
+                    } else {
+                        aggregateErrors.push( error );
+                    }
                 }
+            }
+
+            if ( aggregateErrors != null && aggregateErrors.length > 0 ) {
+                throw aggregateErrors[ 0 ];
             }
         }, cache );
     }

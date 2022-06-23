@@ -1,7 +1,7 @@
 {
   "name": "unicast",
-  "version": "2.6.0",
-  "description": "21st Century Media Center",
+  "version": "2.7.0",
+  "description": "Media Center. Modern. Web based. Self hosted. Extensible.",
   "main": "lib/cli.js",
   "bin": "lib/cli.js",
   "pkg": {
@@ -58,7 +58,7 @@
     "clui-progressbar": "^0.1.1",
     "composable": "^0.9.2",
     "config": "^1.26.2",
-    "data-async-iterators": "^1.4.4",
+    "data-async-iterators": "^1.4.6",
     "data-balanced-tree": "^0.1.0",
     "data-cancel-token": "^0.5.3",
     "data-collectors": "^1.0.5",
@@ -121,7 +121,7 @@
     "stream-to-string": "^1.1.0",
     "string-to-stream": "^1.1.0",
     "strip-ansi": "^5.0.0",
-    "subbox": "^0.1.8",
+    "subbox": "^0.1.9",
     "subtitler": "^2.6.0",
     "subtitles-parser": "0.0.2",
     "superagent": "^3.6.0",
