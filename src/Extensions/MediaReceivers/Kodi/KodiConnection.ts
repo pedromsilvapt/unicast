@@ -286,6 +286,17 @@ export class KodiConnection {
         return ( await this.call( 'GUI.GetProperties', { properties: [ property ] } ) )[ property ];
     }
 
+    public async sendSetServerAddress ( address : string, port : number ) : Promise<void> {
+        this.call( 'JSONRPC.NotifyAll', { 
+            sender: 'unicast', 
+            'message': `PluginVideoUnicast.SetServerAddress`, 
+            data: { 
+                address: address, 
+                port: port
+            } 
+        } );
+    }
+
     quit () : Promise<void> {
         return this.call( 'System.Shutdown' );
     }
