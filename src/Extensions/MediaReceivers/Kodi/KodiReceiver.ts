@@ -485,9 +485,9 @@ export class KodiReceiver extends BaseReceiver {
         return this.status();
     }
 
-    async setServerAddress () : Promise<any> {
-        const address = this.server.getIpV4();
-        const port = this.server.getPort();
+    async setServerAddress (address?: string, port?: number) : Promise<any> {
+        address ??= this.server.getIpV4();
+        port ??= this.server.getPort();
         
         return await this.connection.sendSetServerAddress( address, port );
     }

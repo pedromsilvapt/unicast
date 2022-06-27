@@ -14,7 +14,12 @@ export class SetReceiverHostCustomActionExtension extends Extension {
 }
 
 export class SetReceiverHostCustomAction extends CustomAction<SetReceiverHostOptions> {
-    readonly label: string = 'Set Receiver Host';
+    get label (): string {
+        const address = this.options.address ?? this.server.getIpV4();
+        const port = this.options.port ?? this.server.getPort();
+        
+        return `Set ${address}:${port} Host`;
+    }
 
     getIcon () : string {
         return `<?xml version="1.0" encoding="UTF-8"?>
@@ -27,8 +32,11 @@ export class SetReceiverHostCustomAction extends CustomAction<SetReceiverHostOpt
     public async execute ( context : CustomActionContext ) : Promise<CustomActionResult> {
         const receiver = this.server.receivers.get( context?.device?.name );
         
+        const address = this.options.address ?? this.server.getIpV4();
+        const port = this.options.port ?? this.server.getPort();
+        
         if ( typeof receiver["setServerAddress"] === 'function' ) {
-            await receiver["setServerAddress"]();
+            await receiver["setServerAddress"](address, port);
         } else {
             return CustomAction.error(`Invalid receiver "${ context?.device?.name }"`);
         }
@@ -38,5 +46,6 @@ export class SetReceiverHostCustomAction extends CustomAction<SetReceiverHostOpt
 }
 
 export interface SetReceiverHostOptions extends CustomActionOptions {
-    
+    address?: string;
+    port?: number;
 }
