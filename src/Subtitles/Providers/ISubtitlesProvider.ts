@@ -22,6 +22,8 @@ export interface SearchOptions {
 export interface ISubtitlesProvider<S extends ISubtitle = ISubtitle> extends IEntity {
     readonly name : string;
 
+    readonly disableCaching ?: boolean;
+
     search ( media : PlayableMediaRecord, searchOptions : SearchOptions ) : Promise<S[]>;
 
     download ( subtitle : S ) : Promise<NodeJS.ReadableStream>;

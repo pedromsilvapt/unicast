@@ -1,6 +1,7 @@
 import { IMediaReceiver } from "./IMediaReceiver";
 import { Request, Response, Next } from "restify";
-import { MediaStreamType, MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
+import { MediaStream } from "../../MediaProviders/MediaStreams/MediaStream";
+import { SubtitlesMediaStream } from '../../MediaProviders/MediaStreams/SubtitlesStream';
 import { serveMedia } from "../../ES2017/HttpServeMedia";
 import { Logger } from 'clui-logger';
 
@@ -41,16 +42,27 @@ export class HttpSender {
 
     async serve ( req : Request, res : Response, next : Next ) : Promise<void> {
         try {
-            const { streams } = await this.receiver.sessions.get( req.params.session );
-    
+            const { streams, options } = await this.receiver.sessions.get( req.params.session );
+
+            options.subtitlesOffset
+
             const stream = await this.getStream( streams, req.params.stream, req.query );
-            
-            let mime = stream.type === MediaStreamType.Subtitles
-                ? stream.mime + ';charset=utf-8'
+
+            if ( SubtitlesMediaStream.is( stream ) ) {
+                if ( options.subtitlesOffset != null ) {
+
+                } else if ( stream.encoding == null ) {
+                    await stream.autoDetectEncoding();
+                }
+            }
+
+
+            let mime = SubtitlesMediaStream.is( stream )
+                ? stream.mime + ';charset=' + stream.encoding
                 : stream.mime;
-            
+
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
-            
+
             reader.on( 'error', err => {
                 this.logger.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stackTrace }`, err );
 

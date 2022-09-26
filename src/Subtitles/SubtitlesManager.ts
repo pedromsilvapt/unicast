@@ -2,6 +2,7 @@ import { SubtitlesProvidersManager } from "./ProvidersManager";
 import { UnicastServer } from "../UnicastServer";
 import { OpenSubtitlesProvider } from "./Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { EmbeddedSubtitlesProvider } from "./Providers/EmbeddedSubtitles/EmbeddedSubtitlesProvider";
+import { UploadedSubtitlesProvider } from './Providers/UploadedSubtitles/UploadedSubtitlesProvider';
 import { ISubtitle } from "./Providers/ISubtitlesProvider";
 import { MediaRecord } from "../MediaRecord";
 import { FallbackSubtitlesRepository, IDatabaseLocalSubtitle } from "./SubtitlesRepository";
@@ -29,6 +30,7 @@ export class SubtitlesManager {
 
         this.providers.add( new OpenSubtitlesProvider() );
         this.providers.add( new EmbeddedSubtitlesProvider() );
+        this.providers.add( new UploadedSubtitlesProvider() );
 
         this.repository = new FallbackSubtitlesRepository( server );
     }
@@ -52,7 +54,7 @@ export class SubtitlesManager {
 
     async list ( media : MediaRecord ) : Promise<ILocalSubtitle[]> {
         const mediaRepository = this.server.repositories.get( media.repository );
-        
+
         if ( !mediaRepository || !mediaRepository.subtitles ) {
             return this.repository.list( media );
         } else if ( mediaRepository.subtitles.canWrite ) {
@@ -89,7 +91,7 @@ export class SubtitlesManager {
         if ( !body ) {
             body = await this.providers.download( subtitle );
         }
-        
+
         const mediaRepository = this.server.repositories.get( media.repository );
 
         if ( !mediaRepository || !mediaRepository.subtitles ) {

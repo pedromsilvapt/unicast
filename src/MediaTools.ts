@@ -71,7 +71,7 @@ export class MediaTools {
 
     static async probe ( track : string ) : Promise<MediaMetadata> {
         let probe = new FFProbe( track );
-        
+
         let metadata = await probe.run();
 
         return this.probeNormalize( metadata, track );
@@ -91,7 +91,7 @@ export class MediaTools {
         return command;
     }
 
-    static parseName ( names: string | Iterable<string> ): Partial<{ codec: string, group: string, resolution: string, quality: string, source: string }> {
+    static parseName ( names: string | Iterable<string> ): Partial<ParsedName> {
         if ( typeof names == 'string' ) {
             names = [ names ];
         }
@@ -100,13 +100,13 @@ export class MediaTools {
 
         for ( const name of names ) {
             const details = parseTorrentName( name ) ?? {};
-            
+
             details.source = MediaSources.normalize( details.quality );
-    
+
             if ( details.source == null ) {
                 details.source = MediaSources.findAny( name, true );
             }
-    
+
             for ( const key of Object.keys( details ) ) {
                 if ( globalDetails[ key ] == null ) {
                     globalDetails[ key ] = details[ key ];
@@ -154,6 +154,16 @@ export enum ParsePathMode {
     BaseName,
     DirName,
     Both
+}
+
+export interface ParsedName {
+    codec: string;
+    group: string;
+    resolution: string;
+    quality: string;
+    source: string;
+    season : number;
+    episode : number;
 }
 
 export interface TrackMediaMetadata {
@@ -220,7 +230,7 @@ export class FFProbe {
         } else {
             this.commandPath = binaryExecutableName( 'ffprobe' );
         }
-        
+
         this.args  = [ '-show_format', '-show_streams', '-loglevel', 'warning', '-print_format', 'json' ];
 
         if ( typeof file === 'string' ) {
@@ -235,7 +245,7 @@ export class FFProbe {
 
         let types = {};
 
-        result.streams = result.streams.map( stream => {
+        result.streams = result.streams?.map( stream => {
             let type = stream.codec_type;
 
             if ( !( type in types ) ) {
@@ -245,7 +255,7 @@ export class FFProbe {
             stream.typeIndex = types[ type ]++;
 
             return stream;
-        } );
+        } ) ?? [];
 
         return result;
     }
@@ -256,7 +266,7 @@ export class FFProbe {
                 let node = spawn( path.basename( this.commandPath ), this.args, {
                     cwd: path.dirname( this.commandPath )
                 } );
-        
+
                 node.stdout.setEncoding( 'utf8' );
 
                 let exitCode;
@@ -266,11 +276,15 @@ export class FFProbe {
                 node.stdout.on( 'data', data => result += typeof data == 'string' ? data : data.toString( 'utf8' ) );
                 node.stderr.on( 'data', data => resultErr += data );
                 node.stdout.on( 'end', () => {
-                    if ( exitCode || !result ) {
-                        return reject( resultErr );
-                    }
+                    try {
+                        if ( exitCode || !result ) {
+                            return reject( resultErr );
+                        }
 
-                    resolve( this.transformResult( result ) );
+                        resolve( this.transformResult( result ) );
+                    } catch (err) {
+                        return reject( err );
+                    }
                 } );
 
                 node.on( 'exit', code => exitCode = code );

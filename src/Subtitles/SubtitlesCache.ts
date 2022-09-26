@@ -1,4 +1,4 @@
-import { ISubtitle, SearchOptions } from "./Providers/ISubtitlesProvider";
+import { ISubtitle, ISubtitlesProvider, SearchOptions } from "./Providers/ISubtitlesProvider";
 import { MediaRecord } from "../MediaRecord";
 import * as cacheStream from 'cache-stream';
 
@@ -10,11 +10,11 @@ export class SubtitlesCache {
     searches : Map<string, Promise<ISubtitle[]>> = new Map;
 
     getSearchKey ( provider : string, options : SearchOptions, media : MediaRecord ) : string {
-        return provider + 
-            '|' + options.lang + 
-            '|' + media.kind + 
-            '|' + media.id + 
-            '|' + ( options.seasonOffset ?? 0 ) + 
+        return provider +
+            '|' + options.lang +
+            '|' + media.kind +
+            '|' + media.id +
+            '|' + ( options.seasonOffset ?? 0 ) +
             '|' + ( options.episodeOffset ?? 0 );
     }
 
@@ -32,12 +32,16 @@ export class SubtitlesCache {
         return this;
     }
 
-    wrapSearch ( provider : string, options : SearchOptions, media : MediaRecord, supplier : () => Promise<ISubtitle[]> ) : Promise<ISubtitle[]> {
-        if ( !this.hasSearch( provider, options, media ) ) {
-            this.setSearch( provider, options, media, supplier() );
+    wrapSearch ( provider : ISubtitlesProvider, options : SearchOptions, media : MediaRecord, supplier : () => Promise<ISubtitle[]> ) : Promise<ISubtitle[]> {
+        if ( provider.disableCaching ) {
+            return supplier();
         }
-        
-        return this.getSearch( provider, options, media );
+
+        if ( !this.hasSearch( provider.name, options, media ) ) {
+            this.setSearch( provider.name, options, media, supplier() );
+        }
+
+        return this.getSearch( provider.name, options, media );
     }
 
     hasDownload ( subtitle : ISubtitle ) : boolean {
@@ -58,7 +62,7 @@ export class SubtitlesCache {
         if ( !this.hasDownload( subtitle ) ) {
             this.setDownload( subtitle, supplier() );
         }
-        
+
         return this.getDownload( subtitle );
     }
 

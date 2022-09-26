@@ -52,11 +52,11 @@ export abstract class MediaStream {
 
         if ( stream ) {
             await stream.init();
-    
+
             if ( stream.isContainer ) {
                 return ( await stream.getInnerStream( options ) ) || stream;
             }
-    
+
             return stream;
         }
 
@@ -65,7 +65,7 @@ export abstract class MediaStream {
 
     reader ( range ?: MediaRange, options ?: any ) : NodeJS.ReadableStream {
         const input = this.open( range || {} );
-        
+
         if ( this.seekable || !range || ( !range.start && !range.end ) ) {
             return input;
         }
@@ -83,7 +83,7 @@ export abstract class MediaStream {
         const mime = this.mime;
         const size = this.size;
         const provider = this.source.provider.type;
-        
+
         return { id, provider, type, mime, size };
     }
 }

@@ -1,5 +1,6 @@
 import { MediaStream, MediaStreamType } from './MediaStream';
 import { SubsPipeline, Pipeline, StreamReader, ParserPipeline, ContextManager, DecoderPipeline, LazyPipeline } from 'subbox';
+import { detect } from 'jschardet';
 
 export abstract class SubtitlesMediaStream extends MediaStream {
     static is ( stream : MediaStream ) : stream is SubtitlesMediaStream {
@@ -11,6 +12,19 @@ export abstract class SubtitlesMediaStream extends MediaStream {
     format : string;
 
     encoding : string = null;
+
+    async autoDetectEncoding () {
+        const reader = this.reader();
+
+        const content = await new Promise<Buffer>((resolve, reject) => {
+            const buffers: Buffer[] = [];
+            reader.on('data', bf => buffers.push(bf));
+            reader.on('end', () => resolve(Buffer.concat(buffers)));
+            reader.on('error', err => reject(err));
+        });
+
+        this.encoding = detect( content ).encoding;
+    }
 
     toJSON () {
         return {

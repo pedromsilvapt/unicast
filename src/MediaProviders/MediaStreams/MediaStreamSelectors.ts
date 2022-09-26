@@ -29,7 +29,7 @@ export class MediaStreamSelectors {
             ? streams
             : Array.from( streams );
 
-        return streamsArray.filter( stream => SubtitlesMediaStream.is( stream ) ) as SubtitlesMediaStream[];
+        return streamsArray.filter(SubtitlesMediaStream.is);
     }
 
     static firstSubtitles ( streams : Iterable<MediaStream> | MediaStream[] ) : SubtitlesMediaStream {

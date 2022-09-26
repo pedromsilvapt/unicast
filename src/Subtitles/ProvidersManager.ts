@@ -67,15 +67,15 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
 
         const { episodeOffset, seasonOffset } = options;
 
-        const providersAndOptions = providers.flatMap( provider => 
+        const providersAndOptions = providers.flatMap( provider =>
             options.langs.map( lang => [ provider, { episodeOffset, seasonOffset, lang } ] as [ ISubtitlesProvider, SearchOptions ] )
         );
 
-        return flatten<ISubtitle>( await Promise.all( 
-            providersAndOptions.map( ( [ provider, providerOptions ] ) => this.cache.wrapSearch( provider.name, providerOptions, media, () => {
+        return flatten<ISubtitle>( await Promise.all(
+            providersAndOptions.map( ( [ provider, providerOptions ] ) => this.cache.wrapSearch( provider, providerOptions, media, () => {
                 return provider.search( media, providerOptions ).catch( error => {
-                    this.server.logger.error( 
-                        'subtitles', 
+                    this.server.logger.error(
+                        'subtitles',
                         error.message ? `Provider ${provider.name}: ${ error.message }` : `Error with subtitles provider "${ provider.name }" for record "${ media.title }".`,
                         error
                     );
@@ -93,6 +93,10 @@ export class SubtitlesProvidersManager extends EntityManager<ISubtitlesProvider,
             throw new Error( `Trying to download subtitles from invalid provider ${ subtitle.provider }.` );
         }
 
-        return this.cache.wrapDownload( subtitle, () => provider.download( subtitle ) );
+        if ( provider.disableCaching ) {
+            return provider.download( subtitle );
+        } else {
+            return this.cache.wrapDownload( subtitle, () => provider.download( subtitle ) );
+        }
     }
 }
