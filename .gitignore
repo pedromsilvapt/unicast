@@ -74,3 +74,4 @@ lib/
 /builds/
 
 src/Tools/Local/
+src/Extensions/CustomActions/Local/
