@@ -87,7 +87,7 @@ export class Database {
         if ( this.daemon ) {
             await this.daemon.start();
         }
-        
+
         return r.connect( this.config.get<r.ConnectionOptions>( 'database' ) );
     }
 
@@ -96,14 +96,14 @@ export class Database {
             const databaseName : string = this.config.get<string>( 'database.db' );
 
             const conn = await this.connections.acquire();
-    
+
             try {
                 const databases = await r.dbList().run( conn );
-        
+
                 if ( !databases.includes( databaseName ) ) {
                     await r.dbCreate( databaseName ).run( conn );
                 }
-        
+
                 await ( r.db( databaseName ) as any ).wait().run( conn );
 
                 await this.tables.install();
@@ -147,6 +147,12 @@ export class Database {
         return task;
     }
 
+    /**
+     * Returns a database object representing a local RethinkDB database.
+     *
+     * @param dbname
+     * @returns
+     */
     for ( dbname : string ) : Database {
         const newConfig = Config.merge( [
             this.config.clone(),
@@ -157,14 +163,29 @@ export class Database {
     }
 
     /**
+     * Returns a database object representing a remote RethinkDB database.
+     *
+     * @param options
+     * @returns
+     */
+    forRemote ( options: r.ConnectionOptions ) : Database {
+        const newConfig = Config.merge( [
+            this.config.clone(),
+            Config.create( { database: { ...options, autostart: { enable: false } } } ),
+        ] );
+
+        return new Database( this.server, newConfig );
+    }
+
+    /**
      * Clones the currently used database into the database provided in
      * the argument destination.
-     * 
-     * @param destination 
-     * @param logger 
-     * @returns 
+     *
+     * @param destination
+     * @param logger
+     * @returns
      */
-    async clone ( destination : Database | string, logger ?: LoggerInterface ) {
+    async clone ( destination : Database | string, logger ?: LoggerInterface, transformer?: ( tableName: string ) => ( row: any ) => any ) {
         if ( typeof destination === 'string' ) {
             destination = this.for( destination );
         }
@@ -173,13 +194,23 @@ export class Database {
         let dstConnection: r.Connection = null;
 
         logger ??= this.server.logger.service( 'Database' ).service( 'Clone' );
-        
+
         try {
-            const srcDbName = this.config.get<string>( 'database.db' );
-            const dstDbName = destination.config.get<string>( 'database.db' );
+            const srcConfig = this.config.get<r.ConnectionOptions>( 'database', {} );
+            const dstConfig = destination.config.get<r.ConnectionOptions>( 'database', {} );
+
+            // Is true when both connections (source and destination) point to
+            // the same RethinkDB instance
+            const isLocalClone: boolean = srcConfig.host == dstConfig.host
+                && srcConfig.port == dstConfig.port
+                && srcConfig.user == dstConfig.user
+                && srcConfig.password == dstConfig.password;
+
+            const srcDbName = srcConfig.db;
+            const dstDbName = dstConfig.db;
 
             // Validate that the databases are different
-            if ( srcDbName == dstDbName ) {
+            if ( isLocalClone && srcDbName == dstDbName ) {
                 logger.error( `Cannot clone a database onto itself: ${ srcDbName } and ${ dstDbName } are equal.` );
                 return;
             }
@@ -188,21 +219,26 @@ export class Database {
             logger.info(`Begining attempt to clone database ${ srcDbName } onto ${ dstDbName }. Holding 5 seconds before proceeding...`);
 
             await new Promise<void>( resolve => setTimeout( resolve, 5000 ) );
-            
+
             // Acquire source connection
             logger.debug( `Attempt to acquire source DB connection...` );
             srcConnection = await this.connections.acquire();
             logger.debug( `Source DB connection acquired!` );
-            
+
+            // Acquire destination connection
+            logger.debug( `Attempt to acquire destination DB connection...` );
+            dstConnection = await destination.connections.acquire();
+            logger.debug( `Destination DB connection acquired!` );
+
             logger.debug( `Retrieving list of databases...` );
-            const databases = await r.dbList().run(srcConnection);
+            const databases = await r.dbList().run( dstConnection );
             logger.debug( `List retrieved, ${ databases.length } databases found!` );
-            
+
             // Drop Destination DB if it exists (wa want to clone from scratch)
             if ( databases.includes( dstDbName ) ) {
                 try {
                     logger.info( `Destination database ${ dstDbName } already exists. Attempting to drop...` );
-                    await r.dbDrop( dstDbName ).run( srcConnection );
+                    await r.dbDrop( dstDbName ).run( dstConnection );
                     logger.info( `Destination database ${ dstDbName } dropped successfully!` );
                 } catch ( err ) {
                     logger.warn( `ERROR (while dropping destination db): ${ err.message }` );
@@ -212,14 +248,11 @@ export class Database {
 
             // Create the Destination DB empty
             logger.info( `Attempting to create destination database ${ dstDbName }...` );
-            await r.dbCreate( dstDbName ).run( srcConnection );
+            await r.dbCreate( dstDbName ).run( dstConnection );
             logger.info( `Destination database ${ dstDbName } created successfully!` );
 
-            // Finally that the Dst DB is created, we can acquire a connection to it
-            dstConnection = await destination.connections.acquire();
-            
             // Create all the tables from the Source Database in the Destination Database
-            const srcTables = await r.db( srcDbName ).tableList().run(srcConnection);
+            const srcTables = await r.db( srcDbName ).tableList().run( srcConnection );
 
             logger.info(`Beginning to create ${srcTables.length} tables on the destination database...`);
             for ( const tableName of srcTables ) {
@@ -234,19 +267,19 @@ export class Database {
             logger.info(`Beginning to create secondary indexes on the destination database...`);
             for ( const tableName of srcTables ) {
                 logger.info(`Beginning to create secondary indexes for table ${tableName} on the destination database...`);
-                
+
                 let sourceIndexes = await r.db( srcDbName ).table( tableName ).indexList().run( srcConnection );
-                
+
                 for (let index of sourceIndexes) {
                     let indexObj = (await r.db( srcDbName ).table( tableName )["indexStatus"]( index ).run(srcConnection))[0];
-                    
+
                     await (r.db( dstDbName ).table( tableName ).indexCreate as any)(
                         indexObj.index, indexObj.function, { geo: indexObj.geo, multi: indexObj.multi } as any
                     ).run( dstConnection );
                 }
 
                 logger.info(`Waiting for secondary indexes on table ${tableName} to be ready...`);
-                
+
                 await r.db( dstDbName ).table( tableName ).indexWait().run( dstConnection );
             }
             logger.info(`All secondary indexes created successfully!`);
@@ -254,24 +287,68 @@ export class Database {
             logger.info(`Beginning to copy table contents to the destination database...`);
             for ( const tableName of srcTables ) {
                 logger.info(`Copying table ${ tableName }...`);
-                await r.db( dstDbName ).table( tableName ).insert( 
-                    r.db( srcDbName ).table( tableName )
-                ).run( dstConnection );
-                    
+
+                const tableTransformer = transformer?.(tableName);
+
+                // If there is no transformer set for this table, we copy the
+                // data directly: it is faster this way
+                // Both databases must also reside on the same RethinkDB instance
+                if ( tableTransformer == null && isLocalClone ) {
+                    await r.db( dstDbName ).table( tableName ).insert(
+                        r.db( srcDbName ).table( tableName )
+                    ).run( dstConnection );
+                } else {
+                    const cursor = await r.db( srcDbName ).table( tableName ).run( srcConnection );
+
+                    let hasNext = true;
+
+                    try {
+                        while (hasNext) {
+                            const chunk: any[] = [];
+
+                            const chunkSize = 100;
+
+                            try {
+                                while ( chunk.length < chunkSize ) {
+                                    const row = await ( cursor.next as () => Promise<any> )();
+
+                                    if ( tableTransformer != null ) {
+                                        chunk.push( tableTransformer( row ) );
+                                    } else {
+                                        chunk.push( row );
+                                    }
+                                }
+                            } catch ( error ) {
+                                if ( !( error.name === "ReqlDriverError" && error.message === "No more rows in the cursor." ) ) {
+                                    throw error;
+                                } else {
+                                    hasNext = false;
+                                }
+                            }
+
+                            if ( chunk.length > 0 ) {
+                                await r.db( dstDbName ).table( tableName ).insert( chunk ).run( dstConnection );
+                            }
+                        }
+                    } finally {
+                        cursor.close();
+                    }
+                }
+
                 logger.info(`Table ${ tableName } copied!`);
             }
             logger.info(`All table's data copied!`);
-            
+
             logger.info(`Clone operation has succeeded. Releasing resources and wrapping up!`);
         } catch ( err ) {
             logger.error( err.message || err );
-            
+
             throw err;
         } finally {
             if ( srcConnection != null ) {
                 this.connections.release( srcConnection );
             }
-            
+
             if ( dstConnection != null ) {
                 destination.connections.release( dstConnection );
             }
@@ -316,13 +393,13 @@ export class DatabaseTables {
         this.shows = new TvShowsMediaTable( pool );
 
         this.seasons = new TvSeasonsMediaTable( pool );
-        
+
         this.episodes = new TvEpisodesMediaTable( pool );
-    
+
         this.custom = new CustomMediaTable( pool );
-    
+
         this.history = new HistoryTable( pool );
-    
+
         this.playlists = new PlaylistsTable( pool );
 
         this.collections = new CollectionsTable( pool );
@@ -399,6 +476,14 @@ export class DatabaseTables {
             }
         } );
     }
+
+    get ( name: string ) : BaseTable<any> {
+        if ( name in this && this[ name ] instanceof BaseTable ) {
+            return this[ name ];
+        }
+
+        throw new Error( `Could not find a table named "${name}".` );
+    }
 }
 
 export class ConnectionPool {
@@ -425,7 +510,7 @@ export class ConnectionPool {
     }
 
     protected async createConnection () : Promise<ConnectionResource> {
-        return { 
+        return {
             connection: await this.database.connect(),
             usageCount: 0,
             inUse: false,
@@ -454,12 +539,12 @@ export class ConnectionPool {
         const release = await this.semaphore.acquire();
 
         let conn : ConnectionResource;
-        
+
         while ( this.freeConnections.length && !conn ) {
             conn = this.freeConnections.pop();
 
             if ( !conn.connection.open ) {
-                this.destroyConnection( conn );   
+                this.destroyConnection( conn );
             }
         }
 
@@ -479,7 +564,7 @@ export class ConnectionPool {
 
         return conn.connection;
     }
-    
+
     release ( connection : r.Connection ) : void {
         if ( this.usedConnections.has( connection ) ) {
             const resource = this.usedConnections.get( connection );
@@ -501,6 +586,18 @@ export class ConnectionPool {
             }
 
             resource.release();
+        }
+    }
+
+    async test () {
+        try {
+            const connection = await this.acquire();
+            this.release(connection);
+
+            return true;
+        } catch ( error ) {
+            this.database.server.onError.notify( error );
+            return false;
         }
     }
 
@@ -585,7 +682,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             const tables : string[] = await ( r as any ).tableList().run( conn );
-    
+
             if ( !tables.includes( this.tableName ) ) {
                 await ( r as any ).tableCreate( this.tableName ).run( conn );
             }
@@ -613,19 +710,19 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             const indexes = await this.query().indexList().run( conn );
-        
+
             for ( let index of this.indexesSchema ) {
                 if ( indexes.includes( index.name ) ) {
                     continue;
                 }
-    
+
                 if ( index.expression ) {
                     await ( this.query().indexCreate as any )( index.name, index.expression, index.options ).run( conn );
                 } else {
                     await ( this.query().indexCreate as any )( index.name, index.options ).run( conn );
                 }
             }
-    
+
             await ( this.query() as any ).indexWait().run( conn );
 
             this.relations = this.installRelations( this.database.tables );
@@ -655,7 +752,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             const item = await this.query().get( id ).run( connection ) as any as Promise<R>;
-    
+
             return item;
         } finally {
             this.pool.release( connection );
@@ -674,24 +771,24 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
         if ( keys.length === 0 ) {
             return [];
         }
-        
+
         const connection = await this.pool.acquire();
 
         try {
-            let table = opts.index ? 
+            let table = opts.index ?
                 this.query().getAll( ( r as any ).args( keys ), { index: opts.index } ) :
                 this.query().getAll( ( r as any ).args( keys ) );
-    
+
             if ( opts.query ) {
                 table = opts.query( table );
             }
 
             const cursor = await table.run( connection );
-            
+
             const items = await cursor.toArray();
-    
+
             await cursor.close();
-    
+
             return items;
         } catch ( err ) {
             throw new Error( JSON.stringify( keys ) );
@@ -705,9 +802,9 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             let table = this.query();
-            
+
             let sequence : r.Expression<T> = query( table );
-    
+
             return await sequence.run( connection );
         } finally {
             await this.pool.release( connection );
@@ -723,22 +820,22 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             let table = this.query();
-            
+
             let sequence : r.Sequence = table;
-    
+
             if ( query ) {
                 sequence = query( table );
             }
 
             const cursor = await sequence.run( connection );
-    
+
             try {
                 while ( true ) {
                     yield await ( cursor.next as () => Promise<T> )();
                 }
             } catch ( error ) {
                 if ( !( error.name === "ReqlDriverError" && error.message === "No more rows in the cursor." ) ) {
-                    throw error;   
+                    throw error;
                 }
             } finally {
                 await cursor.close();
@@ -785,13 +882,13 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
             //  - every character anywhere that is not [\w]
             return Case.pascal( identifier.replace(/(^[^a-zA-Z_])|[^\w]+/g, '-') );
         }
-        
+
         return null;
     }
 
     public applyIdentifier ( record: R, clone: boolean = false ) : R {
         const identifier = this.getIdentifier( record );
-        
+
         if ( identifier != null && identifier != record[ 'identifier' ] ) {
             // If requested, clone the source object before making any changes to it
             if ( clone ) {
@@ -815,11 +912,11 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
             }
 
             this.applyIdentifier( record );
-    
+
             const res = await this.query().insert( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-    
+
             record.id = res.generated_keys[ 0 ];
-            
+
             this.onCreate.notify( record );
 
             return record;
@@ -843,9 +940,9 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
                 this.applyIdentifier( record );
             }
-    
+
             const res = await this.query().insert( records ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-    
+
             let index = 0;
 
             for ( let record of records ) {
@@ -855,7 +952,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                     this.onCreate.notify( record );
                 }
             }
-            
+
             return records;
         } finally {
             this.pool.release( connection );
@@ -868,7 +965,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
         try {
             if ( record[ "id" ] != void 0 && id != record[ "id" ] ) {
                 this.database.server.logger.error( 'database/' + this.tableName, 'TRYING TO CHANGE ID FFS OF RECORD ' + JSON.stringify( { ...record, id } ) + ' TO ' + record[ "id" ] );
-                
+
                 delete record[ "id" ];
             }
 
@@ -879,7 +976,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
             }
 
             await this.query().get( id ).update( record ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-    
+
             if ( this.onUpdate.isSubscribed() ) {
                 this.get( id ).then( updated => this.onUpdate.notify( updated ) );
             }
@@ -906,7 +1003,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
             if ( changes[ "id" ] != void 0 && baseRecord[ "id" ] != changes[ "id" ] ) {
                 this.database.server.logger.error( 'database/' + this.tableName, 'TRYING TO CHANGE ID FFS OF RECORD ' + JSON.stringify( baseRecord ) + ' TO ' + changes[ "id" ] );
-                
+
                 delete changes[ "id" ];
             }
 
@@ -921,11 +1018,11 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             let query = this.query().filter( predicate );
-    
+
             if ( limit && limit < Infinity ) {
                 query = query.limit( limit );
             }
-            
+
             let operation : r.WriteResult;
 
             if ( this.onUpdate.isSubscribed() ) {
@@ -934,7 +1031,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                     .then( records => records.map( r => r.id ) );
 
                 operation = await this.query().getAll( ...ids ).update( update ).run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-            
+
                 this.query().getAll( ...ids ).run( connection )
                     .then<R[]>( cursor => cursor.toArray() )
                     .then( async records => {
@@ -963,7 +1060,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
             }
 
             const operation = await this.query().get( id ).delete().run( connection, { durability: "hard", ...options } as r.OperationOptions );
-    
+
             if ( record != null ) {
                 this.onDelete.notify( record );
             }
@@ -978,14 +1075,14 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
         if ( keys.length === 0 ) {
             return 0;
         }
-        
+
         const connection = await this.pool.acquire();
 
         try {
-            let table = opts.index 
-                ? this.query().getAll( ( r as any ).args( keys ), { index: opts.index } ) 
+            let table = opts.index
+                ? this.query().getAll( ( r as any ).args( keys ), { index: opts.index } )
                 : this.query().getAll( ( r as any ).args( keys ) );
-    
+
             if ( opts.query ) {
                 table = opts.query( table );
             }
@@ -998,14 +1095,14 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                         const array = await cursor.toArray();
 
                         cursor.close();
-                        
+
                         return array;
                     } );
 
                 const ids : string[] = records.map( r => r.id )
 
                 operation = await this.query().getAll( ...ids ).delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-        
+
                 Promise.resolve( records ).then( async records => {
                     for ( let record of records ) {
                         await this.onDelete.notify( record );
@@ -1014,7 +1111,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
             } else {
                 operation = await table.delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
             }
-    
+
             return operation.deleted;
         } finally {
             await this.pool.release( connection );
@@ -1024,14 +1121,14 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
     async deleteMany ( predicate : RethinkPredicate, limit : number = Infinity, options : Partial<r.OperationOptions> = {} ) : Promise<number> {
         const connection = await this.pool.acquire();
-        
+
         try {
             let query = this.query().filter( predicate );
-    
+
             if ( limit && limit < Infinity ) {
                 query = query.limit( limit );
             }
-            
+
             let operation : r.WriteResult;
 
             if ( this.onDelete.isSubscribed() ) {
@@ -1040,14 +1137,14 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                         const array = await cursor.toArray();
 
                         cursor.close();
-                        
+
                         return array;
                     } );
 
                 const ids : string[] = records.map( r => r.id )
 
                 operation = await this.query().getAll( ...ids ).delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-        
+
                 Promise.resolve( records ).then( async records => {
                     for ( let record of records ) {
                         await this.onDelete.notify( record );
@@ -1056,7 +1153,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
             } else {
                 operation = await query.delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
             }
-    
+
             return operation.deleted;
         } finally {
             this.pool.release( connection );
@@ -1068,7 +1165,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
         try {
             const res = await this.query().delete().run( connection, { durability: 'hard', ...options } as r.OperationOptions );
-    
+
             return res.deleted;
         } finally {
             this.pool.release( connection );
@@ -1090,7 +1187,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
                     let date = new Date();
 
                     if ( 'createdAt' in tableRecord ) {
-                        date = tableRecord[ 'createdAt' ];
+                        date = tableRecord[ 'createdAt' ] as Date;
                     }
 
                     await this.changesHistory.createChange( 'create', tableRecord, date );
@@ -1105,7 +1202,7 @@ export abstract class BaseTable<R extends { id ?: string }> implements Relatable
 
             await Promise.all( records.map( async id => {
                 const record = await this.get( id );
-    
+
                 let changed = false;
 
                 for( let field of this.dateFields ) {
@@ -1147,7 +1244,7 @@ export class ChangeHistoryTable<R> extends BaseTable<ChangeHistory<R>> {
 
     public async createChange ( action: 'create' | 'update' | 'delete', data: R, date?: Date ): Promise<ChangeHistory<R>> {
         const now = date ?? new Date();
-        
+
         const change: ChangeHistory<R> = {
             action: action,
             data: data,
@@ -1159,7 +1256,7 @@ export class ChangeHistoryTable<R> extends BaseTable<ChangeHistory<R>> {
 
     public async createManyChanges ( action: 'create' | 'update' | 'delete', datas: R[] ): Promise<ChangeHistory<R>[]> {
         const now = new Date();
-        
+
         const changes: ChangeHistory<R>[] = datas.map( data => ({
             action: action,
             data: data,
@@ -1194,7 +1291,7 @@ export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
 
     foreignMediaKeys : MediaTableForeignKeys = {};
 
-    relations : {
+    declare relations : {
         collections: ManyToManyRelation<R, CollectionRecord>,
         cast: ManyToManyRelation<R, PersonRecord>
     };
@@ -1239,7 +1336,7 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
 
     readonly kind : MediaKind = MediaKind.Movie;
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'internalId' },
         { name: 'title' },
         { name: 'rating' },
@@ -1257,11 +1354,11 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
 
     dateFields = [ 'addedAt', 'lastPlayedAt' ];
 
-    relations : {
+    declare relations : {
         collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>,
         cast: ManyToManyRelation<MovieMediaRecord, PersonRecord>
     };
-    
+
     baseline : Partial<MovieMediaRecord> = {
         watched: false,
         lastPlayedAt: null,
@@ -1283,7 +1380,7 @@ export class MoviesMediaTable extends MediaTable<MovieMediaRecord> {
                 // TODO Extract from server into here
                 ...await this.database.server.media.watchTracker.onPlayRepairChanges( movie ),
             }
-            
+
             await this.updateIfChanged( movie, changes );
 
             Object.assign( movie, changes );
@@ -1318,13 +1415,13 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         { name: 'addedAt' },
         { name: 'genres', options: { multi: true } },
     ];
-    
-    relations : {
+
+    declare relations : {
         collections: ManyToManyRelation<TvShowMediaRecord, CollectionRecord>,
         cast: ManyToManyRelation<TvShowMediaRecord, PersonRecord>,
         seasons: HasManyRelation<TvShowMediaRecord, TvSeasonMediaRecord>
     };
-    
+
     installRelations ( tables : DatabaseTables ) {
         return {
             ...super.installRelations( tables ),
@@ -1381,12 +1478,12 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
         }
 
         await super.repair( shows );
-        
+
         await Promise.all( shows.map( async showId => {
             const show = await this.get( showId );
 
             const seasons = await this.relations.seasons.load( show );
-            
+
             await this.database.tables.seasons.repair( seasons.map( season => season.id ) )
 
             const changes = {
@@ -1411,26 +1508,26 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         episodesCount: 0,
         transient: false
     };
-    
+
     foreignMediaKeys : MediaTableForeignKeys = {
         tvShowId: MediaKind.TvShow
     }
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'internalId' },
         { name: 'number' },
         { name: 'tvShowId' },
         { name: 'playCount' },
         { name: 'lastPlayedAt' },
     ];
-    
-    relations : {
+
+    declare relations : {
         collections: ManyToManyRelation<TvSeasonMediaRecord, CollectionRecord>,
         cast: ManyToManyRelation<TvSeasonMediaRecord, PersonRecord>,
         show: BelongsToOneRelation<TvSeasonMediaRecord, TvShowMediaRecord>,
         episodes: HasManyRelation<TvSeasonMediaRecord, TvEpisodeMediaRecord>,
     };
-    
+
     installRelations ( tables : DatabaseTables ) {
         return {
             ...super.installRelations( tables ),
@@ -1520,7 +1617,7 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
                 // TODO Extract from server into here
                 ...await this.database.server.media.watchTracker.onPlayRepairChanges( season, { episodes } ),
             };
-            
+
             await this.updateIfChanged( season, changes );
 
             Object.assign( season, changes );
@@ -1532,7 +1629,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     readonly tableName : string = 'media_tvepisodes';
 
     readonly kind : MediaKind = MediaKind.TvEpisode;
-    
+
     dateFields = [ 'addedAt', 'airedAt', 'lastPlayedAt' ];
 
     baseline : Partial<TvEpisodeMediaRecord> = {
@@ -1542,7 +1639,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
         transient: false
     };
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'internalId' },
         { name: 'number' },
         { name: 'tvSeasonId' },
@@ -1555,13 +1652,13 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
     foreignMediaKeys : MediaTableForeignKeys = {
         tvSeasonId: MediaKind.TvSeason
     }
-    
-    relations : {
+
+    declare relations : {
         season: BelongsToOneRelation<TvEpisodeMediaRecord, TvSeasonMediaRecord>,
         collections: ManyToManyRelation<TvEpisodeMediaRecord, CollectionRecord>,
         cast: ManyToManyRelation<TvEpisodeMediaRecord, PersonRecord>
     };
-    
+
     installRelations ( tables : DatabaseTables ) {
         return {
             ...super.installRelations( tables ),
@@ -1609,7 +1706,7 @@ export class TvEpisodesMediaTable extends MediaTable<TvEpisodeMediaRecord> {
                 // TODO Extract from server into here
                 ...await this.database.server.media.watchTracker.onPlayRepairChanges( episode ),
             }
-            
+
             await this.updateIfChanged( episode, changes );
 
             Object.assign( episode, changes );
@@ -1638,18 +1735,18 @@ export class PlaylistsTable extends BaseTable<PlaylistRecord> {
 
     dateFields = [ 'createdAt', 'updatedAt' ];
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'createdAt' },
         { name: 'updatedAt' }
     ];
 
-    relations: {
+    declare relations: {
         items: ManyToManyPolyRelation<PlaylistRecord, MediaRecord>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             items: new ManyToManyPolyRelation( 'items', map, 'references', null, 'kind', 'id' )
         };
@@ -1661,18 +1758,18 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
 
     dateFields = [ 'createdAt', 'updatedAt' ];
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'createdAt' },
         { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];
-    
-    relations: {
+
+    declare relations: {
         record: BelongsToOnePolyRelation<HistoryRecord, MediaRecord, { record: MediaRecord }>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'reference.kind', 'reference.id' )
         };
@@ -1682,19 +1779,19 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
 export class CollectionsTable extends BaseTable<CollectionRecord> {
     readonly tableName : string = 'collections';
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'title' },
         { name: 'identifier' }
     ];
-    
-    relations: {
+
+    declare relations: {
         records: ManyToManyPolyRelation<CollectionRecord, MediaRecord>;
         parent: BelongsToOneRelation<CollectionRecord, HistoryRecord>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             records: new ManyToManyPolyRelation( 'records', map, tables.collectionsMedia, 'collectionId', 'mediaKind', 'mediaId' ),
             parent: new BelongsToOneRelation( 'parent', this, 'parentId' ),
@@ -1733,7 +1830,7 @@ export class CollectionsTable extends BaseTable<CollectionRecord> {
             if ( predicate( node ) ) {
                 return node;
             }
-            
+
             if ( result = this.findInTrees( node.children, predicate ) ) {
                 return result;
             }
@@ -1765,19 +1862,19 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
 
     dateFields = [ 'createdAt' ];
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'collectionId' },
         { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
     ];
 
-    relations: {
+    declare relations: {
         record: BelongsToOnePolyRelation<CollectionMediaRecord, MediaRecord, { record : MediaRecord }>;
         collection: BelongsToOneRelation<CollectionMediaRecord, CollectionRecord, { collection : CollectionRecord }>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'mediaKind', 'mediaId' ),
             collection: new BelongsToOneRelation( 'collection', tables.collections, 'collectionId', 'collectionId' )
@@ -1801,7 +1898,7 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
             if ( !media ) {
                 await this.delete( recordId );
             } else {
-                await this.deleteMany( 
+                await this.deleteMany(
                     query => query( 'mediaKind' ).eq( media.kind )
                         .and( query( 'mediaId' ).eq( media.id ) )
                         .and( query( 'collectionId' ).eq( record.collectionId ) )
@@ -1821,13 +1918,13 @@ export class UserRanksTable extends BaseTable<UserRankRecord> {
         { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];
 
-    relations: {
+    declare relations: {
         record: BelongsToOnePolyRelation<UserRankRecord, MediaRecord>;
     }
-    
+
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'reference.kind', 'reference.id' )
         };
@@ -1844,17 +1941,17 @@ export interface UserRankRecord  {
 export class SubtitlesTable extends BaseTable<SubtitleMediaRecord> {
     readonly tableName : string = 'subtitles';
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'reference', expression: [ r.row( 'reference' )( 'kind' ), r.row( 'reference' )( 'id' ) ] }
     ];
 
-    relations: {
+    declare relations: {
         record: BelongsToOnePolyRelation<SubtitleMediaRecord, MediaRecord>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'reference.kind', 'reference.id' )
         };
@@ -1869,14 +1966,14 @@ export class PeopleTable extends BaseTable<PersonRecord> {
     tableName : string = 'people';
 
     dateFields = [ 'createdAt', 'updatedAt' ];
-    
-    indexesSchema : IndexSchema[] = [ 
+
+    indexesSchema : IndexSchema[] = [
         { name: 'internalId' },
         { name: 'name' },
         { name: 'identifier' }
     ];
 
-    relations: {
+    declare relations: {
         credits: ManyToManyPolyRelation<PersonRecord, MediaRecord>;
     };
 
@@ -1884,7 +1981,7 @@ export class PeopleTable extends BaseTable<PersonRecord> {
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             credits: new ManyToManyPolyRelation( 'credits', map, tables.mediaCast, 'personId', 'mediaKind', 'mediaId' ).savePivot( 'role' ),
         };
@@ -1896,20 +1993,20 @@ export class MediaCastTable extends BaseTable<MediaCastRecord> {
 
     dateFields = [ 'createdAt', 'updatedAt' ];
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'internalId' },
         { name: 'personId' },
         { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
     ];
-    
-    relations: {
+
+    declare relations: {
         record: BelongsToOnePolyRelation<MediaCastRecord, MediaRecord>;
         person : BelongsToOneRelation<MediaCastRecord, PersonRecord>;
     }
 
     installRelations ( tables : DatabaseTables ) {
         const map : PolyRelationMap<MediaRecord> = createMediaRecordPolyMap( tables );
-    
+
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'kind', 'id' ),
             person: new BelongsToOneRelation( 'person', tables.people, 'personId', 'personId' )
@@ -1922,7 +2019,7 @@ export class StorageTable extends BaseTable<StorageRecord> {
 
     dateFields = [ 'createdAt', 'updatedAt' ];
 
-    indexesSchema : IndexSchema[] = [ 
+    indexesSchema : IndexSchema[] = [
         { name: 'key' },
         { name: 'tags', options: { multi: true } }
     ];
@@ -1946,7 +2043,7 @@ export class DatabaseDaemon {
     async online () : Promise<boolean> {
         try {
             const conn = await r.connect( this.server.config.get<r.ConnectionOptions>( 'database' ) );
-    
+
             await conn.close();
 
             return true;
@@ -1985,7 +2082,7 @@ export class DatabaseDaemon {
 
             for ( let line of lines ) {
                 this.server.logger.info( 'Database', line );
-                    
+
                 if ( line.startsWith( 'Server ready,' ) ) {
                     setTimeout( () => this.futureStart.resolve(), 5000 );
                 }
@@ -1993,7 +2090,7 @@ export class DatabaseDaemon {
         } );
 
         this.process.on( 'exit', () => {
-            this.futureClose.resolve();            
+            this.futureClose.resolve();
         } )
 
         this.process.on( 'close', () => {
@@ -2009,9 +2106,9 @@ export class DatabaseDaemon {
         }
 
         await this.start();
-        
+
         await this.server.database.connections.close();
-   
+
         if ( this.process ) {
             this.process.kill();
         } else {
@@ -2109,7 +2206,7 @@ export function createMediaRecordPolyMap ( tables : DatabaseTables ) : PolyRelat
 
 export class RelationsQuery<R extends {id?: string}, T extends BaseTable<R>> {
     protected table : T;
-    
+
     protected relations : Relation<R, any>[];
 
     constructor ( table: T, relations: Relation<R, any>[] ) {

@@ -289,6 +289,13 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
         } ) );
     }
 
+    @Route('get', '/:id/collections')
+    async collections ( req : Request, res : Response ) {
+        const kind = this.server.media.getKind( this.table );
+
+        return await this.server.media.getCollections( kind, req.params.id );
+    }
+
     @Route( 'get', '/:id/cast' )
     async cast ( req : Request, res : Response ) : Promise<PersonRecord[]> {
         const media : MediaRecord = await this.table.get( req.params.id );

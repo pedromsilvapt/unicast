@@ -1,9 +1,9 @@
 import { LoggerInterface } from 'clui-logger';
-import { FileSystemRepository } from '../../../Extensions/MediaRepositories/FileSystem/FileSystemRepository';
+import { FileSystemRepository } from '../../MediaRepositories/FileSystem/FileSystemRepository';
 import { PlayableMediaRecord } from '../../../MediaRecord';
 import { MediaTools } from '../../../MediaTools';
 import { UnicastServer } from '../../../UnicastServer';
-import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../ISubtitlesProvider';
+import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../../../Subtitles/Providers/ISubtitlesProvider';
 import { fs } from 'mz';
 import { spawn } from 'child_process';
 import { waitForProcess } from '../../../ES2017/ChildProcess';
@@ -15,6 +15,15 @@ export interface IEmbeddedSubtitlesResult extends ISubtitle {
     trackIndex: number;
 }
 
+export interface IEmbeddedSubtitlesConfig {
+    enabled?: boolean;
+    showExtractionOutput: boolean;
+    subtitleEditFolder: string;
+    subtitleEditExecutable: string;
+    maxWaitTime: number;
+    checkIntervalTime: number;
+}
+
 export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSubtitlesResult> {
     readonly name: string = 'embedded';
 
@@ -22,7 +31,18 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
 
     logger: LoggerInterface;
 
-    showExtractionOutput: boolean = false;
+    config : IEmbeddedSubtitlesConfig;
+
+    public constructor ( config : Partial<IEmbeddedSubtitlesConfig> ) {
+        this.config = {
+            showExtractionOutput: false,
+            subtitleEditFolder: null,
+            subtitleEditExecutable: 'SubtitleEdit.exe',
+            maxWaitTime: 1000 * 60 * 5,
+            checkIntervalTime: 1000 * 10,
+            ...config
+        };
+    }
 
     onEntityInit () {
         this.logger = this.server.logger.service( `Subtitles/Providers/${ this.name }` );
@@ -60,7 +80,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
                         } ) );
                 } else {
                     const humanizedTitle = await this.server.media.humanize( media );
-                    
+
                     this.logger.warn( `Media ${ humanizedTitle } could not locate file path "${ videoPath }".` );
                 }
             } else {
@@ -69,37 +89,37 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
                 this.logger.warn( `Media ${ humanizedTitle } provided by FileSystemRepository could not resolve file path.` );
             }
         }
-        
+
         return [];
     }
 
     async download ( subtitle: IEmbeddedSubtitlesResult ): Promise<NodeJS.ReadableStream> {
         const tempFolder = await this.server.storage.getRandomFolder('embedded-subtitle');
 
-        const processArgs = [ 
-            '/convert', 
-            subtitle.filePath, 
-            'subrip', 
-            '/track-number:' + ( subtitle.trackIndex + 1 ), 
-            '/outputfolder:' + tempFolder 
+        const processArgs = [
+            '/convert',
+            subtitle.filePath,
+            'subrip',
+            '/track-number:' + ( subtitle.trackIndex + 1 ),
+            '/outputfolder:' + tempFolder
         ];
-        
+
         this.logger.info( 'Extracting: ' + subtitle.filePath );
-        
-        const cp = spawn( 'SubtitleEdit.exe', processArgs, {
-            cwd: 'C:\\Program Files\\Subtitle Edit',
-            stdio: this.showExtractionOutput ? 'inherit' : 'ignore'
+
+        const cp = spawn( this.config.subtitleEditExecutable, processArgs, {
+            cwd: this.config.subtitleEditFolder,
+            stdio: this.config.showExtractionOutput ? 'inherit' : 'ignore'
         } );
-        
+
         await waitForProcess( cp );
 
         const stopwatch = new Stopwatch().resume();
 
         // Max wait time for the file to be created, in milliseconds
-        const maxWaitTime = 1000 * 60 * 5;
+        const maxWaitTime = this.config.maxWaitTime;
 
         // The time to wait between consecutive checks for the file
-        const sleepTime = 1000 * 10;
+        const sleepTime = this.config.checkIntervalTime;
 
         let tempFile: string = null;
 
@@ -118,7 +138,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
         }
 
         stopwatch.pause();
-        
+
         if ( tempFile === null ) {
             throw new Error( `Process to extract subtitles failed` );
         }

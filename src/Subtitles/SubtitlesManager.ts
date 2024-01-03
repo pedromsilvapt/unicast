@@ -1,7 +1,6 @@
 import { SubtitlesProvidersManager } from "./ProvidersManager";
 import { UnicastServer } from "../UnicastServer";
-import { OpenSubtitlesProvider } from "./Providers/OpenSubtitles/OpenSubtitlesProvider";
-import { EmbeddedSubtitlesProvider } from "./Providers/EmbeddedSubtitles/EmbeddedSubtitlesProvider";
+import { EmbeddedSubtitlesProvider } from "../Extensions/SubtitleProviders/EmbeddedSubtitles/EmbeddedSubtitlesProvider";
 import { UploadedSubtitlesProvider } from './Providers/UploadedSubtitles/UploadedSubtitlesProvider';
 import { ISubtitle } from "./Providers/ISubtitlesProvider";
 import { MediaRecord } from "../MediaRecord";
@@ -27,10 +26,6 @@ export class SubtitlesManager {
         this.server = server;
 
         this.providers = new SubtitlesProvidersManager( server );
-
-        this.providers.add( new OpenSubtitlesProvider() );
-        this.providers.add( new EmbeddedSubtitlesProvider() );
-        this.providers.add( new UploadedSubtitlesProvider() );
 
         this.repository = new FallbackSubtitlesRepository( server );
     }

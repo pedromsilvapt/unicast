@@ -2,9 +2,8 @@ import { EntityManager, EntityFactoryManager } from "../EntityManager";
 import { IScraper, IScraperQuery } from "./IScraper";
 import { UnicastServer } from "../UnicastServer";
 import { ScraperFactory } from "./ScraperFactory";
-import { MediaKind, ExternalReferences, ArtRecord, RoleRecord } from "../MediaRecord";
+import { MediaKind, ExternalReferences, ArtRecord, RoleRecord, MediaRecord } from "../MediaRecord";
 import { CacheOptions } from "../MediaProviders/ProvidersManager";
-import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 
 export class ScrapersManager extends EntityManager<IScraper, string> {
     protected getEntityKey( scraper : IScraper ): string {
@@ -95,7 +94,7 @@ export class ScrapersManager extends EntityManager<IScraper, string> {
                 return this.getMediaArtwork( name, kind, record.id, query, cache );
             } catch ( error ) {
                 this.server.onError.notify( error );
-                
+
                 return [];
             }
         } ) );

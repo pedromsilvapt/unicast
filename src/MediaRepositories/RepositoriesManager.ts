@@ -1,6 +1,5 @@
-import { MediaKind } from "../MediaRecord";
+import { MediaKind, MediaRecord } from "../MediaRecord";
 import { UnicastServer } from "../UnicastServer";
-import { MediaRecord } from "../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { PersistentQueue, JobResult, IntervalJobScheduler, JobOrder } from "../PersistentQueue";
 import { JobRecord } from "../Database/Database";
 import * as itt from 'itt';
@@ -19,8 +18,8 @@ export class RepositoriesManager extends EntityManager<IMediaRepository, string>
         this.factories = new RepositoryFactoriesManager( this, server );
 
         this.jobQueue = new MediaRepositoryPersistentQueue( server, 'repositories', new IntervalJobScheduler( {
-            interval: 5000, 
-            retryInterval: 1000 * 60, 
+            interval: 5000,
+            retryInterval: 1000 * 60,
             order: JobOrder.LIFO,
             maxConcurrent: 5
         } ) );
@@ -91,7 +90,7 @@ export class MediaRepositoryPersistentQueue extends PersistentQueue<MediaReposit
             if ( !await repository.available() ) {
                 return JobResult.DidNotRun;
             }
-    
+
             await repository.watch( job.payload.kind, job.payload.id, job.payload.watched );
         }
 

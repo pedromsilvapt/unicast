@@ -1,4 +1,4 @@
-import * as yaml from 'js-yaml' 
+import * as yaml from 'js-yaml';
 import * as path from 'path';
 import * as fs from 'mz/fs';
 import * as ObjectPath from 'object-path';
@@ -136,7 +136,7 @@ export class Config {
     }
 
     static getFiles ( folder : string ) : string[] {
-        if ( folder.toLowerCase().endsWith( '.yaml' ) ) {
+        if ( folder.toLowerCase().endsWith( '.yaml' ) || folder.toLowerCase().endsWith( '.yml' ) ) {
             return [ '' ];
         }
 

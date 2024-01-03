@@ -1,10 +1,9 @@
-import { Synchronized, SynchronizedBy } from 'data-semaphore';
+import { Synchronized } from 'data-semaphore';
 import { Lifetime } from '../../../ES2017/Lifetime';
 import * as jayson from 'jayson';
-import { PlayableMediaRecord, MediaKind, TvShowMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from '../../../MediaRecord';
+import { PlayableMediaRecord, TvShowMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from '../../../MediaRecord';
 import { CircuitBreaker } from '../../../ES2017/Resilient';
 import { stringify } from 'querystring';
-import { attachCookies } from 'superagent';
 
 export interface KodiActivePlayer {
     playerid: number;

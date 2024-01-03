@@ -59,7 +59,7 @@ task( 'build:copy', async context => {
 let packageDependencies = {
     'win32': {
         'ffmpeg': 'https://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-4.1-win64-static.zip',
-        'rethinkdb': 'https://download.rethinkdb.com/windows/rethinkdb-2.3.6.zip',
+        'rethinkdb': 'https://download.rethinkdb.com/repository/raw/windows/rethinkdb-2.3.6.zip',
         'sharp': 'https://github.com/lovell/sharp/releases/download/v0.21.1/sharp-v0.21.1-node-v64-win32-x64.tar.gz',
         'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-win32-x64.tar.gz'
     },
@@ -71,7 +71,7 @@ let packageDependencies = {
     },
     'darwin': {
         'ffmpeg': 'https://evermeet.cx/ffmpeg/ffmpeg-4.1.7z',
-        'rethinkdb': 'https://download.rethinkdb.com/osx/rethinkdb-2.3.6.dmg',
+        'rethinkdb': 'https://download.rethinkdb.com/repository/raw/osx/rethinkdb-2.3.6.dmg',
         'sharp': 'https://github.com/lovell/sharp/releases/download/v0.21.1/sharp-v0.21.1-node-v64-darwin-x64.tar.gz',
         'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-darwin-x64.tar.gz'
     }

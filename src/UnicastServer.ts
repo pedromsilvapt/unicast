@@ -42,12 +42,13 @@ import { max } from './ES2017/Date';
 import * as crypto from 'crypto';
 import { collect, first, groupingBy } from 'data-collectors';
 import * as schema from '@gallant/schema';
+import { BaseUrl } from './ES2017/BaseUrl';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
 
     readonly onError : Hook<Error> = this.hooks.create( 'error' );
-    
+
     readonly onStart : Hook<void> = this.hooks.create( 'start' );
 
     readonly onListen : Hook<void> = this.hooks.create( 'listen' );
@@ -65,7 +66,7 @@ export class UnicastServer {
     readonly receivers : ReceiversManager;
 
     readonly providers : ProvidersManager;
-    
+
     readonly media : MediaManager;
 
     readonly smartCollections : SmartCollectionsManager;
@@ -116,7 +117,7 @@ export class UnicastServer {
         this.config = Config.singleton();
 
         this.storage = new Storage( this );
-        
+
         this.loggerBackend = new FilterBackend( new ConsoleBackend( TIMESTAMP_SHORT ) );
 
         this.logger = new SharedLogger( new MultiBackend( [
@@ -127,7 +128,7 @@ export class UnicastServer {
         this.database = new Database( this );
 
         this.dataStore = new DataStore( this );
-        
+
         this.journal = Journal.fromServer( this );
 
         this.tasks = new BackgroundTasksManager();
@@ -145,7 +146,7 @@ export class UnicastServer {
         this.media = new MediaManager( this );
 
         this.smartCollections = new SmartCollectionsManager( this );
-   
+
         this.customActions = new CustomActionsManager( this );
 
         this.subtitles = new SubtitlesManager( this );
@@ -196,7 +197,7 @@ export class UnicastServer {
         this.http.name = Config.get<string>( 'name', 'unicast' );
 
         const cors = corsMiddleware( { origins: [ '*' ] } );
-        
+
         this.http.pre( cors.preflight );
         this.http.use( cors.actual );
 
@@ -223,9 +224,9 @@ export class UnicastServer {
 
         this.http.use( this.httpLoggerMiddleware.before() );
         this.http.on( 'after', this.httpLoggerMiddleware.after() );
-        
-        this.httpLoggerMiddleware.registerHighFrequencyPattern( 
-            /\/media\/send\/(\w+)\/([\w\-_ ]+)\/session\/([\w\-_ ]+)\/stream\//, 
+
+        this.httpLoggerMiddleware.registerHighFrequencyPattern(
+            /\/media\/send\/(\w+)\/([\w\-_ ]+)\/session\/([\w\-_ ]+)\/stream\//,
             match => match[ 1 ] + '/' + match[ 2 ] + '/' + match[ 3 ]
         );
 
@@ -261,12 +262,15 @@ export class UnicastServer {
         return `https://${ this.getIpV4() }:${ this.getSecurePort() }` + ( path || '' );
     }
 
+    getBaseUrl ( req : restify.Request ) : BaseUrl {
+        return BaseUrl.fromRequest( req, {
+            fallbackUrl: BaseUrl.fromString( this.getUrl() ),
+            fallbackSecureUrl: BaseUrl.fromString( this.getSecureUrl() ),
+        } );
+    }
+
     getMatchingUrl ( req : restify.Request, path ?: string ) : string {
-        if ( ( req.connection as any ).encrypted ) {
-            return this.getSecureUrl( path );
-        } else {
-            return this.getUrl( path );
-        }
+        return this.getBaseUrl( req ).get( path );
     }
 
     async bootstrap () : Promise<void> {
@@ -291,7 +295,7 @@ export class UnicastServer {
         const port : number = this.getPort();
 
         const sslPort : number = this.getSecurePort();
-    
+
         // Attach all api controllers
         this.streams.initialize();
 
@@ -307,13 +311,13 @@ export class UnicastServer {
         await this.database.install();
 
         await this.http.listen( [ port, sslPort ] );
-        
+
         await this.onListen.notify();
-        
+
         await this.storage.clean();
 
         this.logger.info( this.name, this.name + ' listening on ' + this.getUrl() );
-        
+
         if ( this.isHttpsEnabled ) {
             this.logger.info( this.name, this.name + ' listening on ' + this.getSecureUrl() );
         }
@@ -351,9 +355,9 @@ export class UnicastServer {
             this.onClose.notify(),
             new Promise( resolve => timeout > 0 && setTimeout( resolve, timeout ) )
         ] );
-        
+
         this.http.close();
-        
+
         this.logger.info( 'unicast', 'Server closed.' );
     }
 
@@ -411,9 +415,9 @@ export class HttpRawMediaServer {
             let mime = stream.type === MediaStreamType.Subtitles
                 ? stream.mime + ';charset=utf-8'
                 : stream.mime;
-            
+
             let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
-            
+
             if ( reader ) {
                 reader.on( 'error', () => {
                     stream.close( reader );
@@ -425,7 +429,7 @@ export class HttpRawMediaServer {
             next();
         } catch ( error ) {
             this.server.onError.notify( error );
-           
+
             res.send( 500, { error: true } );
 
             next();
@@ -528,7 +532,7 @@ export class MediaManager {
 
     async getSeason ( show : string, season : number ) : Promise<TvSeasonMediaRecord> {
         const seasons = await this.database.tables.seasons.find( query => query.filter( {
-            tvShowId: show, 
+            tvShowId: show,
             number: season
         } ).limit( 1 ) );
 
@@ -547,7 +551,7 @@ export class MediaManager {
 
     async getSeasonEpisode ( season : string, episode : number ) : Promise<TvEpisodeMediaRecord> {
         const episodes = await this.database.tables.episodes.find( query => query.filter( {
-            tvSeasonId: season, 
+            tvSeasonId: season,
             number: episode
         } ).limit( 1 ) );
 
@@ -636,7 +640,7 @@ export class MediaManager {
         let normalized = this.server.providers.normalizeSources( sources );
 
         let media = await this.server.providers.getMediaRecordFor( normalized );
-        
+
         if ( media && media.id ) {
             let table = this.getTable( media.kind );
 
@@ -651,7 +655,7 @@ export class MediaManager {
             delete media.id;
 
             ( media as any ).sources = normalized;
-            
+
             media.transient = true;
 
             return this.store( media );
@@ -718,7 +722,7 @@ export class MediaManager {
 
         if ( itemsToAdd.length > 0 ) {
             const now = new Date();
-    
+
             await this.server.database.tables.collectionsMedia.createMany( itemsToAdd.map( record => ( {
                 collectionId: collectionId,
                 mediaKind: record.kind,
@@ -730,7 +734,7 @@ export class MediaManager {
         if ( itemsToRemove.length > 0 ) {
             const keys = itemsToRemove.map( record => [ record.kind, record.id ] );
 
-            await this.server.database.tables.collectionsMedia.deleteKeys( keys, { 
+            await this.server.database.tables.collectionsMedia.deleteKeys( keys, {
                 index: 'reference',
                 query: query => query.filter( { collectionId } ),
             } );
@@ -758,8 +762,8 @@ export class MediaManager {
                 tvShowId: media.id
             }, {
                 art: {
-                    tvshow: { 
-                        [ property ]: url 
+                    tvshow: {
+                        [ property ]: url
                     }
                 }
             } );
@@ -769,8 +773,8 @@ export class MediaManager {
                     tvSeasonId: season.id
                 }, {
                     art: {
-                        tvshow: { 
-                            [ property ]: url 
+                        tvshow: {
+                            [ property ]: url
                         }
                     }
                 } );
@@ -780,9 +784,9 @@ export class MediaManager {
 
     async updateManyIfChanged<R extends MediaRecord> ( original : R[], changed: R[], options : Partial<r.OperationOptions> = {} ): Promise<R[]> {
         if ( original.length === changed.length ) {
-            throw new Error( 
+            throw new Error(
                 `Update many media: original and changed records should have the same length, ` +
-                `instead got ${original.length} and ${changed.length}.` 
+                `instead got ${original.length} and ${changed.length}.`
             );
         }
 
@@ -794,10 +798,10 @@ export class MediaManager {
                 );
             }
         }
-        
+
         return Promise.all( original.map( ( record, index ) => {
             const table = this.getTable( record.kind ) as any as BaseTable<R>;
-            
+
             return table.updateIfChanged( record, changed[ index ], { updatedAt: new Date() }, options );
         } ) );
     }
@@ -807,7 +811,7 @@ export class MediaManager {
             const season = await this.get( MediaKind.TvSeason, record.tvSeasonId );
 
             const show = await this.get( MediaKind.TvShow, season.tvShowId );
-        
+
             return `${show.title} ${season.number}x${record.number} - ${record.title}`;
         } else {
             return record.title;
@@ -840,10 +844,10 @@ export class MediaCustomization {
                 await repository.saveCustomization( entry.record, entry.customization );
             }
         }
-        
+
         // Save the database
         const originalRecords = recordCustomizations.map( record => record.record );
-        
+
         const appliedRecords = this.applyMany( recordCustomizations );
 
         await this.mediaManager.server.media.updateManyIfChanged( originalRecords, appliedRecords );
@@ -920,7 +924,7 @@ export class MediaUserRanksList {
         }
 
         const { kind, id } = userRank.reference;
-        
+
         return await this.mediaManager.get( kind, id );
     }
 
@@ -976,19 +980,19 @@ export class MediaUserRanksList {
      * the first one. Position 1 is the last.
      * The position zero is reserved for all media records not ordered. It is
      * the only position in a list that can contain multiple records.
-     * 
-     * To place (or set the rank of) something AFTER something else means (anchor), 
+     *
+     * To place (or set the rank of) something AFTER something else means (anchor),
      * to put their ranks, if anchor rank is N, as N + 1, N + 2, etc...
-     * 
+     *
      * When performing this update there are some possible states. To understand them
      * let's consider the following list:
      *    id : A B C D E F G H
      *    pos: 8 7 6 5 4 3 2 1
-     * 
+     *
      * If we call setRankAfter(D, [ B, F, G, I ] ), the resulting list ought to be:
      *    id : A C D B F G I E H
      *    pos: 9 8 7 6 5 4 3 2 1
-     * 
+     *
      * There are some things to note:
      *   1. Since we added I to the list, everything to the right of D had to
      *      be incremented by 1 (the number or new elements)
@@ -1000,15 +1004,15 @@ export class MediaUserRanksList {
      *   5. All the items between B and G, that were not in the list, will have
      *      their positions updated
      *       5.1. If their original position is < PositionD, then their new position
-     *            is NewPositionD + 1 + index  
-     *      
-     * 
-     * @param anchor 
-     * @param trailings 
+     *            is NewPositionD + 1 + index
+     *
+     *
+     * @param anchor
+     * @param trailings
      */
     public async setRankBefore ( anchorOrPosition: MediaRecord | number, trailings: MediaRecord[] ) {
         const [ anchor, anchorRank ] = await this.getRecordAndRank( anchorOrPosition );
-        
+
         const table = this.mediaManager.database.tables.userRanks;
 
         // Validate if there are duplicate records in the trailings/anchor
@@ -1043,7 +1047,7 @@ export class MediaUserRanksList {
             const filter = row => row( 'list' ).eq( this.id )
                 .and( row( 'position' ).ge( anchorRank ) );
 
-            const change = { 
+            const change = {
                 position: r.row( 'position' ).add( zerosCount )
             };
 
@@ -1062,10 +1066,10 @@ export class MediaUserRanksList {
         // 3. Calculate (and update) the new achor position
         const anchorRankNew = anchorRank + zerosCount + beforeCount;
 
-        if ( modifiedRange.has( anchorRank ) ) {   
+        if ( modifiedRange.has( anchorRank ) ) {
             // Move the Anchor
             changes.move( modifiedRange.get( anchorRank ).id, anchorRankNew - modifiedRange.get( anchorRank ).position );
-            
+
             modifiedRange.delete( anchorRank )
         }
 
@@ -1089,7 +1093,7 @@ export class MediaUserRanksList {
             }
         }
 
-        // 5. If there are still any 
+        // 5. If there are still any
         if ( modifiedRange.size > 0 ) {
             const recordsBeforeAnchor = Array.from( modifiedRange.values() )
                 .filter( row => row.position > anchorRank )
@@ -1180,11 +1184,11 @@ export class MediaUserRanksList {
                         holes.push( i );
                     }
                 }
-                
+
                 if ( rank.position <= 0 ) {
                     invalid.push( rank.position );
                 }
-                
+
                 lastPosition = rank.position;
             }
         }
@@ -1236,8 +1240,8 @@ export class RankChangeSet {
         const inserts = table.createMany( this.creations );
 
         await Promise.all( [
-            Promise.all( updates ), 
-            inserts 
+            Promise.all( updates ),
+            inserts
         ] );
     }
 }
@@ -1264,20 +1268,20 @@ export class MediaWatchTracker {
                 await this.onPlay( record, session.createdAt );
             }
         } );
-        
+
         historyTable.onDelete.subscribe( async session => {
             const record = await historyTable.relations.record.load( session );
-            
+
             // Allow media played in some receivers to not be included
             if ( !this.excludedReceivers.has( session.receiver ) ) {
                 await this.onPlayRepair( record );
             }
         } );
     }
-    
+
     protected async watchTvEpisodesBatch ( customQuery : any, watched : boolean ) : Promise<TvEpisodeMediaRecord[]> {
-        const episodes = await this.mediaManager.database.tables.episodes.find( query => 
-            query.filter( doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ) )    
+        const episodes = await this.mediaManager.database.tables.episodes.find( query =>
+            query.filter( doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ) )
         );
 
         // When watched, only increment the play count of episodes whose play count equals zero
@@ -1285,7 +1289,7 @@ export class MediaWatchTracker {
             doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ),
             { watched }
         );
-        
+
         for ( let episode of episodes ) {
             // MARK UNAWAITED
             this.mediaManager.server.repositories.watch( episode, watched );
@@ -1302,10 +1306,10 @@ export class MediaWatchTracker {
             const seasons = await this.mediaManager.database.tables.seasons.find( query => query.filter( {
                 tvShowId: show.id
             } ) );
-    
+
             // Then compile all their ids
             const seasonIds = seasons.map( season => season.id );
-    
+
             // And get all episodes that belong to those seasons and are or are not watched, depending on what change we are making
             const episodes = await this.watchTvEpisodesBatch( doc => r.expr( seasonIds ).contains( doc( 'tvSeasonId' ) ), watched );
 
@@ -1314,7 +1318,7 @@ export class MediaWatchTracker {
                     watchedEpisodesCount: watched ? season.episodesCount : 0
                 } );
             }
-    
+
             await this.mediaManager.database.tables.shows.update( show.id, {
                 watchedEpisodesCount: watched ? itt( seasons ).map( season => season.episodesCount ).sum() : 0,
                 watched: watched
@@ -1331,15 +1335,15 @@ export class MediaWatchTracker {
 
         try {
             const episodes = await this.watchTvEpisodesBatch( doc => doc( 'tvSeasonId' ).eq( r.expr( season.id ) ), watched );
-    
+
             const difference = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
-    
+
             await this.mediaManager.database.tables.seasons.update( season.id, {
                 watchedEpisodesCount: watched ? season.episodesCount : 0
             } );
-    
+
             const show = await this.mediaManager.database.tables.shows.get( season.tvShowId );
-    
+
             await this.mediaManager.database.tables.shows.update( season.tvShowId, {
                 watchedEpisodesCount: show.watchedEpisodesCount + difference,
                 watched: show.watchedEpisodesCount + difference >= show.episodesCount
@@ -1363,7 +1367,7 @@ export class MediaWatchTracker {
 
             await this.mediaManager.database.tables.episodes.update( episode.id, { watched } );
 
-            // MARK UNAWAITED            
+            // MARK UNAWAITED
             this.mediaManager.server.repositories.watch( episode, watched );
 
             const similarEpisodes = await this.mediaManager.database.tables.episodes.find( query => query.filter( {
@@ -1376,9 +1380,9 @@ export class MediaWatchTracker {
                 await this.mediaManager.database.tables.seasons.update( episode.tvSeasonId, {
                     watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 )
                 } );
-        
+
                 const season = await this.mediaManager.database.tables.seasons.get( episode.tvSeasonId );
-        
+
                 await this.mediaManager.database.tables.shows.update( season.tvShowId, {
                     watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 ),
                     watched: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 ).eq( r.row( 'episodesCount' ) ),
@@ -1443,15 +1447,15 @@ export class MediaWatchTracker {
             return this.watchCustom( media, watched );
         }
     }
-    
+
     protected async onPlaySingle<T extends PlayableMediaRecord> ( table : MediaTable<T>, record : T, playDate: Date = new Date() ) : Promise<T> {
         // Make sure we have the most recent information regarding this media record
         record = await table.get( record.id );
 
         const lastPlayedAt = max( record.lastPlayedAt, playDate );
 
-        await table.update( record.id, { 
-            lastPlayedAt, playCount: r.row( 'playCount' ).add( 1 ) 
+        await table.update( record.id, {
+            lastPlayedAt, playCount: r.row( 'playCount' ).add( 1 )
         } );
 
         record.lastPlayedAt = lastPlayedAt;
@@ -1497,7 +1501,7 @@ export class MediaWatchTracker {
             release();
         }
     }
-    
+
     async onPlayTvEpisode ( episode : TvEpisodeMediaRecord, playDate: Date = new Date() ) {
         const release = await this.semaphore.acquire();
 
@@ -1508,17 +1512,17 @@ export class MediaWatchTracker {
 
             let season = await this.mediaManager.get( MediaKind.TvSeason, episode.tvSeasonId );
 
-            season = await this.onPlayContainer( 
-                tables.seasons, 
+            season = await this.onPlayContainer(
+                tables.seasons,
                 season,
                 tables.seasons.relations.episodes,
             );
 
             let show = await this.mediaManager.get( MediaKind.TvShow, season.tvShowId );
 
-            show = await this.onPlayContainer( 
-                tables.shows, 
-                show, 
+            show = await this.onPlayContainer(
+                tables.shows,
+                show,
                 tables.shows.relations.seasons,
             );
         } catch ( err ) {
@@ -1527,7 +1531,7 @@ export class MediaWatchTracker {
             release();
         }
     }
-    
+
     async onPlayCustom ( custom : CustomMediaRecord, playDate: Date = new Date() ) {
         const release = await this.semaphore.acquire();
 
@@ -1549,7 +1553,7 @@ export class MediaWatchTracker {
             return this.onPlayCustom( media, playDate );
         }
     }
-    
+
     /* On Play Repair */
     public async onPlayRepairSingleChanges<T extends MediaRecord> ( table : MediaTable<T>, record : T ) : Promise<Partial<MediaRecord>> {
         record = await table.get( record.id );
@@ -1597,9 +1601,9 @@ export class MediaWatchTracker {
 
             show = await this.mediaManager.get( MediaKind.TvShow, show.id );
 
-            show = await this.onPlayContainer( 
-                tables.shows, 
-                show, 
+            show = await this.onPlayContainer(
+                tables.shows,
+                show,
                 tables.shows.relations.seasons,
             );
         } catch ( err ) {
@@ -1617,18 +1621,18 @@ export class MediaWatchTracker {
 
             season = await this.mediaManager.get( MediaKind.TvSeason, season.id );
 
-            season = await this.onPlayContainer( 
-                tables.seasons, 
+            season = await this.onPlayContainer(
+                tables.seasons,
                 season,
                 tables.seasons.relations.episodes,
             );
 
             if ( updateContainer ) {
                 let show = await this.mediaManager.get( MediaKind.TvShow, season.tvShowId );
-    
-                show = await this.onPlayContainer( 
-                    tables.shows, 
-                    show, 
+
+                show = await this.onPlayContainer(
+                    tables.shows,
+                    show,
                     tables.shows.relations.seasons,
                 );
             }
@@ -1650,18 +1654,18 @@ export class MediaWatchTracker {
             if ( updateContainer ) {
                 // The rest is the same as the onPlayTvEpisode method
                 let season = await this.mediaManager.get( MediaKind.TvSeason, episode.tvSeasonId );
-    
-                season = await this.onPlayContainer( 
-                    tables.seasons, 
+
+                season = await this.onPlayContainer(
+                    tables.seasons,
                     season,
                     tables.seasons.relations.episodes,
                 );
-    
+
                 let show = await this.mediaManager.get( MediaKind.TvShow, season.tvShowId );
-    
-                show = await this.onPlayContainer( 
-                    tables.shows, 
-                    show, 
+
+                show = await this.onPlayContainer(
+                    tables.shows,
+                    show,
                     tables.shows.relations.seasons,
                 );
             }
@@ -1742,7 +1746,7 @@ export class MultiServer extends EventEmitter {
             server.on( 'after', ( ...args : any[] ) => this.emit( 'after', ...args ) );
         }
     }
-    
+
     address () : restify.AddressInterface {
         return this.servers[ 0 ].address();
     }
@@ -1761,9 +1765,9 @@ export class MultiServer extends EventEmitter {
         let promises : Promise<void>[] = [];
 
         for ( let server of this.servers ) {
-            promises.push( 
-                new Promise<void>( 
-                    resolve => server.close( resolve ) 
+            promises.push(
+                new Promise<void>(
+                    resolve => server.close( resolve )
                 )
             );
         }
@@ -1850,7 +1854,7 @@ export class MultiServer extends EventEmitter {
         for ( let server of this.servers ) {
             server.versionedUse( versions, fn );
         }
-        
+
         return this;
     }
 
@@ -1862,7 +1866,7 @@ export class MultiServer extends EventEmitter {
         for ( let server of this.servers ) {
             server.use( ...handlers );
         }
-        
+
         return this;
     }
 
@@ -1903,7 +1907,7 @@ export class MultiServer extends EventEmitter {
 
 export class CommandsManager {
     server : UnicastServer;
-    
+
     events : {
         [ key : string ]: string
     } = {};
@@ -1922,7 +1926,7 @@ export class CommandsManager {
             exec( this.events[ binding ] );
         }
     }
-    
+
     onStart () {
         return this.runHooks( 'onStart' );
     }

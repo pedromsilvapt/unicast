@@ -1,17 +1,16 @@
 import { IScraper, IScraperQuery } from "../../../MediaScrapers/IScraper";
 import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/ScraperCache";
-import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds, RoleRecord } from "../../../MediaRecord";
+import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds, RoleRecord, MediaRecord } from "../../../MediaRecord";
 import { UnicastServer } from "../../../UnicastServer";
 import { MediaRecordFactory } from "./MediaRecordFactory";
 import { MovieDBEpisodeExternals, MovieDBSeason, MovieDBShow, MovieDBShowExternals, MovieDBShowRatings, MovieDBShowSeason } from "./Responses";
 import { Client as MovieDB } from './Client';
-import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { Logger } from 'clui-logger';
 import * as sortBy from 'sort-by';
 
 export class TheMovieDB implements IScraper {
     server : UnicastServer;
-    
+
     name : string = 'moviedb';
 
     logger : Logger;
@@ -127,22 +126,22 @@ export class TheMovieDB implements IScraper {
                     if ( source === 'moviedb' && kinds.length > 0 ) {
                         return recordsMapper[ kinds[ 0 ] ]( external[ source ] );
                     } else if ( source in keysMapper ) {
-                        // The method `find` returns an object of arrays: each key of the object is a kind (movie, show, etc...) and its 
+                        // The method `find` returns an object of arrays: each key of the object is a kind (movie, show, etc...) and its
                         // value is the list of media of that kind that matched the query
                         const results = await this.moviedbCall( 'find', { id: external[ source ], external_source: keysMapper[ source ] }, cache );
-            
+
                         for ( let kind of kinds ) {
                             const kindResult = results?.[ kindsMapper[ kind ] ];
-    
+
                             if ( kindResult && kindResult.length > 0 ) {
                                 let id = kindResult[ 0 ].id.toString();
-    
+
                                 if ( kind === MediaKind.TvSeason ) {
                                     id = MediaRecordFactory.toTvSeasonId( kindResult[ 0 ].show_id, kindResult[ 0 ].season_number );
                                 } else if ( kind === MediaKind.TvEpisode ) {
                                     id = MediaRecordFactory.toTvEpsiodeId( kindResult[ 0 ].show_id, kindResult[ 0 ].season_number, kindResult[ 0 ].episode_number );
                                 }
-    
+
                                 return await recordsMapper[ kind ]( id, cache );
                             }
                         }
@@ -164,13 +163,13 @@ export class TheMovieDB implements IScraper {
 
     protected async transformArtResponse ( keys: Record<string, ArtRecordKind>, rawArtwork: Record<string, any[]>, kind ?: ArtRecordKind, ) : Promise<ArtRecord[]> {
         const artwork: ArtRecord[] = [];
-        
+
         for ( let key of Object.keys( keys ) ) {
             const kind : ArtRecordKind = keys[ key ];
 
             for ( let art of rawArtwork[ key ] ) {
                 const url = await this.getArtPath( art.file_path, 'original' );
-                
+
                 artwork.push( {
                     id: url,
                     url: url,
@@ -192,7 +191,7 @@ export class TheMovieDB implements IScraper {
     getMovieArt ( id : string, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         return this.runCachedTask<ArtRecord[]>( 'getMovieArt', id + kind, query, async () => {
             const rawMovie = await this.moviedbCall( 'movieImages', { id: id }, cache );
-    
+
             const keys = { 'backdrops': ArtRecordKind.Background, 'posters': ArtRecordKind.Poster };
 
             return this.transformArtResponse( keys, rawMovie, kind );
@@ -218,7 +217,7 @@ export class TheMovieDB implements IScraper {
             const rawArtwork = await this.moviedbCall( 'tvImages', { id: id }, cache );
 
             const keys = { 'backdrops': ArtRecordKind.Background, 'posters': ArtRecordKind.Poster };
-    
+
             return this.transformArtResponse( keys, rawArtwork, kind );
         }, cache );
     }
@@ -371,23 +370,23 @@ export class TheMovieDB implements IScraper {
             const [ tvShowId, seasonNumber ] = MediaRecordFactory.fromTvSeasonId( id );
 
             const rawArtwork = await this.moviedbCall( 'tvSeasonImages', { id: tvShowId, season_number: seasonNumber }, cache );
-            
+
             const keys = { 'posters': ArtRecordKind.Poster };
 
             return this.transformArtResponse( keys, rawArtwork, kind );
         }, cache );
     }
-    
+
     async getTvEpisodeArt ( id : string, kind ?: ArtRecordKind, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<ArtRecord[]> {
         return this.runCachedTask<ArtRecord[]>( 'getTvEpisodeArt', id + kind, query, async () => {
             const [ tvShowId, seasonNumber, episodeNumber ] = MediaRecordFactory.fromTvEpisodeId( id );
 
-            const rawArtwork = await this.moviedbCall( 'tvSeasonEpisodeImages', { 
-                id: tvShowId, 
-                season_number: seasonNumber, 
-                episode_number: episodeNumber 
+            const rawArtwork = await this.moviedbCall( 'tvSeasonEpisodeImages', {
+                id: tvShowId,
+                season_number: seasonNumber,
+                episode_number: episodeNumber
             }, cache );
-            
+
             const keys = { 'stills': ArtRecordKind.Thumbnail };
 
             return this.transformArtResponse( keys, rawArtwork, kind );
@@ -412,7 +411,7 @@ export class TheMovieDB implements IScraper {
         }
     }
 
-    
+
     /* Get Media Cast */
     getMovieCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return this.runCachedTask<RoleRecord[]>( 'getMovieCast', id, query, async () => {

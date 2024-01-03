@@ -1,15 +1,14 @@
 import { BaseTableController } from "../../BaseTableController";
 import { BaseTable, HistoryRecord } from "../../../Database/Database";
 import { Request, Response } from "restify";
-import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import * as r from 'rethinkdb';
-import { MediaKind } from '../../../MediaRecord';
+import { MediaKind, MediaRecord } from '../../../MediaRecord';
 import { AsyncStream } from 'data-async-iterators';
 
 export class SessionsController extends BaseTableController<HistoryRecord> {
     defaultSortField : string = 'createdAt';
 
-    defaultSortFieldDirection : 'asc' | 'desc' = 'desc';    
+    defaultSortFieldDirection : 'asc' | 'desc' = 'desc';
 
     sortingFields : string[] = [ 'createdAt' ];
 
@@ -21,7 +20,7 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
         history = await super.transformAll( req, res, history );
 
         const url = this.server.getMatchingUrl( req );
-    
+
         if ( req.query.records === 'true' ) {
             await this.server.database.tables.history.relations.record.applyAll( history );
 
@@ -39,7 +38,7 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
 
     async transformQuery ( req : Request ) {
         await super.transformQuery( req );
-        
+
         if ( req.query.filterMedia ) {
             const media : [ MediaKind, string ][] = req.query.filterMedia.map( id => id.split( ',' ) );
 
@@ -57,7 +56,7 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
 
         if ( req.query.filterPlayableMedia ) {
             const media : string[] = req.query.filterPlayableMedia;
-            
+
             query = query.filter( row => r.expr( media ).contains( ( row( 'reference' )( 'kind' ) as any ).add(',').add( row( 'reference' )( 'id' ) ) ) );
         }
 

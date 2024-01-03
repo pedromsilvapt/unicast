@@ -1,8 +1,7 @@
 import { BaseController, Route } from "../../BaseController";
 import { Request, Response } from "restify";
-import { MediaKind, ExternalReferences, ArtRecord, RoleRecord } from "../../../MediaRecord";
+import { MediaKind, ExternalReferences, ArtRecord, RoleRecord, MediaRecord } from "../../../MediaRecord";
 import { InvalidArgumentError } from "restify-errors";
-import { MediaRecord } from "../../../Subtitles/Providers/OpenSubtitles/OpenSubtitlesProvider";
 import { CacheOptions } from "../../../MediaScrapers/ScraperCache";
 import { IScraperQuery } from '../../../MediaScrapers/IScraper';
 import { MediaTools } from '../../../MediaTools';
