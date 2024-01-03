@@ -72,3 +72,5 @@ lib/
 /dist/
 
 /builds/
+
+src/Tools/Local/

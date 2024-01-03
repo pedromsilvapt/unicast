@@ -7,7 +7,7 @@ export class SetReceiverHostCustomActionExtension extends Extension {
     onEntityInit () {
         super.onEntityInit();
 
-        this.server.customActions.factories.add( 
+        this.server.customActions.factories.add(
             new CustomActionFactory( 'setReceiverHost', SetReceiverHostCustomAction )
         );
     }
@@ -17,7 +17,7 @@ export class SetReceiverHostCustomAction extends CustomAction<SetReceiverHostOpt
     get label (): string {
         const address = this.options.address ?? this.server.getIpV4();
         const port = this.options.port ?? this.server.getPort();
-        
+
         return `Set ${address}:${port} Host`;
     }
 
@@ -31,14 +31,14 @@ export class SetReceiverHostCustomAction extends CustomAction<SetReceiverHostOpt
 
     public async execute ( context : CustomActionContext ) : Promise<CustomActionResult> {
         const receiver = this.server.receivers.get( context?.device?.name );
-        
+
         const address = this.options.address ?? this.server.getIpV4();
         const port = this.options.port ?? this.server.getPort();
-        
+
         if ( typeof receiver["setServerAddress"] === 'function' ) {
             await receiver["setServerAddress"](address, port);
         } else {
-            return CustomAction.error(`Invalid receiver "${ context?.device?.name }"`);
+            return CustomAction.error(`Invalid receiver "${ context?.device?.name }: does not support function 'setServerAddress'"`);
         }
 
         return CustomAction.success( `Host set to ${ this.server.getIpV4() }:${ this.server.getPort() }` );
