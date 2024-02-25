@@ -1,6 +1,6 @@
 import { ILocalSubtitle } from "./SubtitlesManager";
 import { UnicastServer } from "../UnicastServer";
-import { MediaRecord } from "../MediaRecord";
+import { MediaKind, MediaRecord } from "../MediaRecord";
 import { ISubtitle } from "./Providers/ISubtitlesProvider";
 import { SubtitlesTable } from "../Database/Database";
 import * as path from 'path';
@@ -8,7 +8,8 @@ import * as fs from 'mz/fs';
 
 export interface IDatabaseLocalSubtitle extends ILocalSubtitle {
     file : string;
-    reference : { kind : string, id : string };
+    mediaKind : MediaKind, 
+    mediaId : string, 
 }
 
 export interface ISubtitlesRepository<S extends ILocalSubtitle = ILocalSubtitle> {
@@ -55,7 +56,7 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
     async get ( media : MediaRecord, id : string ) : Promise<IDatabaseLocalSubtitle> {
         const subtitles = await this.table.get( id );
 
-        if ( !subtitles || subtitles.reference.kind != media.kind || subtitles.reference.id !== media.id ) {
+        if ( !subtitles || subtitles.mediaKind != media.kind || subtitles.mediaId !== media.id ) {
             return null;
         }
 
@@ -71,7 +72,7 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
     }
 
     async list ( media : MediaRecord ) : Promise<IDatabaseLocalSubtitle[]> {
-        return this.table.find( ( query ) => query.filter( { reference: { id: media.id, kind: media.kind } } ) );
+        return this.table.find( ( query ) => query.where( { mediaId: media.id, mediaKind: media.kind } ) );
     }
 
     async store ( media : MediaRecord, subtitle : ISubtitle, data : Buffer | NodeJS.ReadableStream ) : Promise<IDatabaseLocalSubtitle> {
@@ -102,7 +103,8 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
             language: null,
             releaseName: subtitle.releaseName,
             file: path.basename( file ),
-            reference: { kind: media.kind, id : media.id }
+            mediaKind: media.kind, 
+            mediaId : media.id
         };
 
         return this.table.create( local );

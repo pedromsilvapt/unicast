@@ -1,9 +1,4 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
-import { MediaKind, AllMediaKinds, PlayableQualityRecord, MediaRecordArt } from "../MediaRecord";
-import * as parseTorrentName from 'parse-torrent-name';
-import { MediaTools } from "../MediaTools";
-import * as path from 'path';
-import * as r from 'rethinkdb';
 
 export interface RenameReceiverOptions {
     oldName: string;
@@ -29,29 +24,29 @@ export class RenameReceiverTool extends Tool<RenameReceiverOptions> {
         if ( options.dryRun ) {
             // NO ACTUAL MUTATION, JUST READ-ONLY QUERIES HERE
 
-            const historyRecords = await this.server.database.tables.history.count( q => q.filter( {
+            const historyRecords = await this.server.database.tables.history.count( q => q.where( {
                 receiver: options.oldName
             } ) );
 
             this.log(`Renamed ${historyRecords} history records from "${options.oldName}" to "${options.newName}".`);
 
-            const playlistRecords = await this.server.database.tables.playlists.count( q => q.filter( {
+            const playlistRecords = await this.server.database.tables.playlists.count( q => q.where( {
                 device: options.oldName
             } ) );
 
             this.log(`Renamed ${playlistRecords} playlist records from "${options.oldName}" to "${options.newName}".`);
         } else {
-            const historyRecords = await this.server.database.tables.history.updateMany( {
+            const historyRecords = await this.server.database.tables.history.updateMany( q => q.where( {
                 receiver: options.oldName
-            }, {
+            } ), {
                 receiver: options.newName
             } );
 
             this.log(`Renamed ${historyRecords} history records from "${options.oldName}" to "${options.newName}".`);
 
-            const playlistRecords = await this.server.database.tables.playlists.updateMany( {
+            const playlistRecords = await this.server.database.tables.playlists.updateMany( q => q.where( {
                 device: options.oldName
-            }, {
+            } ), {
                 device: options.newName
             } );
 

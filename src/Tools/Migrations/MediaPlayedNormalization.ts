@@ -1,8 +1,8 @@
 import { Tool, ToolOption, ToolValueType } from "../Tool";
 import { ExternalReferences, isPlayableRecord, MediaRecord, PlayableMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord } from '../../MediaRecord';
-import { DatabaseTables, HistoryTable, MediaTable, TvSeasonsMediaTable, TvShowsMediaTable } from '../../Database/Database';
+import { AbstractMediaTable, DatabaseTables, HistoryTable, MediaTable, TvSeasonsMediaTable, TvShowsMediaTable } from '../../Database/Database';
 import { addDays, format, subDays } from 'date-fns';
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 
 export interface MediaPlayedNormalizationOptions {
     dryRun : boolean;
@@ -33,7 +33,7 @@ export class MediaPlayedNormalizationTool extends Tool<MediaPlayedNormalizationO
 
         const allTables = this.server.database.tables;
 
-        const tables : MediaTable<CommonRecord>[] = [
+        const tables : AbstractMediaTable<CommonRecord>[] = [
             allTables.custom, allTables.movies, 
             allTables.episodes, allTables.seasons, allTables.shows,
         ];
@@ -73,7 +73,7 @@ export class MediaPlayedNormalizationTool extends Tool<MediaPlayedNormalizationO
                     var changes = {
                         ...await this.server.media.watchTracker.onPlayRepairChanges( record ),
                         lastPlayedAtLegacy,
-                        lastPlayed: (r as any).literal(),
+                        lastPlayed: null,
                     }
     
                     logCounter( table, ++recordsChanged );

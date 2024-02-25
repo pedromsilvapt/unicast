@@ -15,7 +15,7 @@ export class EmbeddedSubtitlesProviderExtension extends Extension {
         const mandatoryConfigs : (keyof IEmbeddedSubtitlesConfig)[] = [ 'subtitleEditFolder' ];
 
         if ( config == null ) {
-            logger.warn( `Missing mandatory config key \'${configNamespace}\' for EmbeddedSubtitles provider` );
+            this.logger.warn( `Missing mandatory config key \'${configNamespace}\' for EmbeddedSubtitles provider` );
 
             enabled = false;
         } else {
@@ -25,7 +25,7 @@ export class EmbeddedSubtitlesProviderExtension extends Extension {
 
             for ( const configName of mandatoryConfigs ) {
                 if ( !( configName in config ) || config[configName] == null ) {
-                    logger.warn( `Missing mandatory config key \'${configNamespace}.${configName}\' for EmbeddedSubtitles provider` );
+                    this.logger.warn( `Missing mandatory config key \'${configNamespace}.${configName}\' for EmbeddedSubtitles provider` );
                     enabled = false;
                 }
             }

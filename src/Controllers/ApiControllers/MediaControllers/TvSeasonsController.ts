@@ -1,7 +1,7 @@
 import { TvSeasonMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database/Database";
+import { AbstractMediaTable, MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { MediaTableController } from "./MediaController";
 import { Route } from '../../BaseController';
 
@@ -10,18 +10,21 @@ export class TvSeasonsController extends MediaTableController<TvSeasonMediaRecor
 
     defaultSortField : string = 'number';
 
-    get table () : MediaTable<TvSeasonMediaRecord> {
+    get table () : AbstractMediaTable<TvSeasonMediaRecord> {
         return this.server.database.tables.seasons;
     }
 
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         query = super.getQuery( req, res, query );
 
         if ( req.query.show ) {
-            query = query.filter( { tvShowId: req.query.show } );
+            query = query.where( { tvShowId: req.query.show } );
         }
         
-        return this.getRepositoryPathsQuery( req, this.getTransientQuery( req, query ) );
+        query = this.getTransientQuery( req, query );
+        query = this.getRepositoryPathsQuery( req, query );
+        
+        return query;
     }
 
     async transformAll ( req : Request, res : Response, seasons : TvSeasonMediaRecord[] ) : Promise<any> {

@@ -1,26 +1,10 @@
 import { MediaSourceDetails } from "./MediaProviders/MediaSource";
 
-export enum MediaKind {
-    Movie = 'movie',
-    TvShow = 'show',
-    TvSeason = 'season',
-    TvEpisode = 'episode',
-    Custom = 'custom'
-}
+import { ExternalReferences } from './Database/Tables/BaseTable';
+export { ExternalReferences };
 
-export var AllMediaKinds : MediaKind[] = [
-    MediaKind.Movie,
-    MediaKind.TvShow,
-    MediaKind.TvSeason,
-    MediaKind.TvEpisode,
-    MediaKind.Custom
-];
-
-export type ExternalReferences = { 
-    imdb ?: string;
-    tvdb ?: string;
-    [ key : string ] : string
-};
+import { MediaKind, AllMediaKinds, PlayableQualityRecord } from './Database/Tables/AbstractMediaTable';
+export { MediaKind, AllMediaKinds, PlayableQualityRecord };
 
 export enum ArtRecordKind {
     Poster = "poster",
@@ -40,46 +24,8 @@ export interface ArtRecord {
     score ?: number;
 }
 
-// This is the object that is stored in the art property of each MediaRecord
-export interface MediaRecordArt {
-    thumbnail : string;
-    poster : string;
-    background : string;
-    banner : string;
-}
-
-export interface TvSeasonMediaRecordArt extends MediaRecordArt {
-    tvshow : MediaRecordArt;
-}
-
-export interface PlayableQualityRecord {
-    source : string;
-    resolution : string;
-    releaseGroup : string;
-    codec : string;
-}
-
-export interface EntityRecord {
-    id ?: string;
-    internalId : string;
-    scraper : string;
-    external : ExternalReferences;
-    createdAt : Date;
-    updatedAt : Date;
-}
-
-export interface PersonRecord {
-    id ?: string;
-    name : string;
-    art : MediaRecordArt;
-    biography ?: null;
-    birthday ?: Date;
-    deathday ?: Date;
-    naturalFrom ?: string;
-
-    // Foreign Relation
-    cast ?: MediaCastRecord;
-}
+import type { PersonRecord } from './Database/Tables/PeopleTable';
+export type { PersonRecord } from './Database/Tables/PeopleTable';
 
 export interface RoleRecord extends PersonRecord {
     role : string;
@@ -88,90 +34,26 @@ export interface RoleRecord extends PersonRecord {
     internalId : string;
 }
 
-export interface MediaCastRecord extends EntityRecord {
-    mediaKind : MediaKind;
-    mediaId : string;
-    personId : string;
-    role : string;
-    order : number;
-    appearences ?: number;
-    createdAt : Date;
-    updatedAt : Date;
+import { MediaCastRecord } from './Database/Tables/MediaCastTable';
+export { MediaCastRecord };
 
-    person ?: PersonRecord;
-    record ?: MediaRecord;
-}
+import { MediaRecord, PlayableMediaRecord, MediaRecordArt } from './Database/Tables/AbstractMediaTable';
+export { MediaRecord, PlayableMediaRecord, MediaRecordArt };
 
-export interface MediaRecord extends EntityRecord {
-    art : MediaRecordArt;
-    repository ?: string;
-    repositoryPaths ?: string[];
-    kind : MediaKind;
-    title : string;
-    transient ?: boolean;
-    playCount : number;
-    lastPlayedAt : Date | null;
-}
+import { MovieMediaRecord } from './Database/Tables/MoviesMediaTable';
+export { MovieMediaRecord };
 
-export interface PlayableMediaRecord extends MediaRecord {
-    runtime : number;
-    sources : MediaSourceDetails[];
-    quality : PlayableQualityRecord;
-    watched : boolean;
-    addedAt : Date;
-}
+import { TvShowMediaRecord } from './Database/Tables/TvShowsMediaTable';
+export { TvShowMediaRecord };
 
-export interface MovieMediaRecord extends PlayableMediaRecord {
-    kind : MediaKind.Movie;
-    rating : number;
-    genres : string[];
-    trailer : string;
-    parentalRating : string;
-    plot : string;
-    year : number;
-    tagline : string;
-}
+import { TvSeasonMediaRecord } from './Database/Tables/TvSeasonsMediaTable';
+export { TvSeasonMediaRecord };
 
-export interface TvShowMediaRecord extends MediaRecord {
-    kind : MediaKind.TvShow;
-    episodesCount : number;
-    genres : string[];
-    plot : string;
-    parentalRating : string;
-    rating : number;
-    seasonsCount : number;
-    year : number;
-    watchedEpisodesCount : number;
-    watched : boolean;
-    addedAt : Date;
-}
+import { TvEpisodeMediaRecord } from './Database/Tables/TvEpisodesMediaTable';
+export { TvEpisodeMediaRecord };
 
-export interface TvSeasonMediaRecord extends MediaRecord {
-    kind : MediaKind.TvSeason;
-    art : TvSeasonMediaRecordArt;
-    number : number;
-    tvShowId : string;
-    episodesCount : number;
-    watchedEpisodesCount : number;
-}
-
-export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
-    art: TvSeasonMediaRecordArt,
-    kind : MediaKind.TvEpisode;
-    number : number;
-    seasonNumber : number;   
-    tvSeasonId : string;
-    rating : number;
-    plot : string;
-    airedAt : Date;
-}
-
-export interface CustomMediaRecord extends PlayableMediaRecord {
-    kind: MediaKind.Custom;
-    subtitle ?: string;
-    plot ?: string;
-}
-
+import { CustomMediaRecord } from './Database/Tables/CustomMediaTable';
+export { CustomMediaRecord };
 
 
 // Utility types and functions

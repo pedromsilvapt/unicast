@@ -1,10 +1,9 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
 import { groupingByMany, collect, first, groupingBy } from 'data-collectors';
-import { Database, MediaTable } from '../Database/Database';
+import { AbstractMediaTable, Database, MediaTable } from '../Database/Database';
 import { AsyncStream } from 'data-async-iterators';
 import { ExternalReferences, MediaRecord, MediaKind } from '../MediaRecord';
 import * as chalk from 'chalk';
-import { CollectionsJournalAction } from '../Journal';
 
 export interface CollectionsSyncOptions {
     target : string;
@@ -53,7 +52,7 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
                     if ( !options.dryRun ) {
                         await targetdb.tables.collections.delete( collection.id );
 
-                        await targetdb.tables.collectionsMedia.deleteMany( { collectionId: collection.id } );
+                        await targetdb.tables.collectionsMedia.deleteMany( q => q.where( { collectionId: collection.id } ) );
                     }
                 }
             },
@@ -110,7 +109,7 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
             .collect( groupingBy( col => col.title, first() ) );
 
         const externalRecordsTable = await AsyncStream
-            .from<MediaTable<MediaRecord>>( [ targetdb.tables.movies, targetdb.tables.shows ] )
+            .from<AbstractMediaTable<MediaRecord>>( [ targetdb.tables.movies, targetdb.tables.shows ] )
             .flatMap( t => t.findStream() )
             .collect( groupingBy( rec => rec.kind, groupingByMany( rec => externalKeys( rec.external ) ) ) );
 
@@ -151,7 +150,7 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
                                 createdAt: collection.createdAt,
                                 mediaId: record.id,
                                 mediaKind: record.kind
-                            }, { durability: "soft" } );
+                            } );
                         }
                     }
                 }
@@ -168,11 +167,11 @@ export class CollectionsSyncTool extends Tool<CollectionsSyncOptions> {
                         logger.info( chalk.red( 'REMOVE ' ) + record.kind + ' ' + record.title + chalk.grey( ' in ' ) + collection.collection.title );
 
                         if ( !options.dryRun ) {
-                            await targetdb.tables.collectionsMedia.deleteMany( {
+                            await targetdb.tables.collectionsMedia.deleteMany( q => q.where( {
                                 collectionId: externalCollectionsTable.get( collection.collection.title ).id,
                                 mediaId: record.id,
                                 mediaKind: record.kind
-                            }, null, { durability: "soft" } );
+                            } ) );
                         }
                     }
                 }

@@ -1,7 +1,7 @@
 import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord, isTvEpisodeRecord, isTvSeasonRecord, isMovieRecord, isTvShowRecord, isCustomRecord } from "./MediaRecord";
-import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable } from "./Database/Database";
+import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable, AbstractMediaTable } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
@@ -19,7 +19,7 @@ import { ArtworkCache } from "./ArtworkCache";
 import { TriggerDb } from "./TriggerDb";
 import { SubtitlesManager } from "./Subtitles/SubtitlesManager";
 import { Hookable, Hook } from "./Hookable";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import * as itt from 'itt';
 import { ReadWriteSemaphore, Semaphore } from "data-semaphore";
 import { MediaStreamType } from "./MediaProviders/MediaStreams/MediaStream";
@@ -43,6 +43,8 @@ import * as crypto from 'crypto';
 import { collect, first, groupingBy } from 'data-collectors';
 import * as schema from '@gallant/schema';
 import { BaseUrl } from './ES2017/BaseUrl';
+import { QueryOptions } from './Database/Tables/BaseTable';
+import { queryParser } from './ES2017/QueryParser';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -201,7 +203,7 @@ export class UnicastServer {
         this.http.pre( cors.preflight );
         this.http.use( cors.actual );
 
-        this.http.use( restify.plugins.queryParser() );
+        this.http.use( queryParser( { allowSparse: true } ) );
         this.http.use( restify.plugins.bodyParser() );
         this.http.use( ( req: restify.Request, res: restify.Response, next: restify.Next ) => {
             try {
@@ -462,7 +464,7 @@ export class MediaManager {
         this.userRanks = new MediaUserRanks( this );
     }
 
-    getTable ( kind : MediaKind ) : MediaTable<MediaRecord> {
+    getTable ( kind : MediaKind ) : AbstractMediaTable<MediaRecord> {
         const tables = this.server.database.tables;
 
         switch ( kind ) {
@@ -495,7 +497,7 @@ export class MediaManager {
     get ( kind : MediaKind.Custom, id : string ) : Promise<CustomMediaRecord>;
     get<R extends MediaRecord = MediaRecord> ( kind : MediaKind, id : string ) : Promise<R>;
     get<R extends MediaRecord = MediaRecord> ( kind : MediaKind, id : string ) : Promise<R> {
-        let table : BaseTable<R> = this.getTable( kind ) as MediaTable<R>;
+        let table : BaseTable<R> = this.getTable( kind ) as AbstractMediaTable<R>;
 
         return table.get( id );
     }
@@ -531,7 +533,7 @@ export class MediaManager {
     }
 
     async getSeason ( show : string, season : number ) : Promise<TvSeasonMediaRecord> {
-        const seasons = await this.database.tables.seasons.find( query => query.filter( {
+        const seasons = await this.database.tables.seasons.find( query => query.where( {
             tvShowId: show,
             number: season
         } ).limit( 1 ) );
@@ -544,13 +546,13 @@ export class MediaManager {
     }
 
     async getSeasons ( show : string ) : Promise<TvSeasonMediaRecord[]> {
-        return await this.database.tables.seasons.find( query => query.filter( {
+        return await this.database.tables.seasons.find( query => query.where( {
             tvShowId: show
         } ) );
     }
 
     async getSeasonEpisode ( season : string, episode : number ) : Promise<TvEpisodeMediaRecord> {
-        const episodes = await this.database.tables.episodes.find( query => query.filter( {
+        const episodes = await this.database.tables.episodes.find( query => query.where( {
             tvSeasonId: season,
             number: episode
         } ).limit( 1 ) );
@@ -563,7 +565,7 @@ export class MediaManager {
     }
 
     async getSeasonEpisodes ( season : string ) : Promise<TvEpisodeMediaRecord[]> {
-        return await this.database.tables.episodes.find( query => query.filter( {
+        return await this.database.tables.episodes.find( query => query.where( {
             tvSeasonId: season
         } ) );
     }
@@ -583,7 +585,7 @@ export class MediaManager {
 
         const ids = seasons.map( season => season.id );
 
-        const episodes = await this.database.tables.episodes.find( query => query.filter( doc => r.expr( ids ).contains( ( doc as any )( 'tvSeasonId' ) ) ) );
+        const episodes = await this.database.tables.episodes.find( query => query.whereIn( 'tvSeasonId', ids ) );
 
         const episodesBySeason : Map<number, { season: TvSeasonMediaRecord, episodes: TvEpisodeMediaRecord[] }> = new Map();
 
@@ -666,7 +668,7 @@ export class MediaManager {
 
     async getCollections ( kind : MediaKind, id : string ) : Promise<CollectionRecord[]> {
         const categories = await this.database.tables.collectionsMedia.find( query => {
-            return query.filter( doc => doc( 'mediaKind' ).eq( kind ).and( doc( 'mediaId' ).eq( id ) ) );
+            return query.where( { mediaKind: kind, mediaId: id } );
         } );
 
         const ids = categories.map( r => r.collectionId );
@@ -675,12 +677,12 @@ export class MediaManager {
     }
 
     async getCollectionNamed ( name : string ) : Promise<CollectionRecord> {
-        return this.server.database.tables.collections.findOne( query => query.filter( { title: name } ) );
+        return this.server.database.tables.collections.findOne( query => query.where( { title: name } ) );
     }
 
     async getCollectionItems ( collectionId : string ) : Promise<MediaRecord[]> {
         const items = await this.database.tables.collectionsMedia.find( query => {
-            return query.filter( doc => doc( 'collectionId' ).eq( collectionId ) );
+            return query.where( { collectionId } );
         } );
 
         const ids = items.map<[MediaKind, string]>( r => ( [ r.mediaKind, r.mediaId ] ) );
@@ -732,12 +734,11 @@ export class MediaManager {
         }
 
         if ( itemsToRemove.length > 0 ) {
-            const keys = itemsToRemove.map( record => [ record.kind, record.id ] );
+            const keys = itemsToRemove.map( record => record.id );
 
-            await this.server.database.tables.collectionsMedia.deleteKeys( keys, {
-                index: 'reference',
-                query: query => query.filter( { collectionId } ),
-            } );
+            await this.server.database.tables.collectionsMedia.deleteMany( 
+                query => query.where( { collectionId } ).whereIn( 'mediaId', keys ) 
+            );
         }
     }
 
@@ -758,9 +759,9 @@ export class MediaManager {
 
         // Update related media
         if ( media.kind === MediaKind.TvShow ) {
-            await this.server.database.tables.seasons.updateMany( {
+            await this.server.database.tables.seasons.updateMany( q => q.where( {
                 tvShowId: media.id
-            }, {
+            } ), {
                 art: {
                     tvshow: {
                         [ property ]: url
@@ -769,9 +770,9 @@ export class MediaManager {
             } );
 
             for ( let season of await this.getSeasons( media.id ) ) {
-                await this.server.database.tables.episodes.updateMany( {
+                await this.server.database.tables.episodes.updateMany( q => q.where( {
                     tvSeasonId: season.id
-                }, {
+                } ), {
                     art: {
                         tvshow: {
                             [ property ]: url
@@ -782,7 +783,7 @@ export class MediaManager {
         }
     }
 
-    async updateManyIfChanged<R extends MediaRecord> ( original : R[], changed: R[], options : Partial<r.OperationOptions> = {} ): Promise<R[]> {
+    async updateManyIfChanged<R extends MediaRecord> ( original : R[], changed: R[], options : QueryOptions = {} ): Promise<R[]> {
         if ( original.length === changed.length ) {
             throw new Error(
                 `Update many media: original and changed records should have the same length, ` +
@@ -914,7 +915,7 @@ export class MediaUserRanksList {
             throw new Error(`Invalid record rank: 0`);
         }
 
-        const userRank = await this.mediaManager.database.tables.userRanks.findOne( query => query.filter( {
+        const userRank = await this.mediaManager.database.tables.userRanks.findOne( query => query.where( {
             list: this.id,
             position: rank,
         } ) );
@@ -923,15 +924,16 @@ export class MediaUserRanksList {
             return null;
         }
 
-        const { kind, id } = userRank.reference;
+        const [ kind, id ] = [ userRank.mediaKind, userRank.mediaId ];
 
         return await this.mediaManager.get( kind, id );
     }
 
     public async getRecordRank ( record: MediaRecord ) : Promise<number> {
-        const userRank = await this.mediaManager.database.tables.userRanks.findOne( query => query.filter( {
+        const userRank = await this.mediaManager.database.tables.userRanks.findOne( query => query.where( {
             list: this.id,
-            reference: { kind: record.kind, id: record.id },
+            mediaId: record.id,
+            mediaKind: record.kind,
         } ) );
 
         if ( userRank == null ) {
@@ -952,7 +954,7 @@ export class MediaUserRanksList {
         const max = Math.max( ...ranks );
 
         const records = await this.mediaManager.database.tables.userRanks.find( query => {
-            return query.between( min, max, { index: 'position', rightBound: 'closed' } as any ).filter( { list: this.id } );
+            return query.whereBetween( 'position', [ min, max ] ).andWhere( { list: this.id } );
         } );
 
         return collect( records, groupingBy( rank => rank.position, first() ) );
@@ -960,8 +962,8 @@ export class MediaUserRanksList {
 
     public async getTopRank () : Promise<number> {
         return await this.mediaManager.database.tables.userRanks.findStream( query => {
-            return query.orderBy( { index: r.desc( 'position' ) } )
-                .filter( { list: this.id } )
+            return query.orderBy( 'position', 'desc' )
+                .where( { list: this.id } )
                 .limit( 1 );
         } ).map( row => row.position ).first() ?? 0;
     }
@@ -1047,9 +1049,7 @@ export class MediaUserRanksList {
             const filter = row => row( 'list' ).eq( this.id )
                 .and( row( 'position' ).ge( anchorRank ) );
 
-            const change = {
-                position: r.row( 'position' ).add( zerosCount )
-            };
+            const change = q => q.increment( 'position', zerosCount );
 
             await table.updateMany( filter, change );
 
@@ -1079,10 +1079,15 @@ export class MediaUserRanksList {
             const newPosition = anchorRankNew - index - 1;
 
             if ( oldPosition == 0 ) {
+                const now = new Date();
+                
                 changes.create( {
                     list: this.id,
-                    reference: { kind: record.kind, id: record.id },
+                    mediaKind: record.kind,
+                    mediaId: record.id,
                     position: newPosition,
+                    createdAt: now,
+                    updatedAt: now,
                 } )
             } else {
                 const rank = modifiedRange.get( oldPosition );
@@ -1146,7 +1151,7 @@ export class MediaUserRanksList {
 
     public async getRanks () : Promise<UserRankRecord[]> {
         return await this.mediaManager.server.database.tables.userRanks.find( query => {
-            return query.orderBy( { index: 'position' } );
+            return query.orderBy( 'position' );
         } );
     }
 
@@ -1161,7 +1166,7 @@ export class MediaUserRanksList {
     public async truncate () {
         const table = this.mediaManager.database.tables.userRanks;
 
-        return await table.deleteMany({ list: this.id });
+        return await table.deleteMany( q => q.where( { list: this.id } ) );
     }
 
     public async checkConsistency () {
@@ -1170,7 +1175,7 @@ export class MediaUserRanksList {
         const invalid: number[] = [];
 
         const positions = await this.mediaManager.server.database.tables.userRanks.findStream( query => {
-            return query.orderBy( { index: r.desc( 'position' ) } );
+            return query.orderBy( 'position', 'desc' );
         } );
 
         let lastPosition: number = null;
@@ -1232,9 +1237,7 @@ export class RankChangeSet {
         const updates = Array.from( this.moves ).map( tuple => {
             const [ offset, ids ] = tuple;
 
-            return table.updateMany( doc => r.expr( ids ).contains( doc( 'id' ) ), {
-                position: r.row( 'position' ).add( offset )
-            } );
+            return table.updateMany( q => q.whereIn( 'id', ids ), q => q.increment( 'position', offset ) );
         } );
 
         const inserts = table.createMany( this.creations );
@@ -1279,14 +1282,13 @@ export class MediaWatchTracker {
         } );
     }
 
-    protected async watchTvEpisodesBatch ( customQuery : any, watched : boolean ) : Promise<TvEpisodeMediaRecord[]> {
+    protected async watchTvEpisodesBatch ( customQuery : Knex.QueryCallback, watched : boolean ) : Promise<TvEpisodeMediaRecord[]> {
         const episodes = await this.mediaManager.database.tables.episodes.find( query =>
-            query.filter( doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ) )
+            query.where( customQuery ).andWhere( 'watched', !watched )
         );
 
-        // When watched, only increment the play count of episodes whose play count equals zero
         await this.mediaManager.database.tables.episodes.updateMany(
-            doc => ( r as any ).and( customQuery( doc ), doc( 'watched' ).eq( r.expr( !watched ) ) ),
+            q => q.whereIn( 'id', episodes.map( m => m.id ) ),
             { watched }
         );
 
@@ -1303,7 +1305,7 @@ export class MediaWatchTracker {
 
         try {
             // First, list all seasons belonging to this TV Show
-            const seasons = await this.mediaManager.database.tables.seasons.find( query => query.filter( {
+            const seasons = await this.mediaManager.database.tables.seasons.find( query => query.where( {
                 tvShowId: show.id
             } ) );
 
@@ -1311,7 +1313,7 @@ export class MediaWatchTracker {
             const seasonIds = seasons.map( season => season.id );
 
             // And get all episodes that belong to those seasons and are or are not watched, depending on what change we are making
-            const episodes = await this.watchTvEpisodesBatch( doc => r.expr( seasonIds ).contains( doc( 'tvSeasonId' ) ), watched );
+            const episodes = await this.watchTvEpisodesBatch( q => q.whereIn( 'tvSeasonId', seasonIds ), watched );
 
             for ( let season of seasons ) {
                 await this.mediaManager.database.tables.seasons.update( season.id, {
@@ -1334,7 +1336,7 @@ export class MediaWatchTracker {
         const release = await this.semaphore.acquire();
 
         try {
-            const episodes = await this.watchTvEpisodesBatch( doc => doc( 'tvSeasonId' ).eq( r.expr( season.id ) ), watched );
+            const episodes = await this.watchTvEpisodesBatch( q => q.where( 'tvSeasonId', season.id ), watched );
 
             const difference = ( watched ? season.episodesCount : 0 ) - season.watchedEpisodesCount;
 
@@ -1361,7 +1363,7 @@ export class MediaWatchTracker {
         try {
             episode = await this.mediaManager.database.tables.episodes.get( episode.id );
 
-            if ( !watched && !episode.watched ) {
+            if ( watched == episode.watched ) {
                 return;
             }
 
@@ -1370,22 +1372,29 @@ export class MediaWatchTracker {
             // MARK UNAWAITED
             this.mediaManager.server.repositories.watch( episode, watched );
 
-            const similarEpisodes = await this.mediaManager.database.tables.episodes.find( query => query.filter( {
+            const similarEpisodes = await this.mediaManager.database.tables.episodes.find( query => query.where( {
                 watched: true,
                 tvSeasonId: episode.tvSeasonId,
                 number: episode.number
             } ) );
 
-            if ( ( watched && similarEpisodes.length === 1 ) || ( !watched && similarEpisodes.length === 0 ) ) {
-                await this.mediaManager.database.tables.seasons.update( episode.tvSeasonId, {
-                    watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 )
-                } );
+            // Only update the season and show counters if either:
+            //  - this IS the same version of this episode watched 
+            //  - this WAS the only version of this episode that was watched
+            if ( ( watched && similarEpisodes.length === 0 ) || ( !watched && similarEpisodes.length === 1 ) ) {
+                const offset = watched ? 1 : -1;
+                
+                await this.mediaManager.database.tables.seasons.update( episode.tvSeasonId, q => q.increment( 'watchedEpisodesCount', offset ) );
 
                 const season = await this.mediaManager.database.tables.seasons.get( episode.tvSeasonId );
+                
+                const show = await this.mediaManager.database.tables.shows.get( season.tvShowId );
 
-                await this.mediaManager.database.tables.shows.update( season.tvShowId, {
-                    watchedEpisodesCount: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 ),
-                    watched: r.row( 'watchedEpisodesCount' ).add( watched ? 1 : -1 ).eq( r.row( 'episodesCount' ) ),
+                const newWatchedCount = show.watchedEpisodesCount + offset;
+                
+                await this.mediaManager.database.tables.shows.updateIfChanged( show, {
+                    watchedEpisodesCount: newWatchedCount,
+                    watched: newWatchedCount >= show.episodesCount,
                 } );
             }
         } catch ( err ) {
@@ -1448,15 +1457,13 @@ export class MediaWatchTracker {
         }
     }
 
-    protected async onPlaySingle<T extends PlayableMediaRecord> ( table : MediaTable<T>, record : T, playDate: Date = new Date() ) : Promise<T> {
+    protected async onPlaySingle<T extends PlayableMediaRecord> ( table : AbstractMediaTable<T>, record : T, playDate: Date = new Date() ) : Promise<T> {
         // Make sure we have the most recent information regarding this media record
         record = await table.get( record.id );
 
         const lastPlayedAt = max( record.lastPlayedAt, playDate );
 
-        await table.update( record.id, {
-            lastPlayedAt, playCount: r.row( 'playCount' ).add( 1 )
-        } );
+        await table.update( record.id, q => q.update( { lastPlayedAt } ).increment( 'playCount', 1 ) );
 
         record.lastPlayedAt = lastPlayedAt;
         record.playCount = ( record.playCount ?? 0 ) + 1;
@@ -1464,7 +1471,7 @@ export class MediaWatchTracker {
         return record;
     }
 
-    public async onPlayContainerChanges<P extends MediaRecord, C extends MediaRecord> ( table : MediaTable<P>, parent : P, relation : Relation<P, C[]> | C[] ) : Promise<Partial<MediaRecord>> {
+    public async onPlayContainerChanges<P extends MediaRecord, C extends MediaRecord> ( table : AbstractMediaTable<P>, parent : P, relation : Relation<P, C[]> | C[] ) : Promise<Partial<MediaRecord>> {
         parent = await table.get( parent.id );
 
         const allChildren = relation instanceof Relation
@@ -1480,7 +1487,7 @@ export class MediaWatchTracker {
         return { lastPlayedAt, playCount };
     }
 
-    protected async onPlayContainer<P extends MediaRecord, C extends MediaRecord> ( table : MediaTable<P>, parent : P, relation : Relation<P, C[]> ) : Promise<P> {
+    protected async onPlayContainer<P extends MediaRecord, C extends MediaRecord> ( table : AbstractMediaTable<P>, parent : P, relation : Relation<P, C[]> ) : Promise<P> {
         const changes = await this.onPlayContainerChanges( table, parent, relation );
 
         await table.update( parent.id, changes );
@@ -1555,11 +1562,9 @@ export class MediaWatchTracker {
     }
 
     /* On Play Repair */
-    public async onPlayRepairSingleChanges<T extends MediaRecord> ( table : MediaTable<T>, record : T ) : Promise<Partial<MediaRecord>> {
-        record = await table.get( record.id );
-
-        let recordSessions = await this.mediaManager.database.tables.history.findAll(
-            [ [ record.kind, record.id ] ], { index: 'reference' }
+    public async onPlayRepairSingleChanges<T extends MediaRecord> ( table : AbstractMediaTable<T>, record : T ) : Promise<Partial<MediaRecord>> {
+        let recordSessions = await this.mediaManager.database.tables.history.find(
+            q => q.where( 'mediaKind', record.kind ).andWhere( 'mediaId', record.id )
         );
 
         recordSessions = recordSessions.filter( session => !this.excludedReceivers.has( session.receiver ) );
@@ -1571,7 +1576,7 @@ export class MediaWatchTracker {
         return { lastPlayedAt, playCount };
     }
 
-    protected async onPlayRepairSingle<T extends PlayableMediaRecord> ( table : MediaTable<T>, record : T ) : Promise<T> {
+    protected async onPlayRepairSingle<T extends PlayableMediaRecord> ( table : AbstractMediaTable<T>, record : T ) : Promise<T> {
         const changes = await this.onPlayRepairSingleChanges( table, record );
 
         await table.update( record.id, changes );
@@ -1579,6 +1584,20 @@ export class MediaWatchTracker {
         Object.assign( record, changes );
 
         return record;
+    }
+
+    public async onPlayRepairContainerChanges<P extends MediaRecord, C extends MediaRecord> ( table : AbstractMediaTable<P>, parent : P, relation : Relation<P, C[]> | C[] ) : Promise<Partial<MediaRecord>> {
+        const allChildren = relation instanceof Relation
+            ? await relation.load( parent )
+            : relation;
+
+        const lastPlayedAt = allChildren.reduce( ( date, record ) => max( date, record.lastPlayedAt ), null as Date );
+
+        const defaultPlayCount = allChildren.length > 0 ? allChildren[ 0 ].playCount : 0;
+
+        const playCount = allChildren.reduce( ( count, record ) => Math.min( count, record.playCount ?? 0 ), defaultPlayCount );
+
+        return { lastPlayedAt, playCount };
     }
 
     public async onPlayRepairMovie ( movie : MovieMediaRecord ) {
@@ -1708,9 +1727,9 @@ export class MediaWatchTracker {
         if ( isMovieRecord( media ) ) {
             return this.onPlayRepairSingleChanges( tables.movies, media );
         } else if ( isTvShowRecord( media ) ) {
-            return this.onPlayContainerChanges( tables.shows, media, context.seasons ?? tables.shows.relations.seasons );
+            return this.onPlayRepairContainerChanges( tables.shows, media, context.seasons ?? tables.shows.relations.seasons );
         } else if ( isTvSeasonRecord( media ) ) {
-            return this.onPlayContainerChanges( tables.seasons, media, context.episodes ?? tables.seasons.relations.episodes );
+            return this.onPlayRepairContainerChanges( tables.seasons, media, context.episodes ?? tables.seasons.relations.episodes );
         } else if ( isTvEpisodeRecord( media ) ) {
             return this.onPlayRepairSingleChanges( tables.episodes, media );
         } else if ( isCustomRecord( media ) ) {

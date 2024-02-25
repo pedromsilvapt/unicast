@@ -1,9 +1,8 @@
-import { JobRecord, PersistentQueueTable } from "./Database/Database";
+import { JobRecord, JobsQueueTable } from "./Database/Database";
 import { UnicastServer } from "./UnicastServer";
-import { Sequence } from 'rethinkdb';
 import { AsyncInterval, setAsyncInterval, clearAsyncInterval } from "./ES2017/AsyncInterval";
 import { Semaphore } from "data-semaphore";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { addMilliseconds, isBefore } from 'date-fns';
 import * as sortBy from 'sort-by';
 import { Logger } from 'clui-logger';
@@ -41,7 +40,7 @@ export class PersistentQueue<P> {
         }
     }
 
-    protected get table () : PersistentQueueTable<JobRecord<P>> {
+    protected get table () : JobsQueueTable {
         return this.server.database.tables.jobsQueue;
     }
 
@@ -67,10 +66,10 @@ export class PersistentQueue<P> {
         return job;
     }
 
-    async find ( query ?: ( query : Sequence ) => Sequence ) : Promise<JobRecord<P>[]> {
+    async find ( query ?: ( query : Knex.QueryBuilder ) => Knex.QueryBuilder ) : Promise<JobRecord<P>[]> {
         return this.table.find( q => {
             if ( this.action ) {
-                q = q.filter( { action: this.action } );
+                q = q.where( { action: this.action } );
             }
 
             if ( query ) {
@@ -115,7 +114,7 @@ export class PersistentQueue<P> {
             
             this.logger.debug( `Deleting outdated ${ replaced.length } jobs.`, replacedIds );
 
-            await this.table.deleteMany( doc => r.expr( replacedIds ).contains( doc( "id" ) ) );
+            await this.table.deleteMany( q => q.whereIn( 'id', replacedIds ) );
         }
 
         const record = await this.table.create( job );

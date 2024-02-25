@@ -1,11 +1,7 @@
 import { StorageTable, StorageRecord } from './Database/Database';
 import { UnicastServer } from './UnicastServer';
-import * as r from 'rethinkdb';
 import { SemaphorePool } from 'data-semaphore';
-
-function escapeRegExp ( string ) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
-}
+import { Knex } from 'knex';
 
 export class DataStore {
     server : UnicastServer;
@@ -21,31 +17,26 @@ export class DataStore {
         this.semaphore = new SemaphorePool( 1, true );
     }
 
-    protected async getStorageRecord<V = any> ( key : string, query ?: (query: r.Sequence) => r.Sequence ) : Promise<StorageRecord<V>> {
-        const results = await this.table.findAll( [ key ], { index: 'key', query } );
-
-        if ( results.length == 0 ) {
-            return null;
-        }
-
-        return results[ 0 ];
+    protected async getStorageRecord<V = any> ( key : string, query ?: (query: Knex.QueryBuilder) => Knex.QueryBuilder ) : Promise<StorageRecord<V>> {
+        return query
+            ? await this.table.findOne( q => query( q.where( 'key', key ) ) )
+            : await this.table.findOne( q => q.where( 'key', key ) );
     }
 
     async list ( options : DataStoreListOptions = {} ) : Promise<StorageRecord[]> {
-        let query : ( query : r.Sequence ) => r.Sequence;
-
-        if ( options.prefix ) {
-            query = q => q.filter( ( r.row( 'key' ) as any ).match("^" + escapeRegExp( options.prefix ) ) );
-        }
-
-        if ( options.tags && options.tags.length > 0 ) {
-            return await this.table.findAll( options.tags, { index: 'tags', query: query } );
-        } else {
-            return await this.table.find( query );
-        }
+        return await this.table.find( q => {
+            if ( options.prefix ) {
+                q = q.whereLike( 'key',  options.prefix + '%' );
+            }
+            if ( options.tags && options.tags.length > 0 ) {
+                q = q.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.tags)` ).whereIn( 'value', options.tags ) );
+            }
+            
+            return q;
+        } );
     }
 
-    async get<V = any> ( key : string, query ?: (query: r.Sequence) => r.Sequence ) : Promise<StorageRecord<V>> {
+    async get<V = any> ( key : string, query ?: (query: Knex.QueryBuilder) => Knex.QueryBuilder ) : Promise<StorageRecord<V>> {
         return await this.getStorageRecord<V>( key, query );
     }
 
@@ -72,7 +63,7 @@ export class DataStore {
             } );
         } else {
             return await this.table.update( record.id, {
-                value: ( r as any ).literal( value ),
+                value: value,
                 updatedAt: now,
                 ...( tags ? { tags } : {} )
             } );
@@ -120,17 +111,19 @@ export class DataStore {
         try {
             const now = new Date();
     
-            // Create a copy object with only the "indexBy" keys
-            const indexQuery: Partial<T> = {};
-            for ( const indexKey of indexBy ) {
-                indexQuery[ indexKey ] = object[ indexKey ];
-            }
+            // Create a predicate function for the indexed keys
+            const indexQuery : (obj : T) => boolean = obj => {
+                for ( const indexKey of indexBy ) {
+                    if ( obj[ indexKey ] != object[ indexKey ] ) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            };
     
             // See if there is any record for this key on the datastore
-            const record = await this.get<T[]>( key, query => query.map( row => ( {
-                id: row( 'id' ),
-                value: ( row( 'value' ) as any ).coerceTo('array').filter( indexQuery ),
-            } ) as any ) );
+            const record = await this.get<T[]>( key );
     
             if ( record == null ) {
                 await this.store( key, [ object ] );
@@ -138,12 +131,17 @@ export class DataStore {
                 return true;
             } else {
                 if ( record.value.length == 0 ) {
-                    await this.table.update( record.id, {
-                        value: r.row( 'value' ).append( object as any ),
-                        updatedAt: now,
-                    } );
-    
-                    return true;
+                    const elementIndex = record.value.findIndex( obj => indexQuery( obj ) );
+                    
+                    if ( elementIndex <= 0 ) {
+                        record.value.push( object );
+                        
+                        await this.table.update( record.id, { value: record.value, updatedAt: now } );
+                        
+                        return true;
+                    }
+                    
+                    return false;
                 } else {
                     return false;
                 }
@@ -159,44 +157,38 @@ export class DataStore {
         try {
             const now = new Date();
 
-            // Create a copy object with only the "indexBy" keys
-            const indexQuery: Partial<T> = {};
-            for ( const indexKey of indexBy ) {
-                indexQuery[ indexKey ] = object[ indexKey ];
-            }
-
+            // Create a predicate function for the indexed keys
+            const indexQuery : (obj : T) => boolean = obj => {
+                for ( const indexKey of indexBy ) {
+                    if ( obj[ indexKey ] != object[ indexKey ] ) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            };
+            
             // See if there is any record for this key on the datastore
-            const record = await this.get<T[]>( key, query => query.map( row => ( {
-                id: row( 'id' ),
-                value: ( row( 'value' ) as any ).coerceTo('array').filter( indexQuery ),
-            } ) as any ) );
+            // const record = await this.get<StorageRecord<T[]>>( key )
+            const record = await this.get<T[]>( key );
 
             // If no key exists, great, nothing to remove
             if ( record == null ) {
                 return false;
             } else {
-                // If the set exists but does not contain the object, great, nothing to remove
+                // If the set is empty, great, nothing to remove
                 if ( record.value.length == 0 ) {
                     return false;
                 } else {
-                    await this.table.update( record.id, {
-                        value: ( r.row( 'value' ) as any ).filter( item => {
-                            let query: any = null;
-
-                            for ( const indexKey of indexBy ) {
-                                if ( query == null ) {
-                                    query = item( indexKey ).ne( object[ indexKey ] );
-                                } else {
-                                    query = query.and( item( indexKey ).ne( object[ indexKey ] ) );
-                                }
-                            }
-
-                            return query;
-                        } ).coerceTo( 'array' ),
-                        updatedAt: now,
-                    } );
-
-                    return true;
+                    const newValue = record.value.filter( obj => !indexQuery( obj ) );
+                    
+                    if ( newValue.length != record.value.length ) {
+                        await this.table.update( record.id, { value: newValue, updatedAt: now } );
+                        
+                        return true;
+                    }
+                    
+                    return false;
                 }
             }
         } finally {

@@ -4,8 +4,6 @@ import * as itt from 'itt';
 import { Relatable } from '../RelationGraph';
 
 export class BelongsToOnePolyRelation<M extends TableRecord, R extends TableRecord, E = {}> extends PolyRelation<M, R, R, E> {
-    typesMap : PolyRelationMap<R>;
-
     foreignType : PropertyAccessor<M, string>;
 
     foreignKey : PropertyAccessor<M, string>;

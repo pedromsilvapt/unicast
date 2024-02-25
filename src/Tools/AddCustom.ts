@@ -3,7 +3,6 @@ import { MediaKind, AllMediaKinds, PlayableQualityRecord, MediaRecordArt } from 
 import * as parseTorrentName from 'parse-torrent-name';
 import { MediaTools } from "../MediaTools";
 import * as path from 'path';
-import * as r from 'rethinkdb';
 
 export enum AddCustomTarget {
     History = 'history',
@@ -53,7 +52,7 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
     
     async getNewestPlaylist ( device : string ) : Promise<string> {
         const playlist = await this.server.database.tables.playlists.findOne( query => {
-            return query.orderBy( { index: r.desc( 'createdAt' ) } ).filter( { device: device } ).limit( 1 );
+            return query.orderBy( 'createdAt', 'desc' ).where( { device: device } ).limit( 1 );
         } );
 
         if ( !playlist ) {
@@ -182,9 +181,20 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
                 throw new Error( `No playlist with id ${ playlistId } was found.` );
             }
 
-            playlist.references.push( { kind: MediaKind.Custom, id: record.id } );
+            const items = await this.server.database.tables.playlistsMedia.find( q => q.where( 'playlistId', playlist.id ) );
+            
+            let order = 0;
+            
+            if ( items.length > 0 ) {
+                order = Math.max( ...items.map( i => i.order ) ) + 1;
+            }
 
-            await this.server.database.tables.playlists.update( playlist.id, playlist );
+            await this.server.database.tables.playlistsMedia.create( { 
+                playlistId: playlist.id,
+                mediaKind: MediaKind.Custom, 
+                mediaId: record.id,
+                order: order,
+            } );
 
             this.log( 'Added media record to playlist', playlistId );
         }

@@ -66,7 +66,7 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
 
         this.driver.setSegmentLocationPrefix( url );
 
-        const record = await this.storage.server.media.get( this.session.reference.kind, this.session.reference.id );
+        const record = await this.storage.server.media.get( this.session.mediaKind, this.session.mediaId );
 
         this.task = new FFmpegHlsTranscodingTask( record, this.inputStream, this.driver, this.folder );
 

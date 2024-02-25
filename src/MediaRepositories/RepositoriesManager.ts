@@ -56,13 +56,11 @@ export class MediaRepositoryPersistentQueue extends PersistentQueue<MediaReposit
     maxTries : number = 4;
 
     async findReplaced ( job : JobRecord<MediaRepositoryItemUpdate> ) : Promise<JobRecord<MediaRepositoryItemUpdate>[]> {
-        return this.find( query => query.filter( {
-            payload: {
-                id: job.payload.id,
-                kind: job.payload.kind,
-                repository: job.payload.repository
-            }
-        } ) );
+        return this.find( query => query
+            .whereJsonPath( 'payload', '$.id', '=', job.payload.id )
+            .whereJsonPath( 'payload', '$.kind', '=', job.payload.kind )
+            .whereJsonPath( 'payload', '$.repository', '=', job.payload.repository )
+        );
     }
 
     async canRun ( jobs : JobRecord<MediaRepositoryItemUpdate>[] ) : Promise<boolean> {
