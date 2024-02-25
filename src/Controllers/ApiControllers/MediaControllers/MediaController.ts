@@ -1,14 +1,14 @@
 import { BaseTableController, RequestQuery } from "../../BaseTableController";
 import { Request, Response } from "restify";
-import * as r from 'rethinkdb';
 import { MediaRecord, ArtRecord, isPlayableRecord, PersonRecord } from "../../../MediaRecord";
 import { Route } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
-import { MediaTable } from "../../../Database/Database";
+import { AbstractMediaTable } from "../../../Database/Database";
 import { ResourceNotFoundError, InvalidArgumentError } from 'restify-errors';
 import { MediaRecordQuerySemantics, QueryAst, QueryLang, QuerySemantics } from '../../../QueryLang';
+import { Knex } from 'knex';
 
-export abstract class MediaTableController<R extends MediaRecord, T extends MediaTable<R> = MediaTable<R>> extends BaseTableController<R, T> {
+export abstract class MediaTableController<R extends MediaRecord, T extends AbstractMediaTable<R> = AbstractMediaTable<R>> extends BaseTableController<R, T> {
     createCustomQuerySemantics ( req: Request, ast : QueryAst ) : QuerySemantics<R> {
         const semantics = new MediaRecordQuerySemantics();
 
@@ -24,169 +24,133 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Medi
     }
 
     async runCustomQuery ( req: Request, records: R[] ) : Promise<R[]> {
-        const query: RequestQuery<R> = req.query;
-
-        const semantics = query?.search?.embeddedQuerySemantics as MediaRecordQuerySemantics<R>;
-
-        if ( semantics != null ) {
-            if ( semantics.features.collection ) {
-                await this.table.relations.collections.applyAll( records );
-            }
-            
-            if ( semantics.features.cast ) {
-                await this.table.relations.cast.applyAll( records );
-            }
-        }
-        
         await this.table.relations.collections.applyAll( records );
 
         return super.runCustomQuery( req, records );
     }
 
-    getQueryCustomOrder ( query: r.Sequence, field: string, direction: 'asc' |  'desc', list: string ) : r.Sequence {
+    getQueryCustomOrder ( query: Knex.QueryBuilder, field: string, direction: 'asc' |  'desc', list: string ) : Knex.QueryBuilder {
         if ( field === '$userRank' ) {
             const userRanksTable = this.server.database.tables.userRanks;
             
-            const kind = this.server.media.getKind( this.table );
-
-            let itemsInListQuery: r.Sequence = userRanksTable.query();
-
-            // Direction in intentionally reversed because for user ranks, by convention, we
+            // Direction is intentionally reversed because for user ranks, by convention, we
             // decided that the first is the one with the bigger $userRank
             if ( direction === 'desc' ) {
-                itemsInListQuery = itemsInListQuery.orderBy( { index: r.asc( 'position' ) } );
+                query = query.orderByRaw( `IFNULL(${ userRanksTable.tableName }.position, 0) ASC` );
             } else {
-                itemsInListQuery = itemsInListQuery.orderBy( { index: r.desc( 'position' ) } );
+                query = query.orderByRaw( `IFNULL(${ userRanksTable.tableName }.position, 0) DESC` );
             }
 
-            itemsInListQuery = itemsInListQuery
-                .filter( { list, reference: { kind } } )
-                // Join the media records
-                .concatMap( userRank => { 
-                    return this.table.query()
-                          .getAll( userRank('reference')('id') )
-                          .map( media => media.merge( { $userRank: userRank('position') } as any ) as any ) as any;
-                } );
-
-            let itemsNotInListQuery = query.orderBy( { index: this.defaultSortField } ).concatMap( media => {
-                return (userRanksTable.query()
-                    .getAll( [ kind, media("id") ] as any, { index: "reference" } )
-                    .filter( { list } ) as any )
-                    .isEmpty().branch(
-                        [ media.merge( { $userRank: 0 } as any ) ] as any,
-                        []
-                    );
-            } );
-
-            // Direction reversed here too, same reason as above
-            const interleave = direction === 'desc' ? r.asc( '$userRank' ) : r.desc( '$userRank' );
-            
-            return ( itemsInListQuery.union as any )( itemsNotInListQuery, { interleave } );
+            query = query
+                .leftJoin(
+                    userRanksTable.tableName,
+                    join => join.on(this.table.tableName + '.id', '=', userRanksTable.tableName + '.mediaId')
+                        .andOn(this.table.tableName + '.kind', '=', userRanksTable.tableName + '.mediaKind')
+                        .andOnVal(userRanksTable.tableName + '.list', '=', list)
+                )
+                .select(this.table.tableName + '.*', this.table.raw(`IFNULL(${ userRanksTable.tableName }.position, 0) AS "$userRank"`))
+            return query;
+        } else {
+            throw new InvalidArgumentError( `Custom ordering not supported for field '${ field }', only supported for '$userRank'.` );
         }
     }
 
-    getTransientQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+    getTransientQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( req.query.transient == 'include' ) {
-            return ( query.filter as any )( doc => doc( 'transient' ).eq( true ), { default: true } );
+            return query.where( { transient: true } );
         } else if ( req.query.transient == 'exclude' || !req.query.transient ) {
-            return ( query.filter as any )( doc => doc( 'transient' ).eq( false ), { default: true } );
+            return query.where( { transient: false } );
         } else {
             return query;
         }
     }
 
-    getWatchedQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+    getSampleQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
+        if ( req.query.sample ) {
+            return query.whereIn( 'id', query.clone().select('id').clearOrder().orderByRaw( 'RANDOM()' ).limit( req.query.sample ) );
+        } else {
+            return query;
+        }
+    }
+
+    getWatchedQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( req.query.filterWatched === 'include' ) {
-            query = query.filter( { watched: true } );
+            query = query.where( { watched: true } );
         } else if ( req.query.filterWatched === 'exclude' ) {
-            query = query.filter( { watched: false } );
+            query = query.where( { watched: false } );
         }
 
         return query;
     }
 
-    getRepositoryPathsQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+    getRepositoryPathsQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( typeof req.query.filterRepositories === 'object' ) {
             const repos = Object.keys( req.query.filterRepositories );
 
             const included = repos.filter( genre => req.query.filterRepositories[ genre ] === 'include' );
             const excluded = repos.filter( genre => req.query.filterRepositories[ genre ] === 'exclude' );
 
-            if ( included.length > 0 || excluded.length > 0 ) {
-                query = query.filter( ( doc ) => {
-                    if ( included.length > 0 && excluded.length > 0 ) {
-                        return ( doc( "repositoryPaths" ) as any ).setIntersection( included ).isEmpty().not().and(
-                            ( doc( "repositoryPaths" ) as any ).setIntersection( excluded ).isEmpty()
-                        );
-                    } else if ( included.length > 0 ) {
-                        return ( doc( "repositoryPaths" ) as any ).setIntersection( included ).isEmpty().not();
-                    } else if ( excluded.length > 0 ) {
-                        return ( doc( "repositoryPaths" ) as any ).setIntersection( excluded ).isEmpty();
-                    }
-                } );
+            if ( included.length > 0 ) {
+                query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.repositoryPaths)` ).whereIn( 'value', included ) );
+            }
+            
+            if ( excluded.length > 0 ) {
+                query = query.whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.repositoryPaths)` ).whereIn( 'value', excluded ) );
             }
         }
 
         return query;
     }
 
-    getGenresQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+    getGenresQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( typeof req.query.filterGenres === 'object' ) {
             const genres = Object.keys( req.query.filterGenres );
 
             const included = genres.filter( genre => req.query.filterGenres[ genre ] === 'include' );
             const excluded = genres.filter( genre => req.query.filterGenres[ genre ] === 'exclude' );
 
-            if ( included.length > 0 || excluded.length > 0 ) {
-                query = query.filter( ( doc ) => {
-                    if ( included.length > 0 && excluded.length > 0 ) {
-                        return ( doc( "genres" ) as any ).setIntersection( included ).isEmpty().not().and(
-                            ( doc( "genres" ) as any ).setIntersection( excluded ).isEmpty()
-                        );
-                    } else if ( included.length > 0 ) {
-                        return ( doc( "genres" ) as any ).setIntersection( included ).isEmpty().not();
-                    } else if ( excluded.length > 0 ) {
-                        return ( doc( "genres" ) as any ).setIntersection( excluded ).isEmpty();
-                    }
-                } );
+            if ( included.length > 0 ) {
+                query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.genres)` ).whereIn( 'value', included ) );
+            }
+            
+            if ( excluded.length > 0 ) {
+                query = query.whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.genres)` ).whereIn( 'value', excluded ) );
             }
         }
 
         return query;
     }
 
-    getCollectionsQuery ( req : Request, query : r.Sequence ) : r.Sequence {
+    getCollectionsQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( typeof req.query.filterCollections === 'object' ) {
             const collections = Object.keys( req.query.filterCollections );
 
             const included = collections.filter( collection => req.query.filterCollections[ collection ] === 'include' );
             const excluded = collections.filter( collection => req.query.filterCollections[ collection ] === 'exclude' );
 
-            if ( included.length > 0 || excluded.length > 0 ) {
-                query = ( query as any ).merge( ( record ) => {
-                    const collections = ( this.server.database.tables.collectionsMedia.query()
-                        .getAll( [ record( 'kind' ), record( 'id' ) ] as any, { index: 'reference' } )
-                        .map( a => a( 'collectionId' ) ) as any ).coerceTo( 'array' )
-
-                    return { collections };
-                } ).filter( ( doc : any ) => {
-                    if ( included.length > 0 && excluded.length > 0 ) {
-                        return doc( "collections" ).setIntersection( r.expr( included ) ).isEmpty().not().and(
-                            doc( "collections" ).setIntersection( r.expr( excluded ) ).isEmpty()
-                        );
-                    } else if ( excluded.length > 0 ) {
-                        return doc( "collections" ).setIntersection( r.expr( excluded ) ).isEmpty();
-                    } else if ( included.length > 0 ) {
-                        return doc( "collections" ).setIntersection( r.expr( included ) ).isEmpty().not();
-                    }
-                } );
+            if ( included.length > 0 ) {
+                const collectionMedia = this.server.database.tables.collectionsMedia;
+                
+                const includedQuery = collectionMedia.query()
+                    .select( 'mediaId' )
+                    .whereIn( 'collectionId', included )
+                    .whereRaw( `${ this.table.tableName }.id = ${ collectionMedia.tableName }.mediaId` );
+                
+                query = query.whereExists( includedQuery );
+            }
+            
+            if ( excluded.length > 0 ) {
+                const collectionMedia = this.server.database.tables.collectionsMedia;
+                
+                const excludedQuery = collectionMedia.query()
+                    .select( 'mediaId' )
+                    .whereIn( 'collectionId', excluded )
+                    .whereRaw( `${ this.table.tableName }.id = ${ collectionMedia.tableName }.mediaId` );
+                
+                query = query.whereNotExists( excludedQuery );
             }
         }
         
-        if ( req.query.sample ) {
-            query = query.sample( +req.query.sample );
-        }
-
         return query;
     }
 

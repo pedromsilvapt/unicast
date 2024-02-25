@@ -1,7 +1,7 @@
 import { CustomMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database/Database";
+import { AbstractMediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { MediaTableController } from "./MediaController";
 
 export class CustomController extends MediaTableController<CustomMediaRecord> {
@@ -9,15 +9,20 @@ export class CustomController extends MediaTableController<CustomMediaRecord> {
         'title', 'lastPlayedAt', 'addedAt', 'playCount'
     ];
     
-    get table () : MediaTable<CustomMediaRecord> {
+    get table () : AbstractMediaTable<CustomMediaRecord> {
         return this.server.database.tables.custom;
     }
 
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        return this.getTransientQuery( req, 
-                    this.getWatchedQuery( req,
-                    super.getQuery( req, res, query )
-                ) );
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
+        query = super.getQuery( req, res, query );
+        query = this.getWatchedQuery( req, query );
+        query = this.getRepositoryPathsQuery( req, query );
+        query = this.getGenresQuery( req, query );
+        query = this.getCollectionsQuery( req, query );
+        query = this.getTransientQuery( req, query );
+        query = this.getSampleQuery( req, query );
+        
+        return query;
     }
 
     async transformAll ( req : Request, res : Response, items : CustomMediaRecord[] ) : Promise<any[]> {

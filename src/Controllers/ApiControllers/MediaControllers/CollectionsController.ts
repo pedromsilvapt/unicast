@@ -1,15 +1,15 @@
 import { BaseTableController } from "../../BaseTableController";
 import { CollectionRecord, BaseTable, CollectionsTable, TreeIterationOrder } from "../../../Database/Database";
 import { Request, Response } from "restify";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { Route } from "../../BaseController";
 
 export class CollectionsController extends BaseTableController<CollectionRecord> {
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         query = super.getQuery( req, res, query );
 
         if ( req.query.kind ) {
-            query = query.filter( collection => collection( 'kinds' ).contains( req.query.kind ).or( collection( 'kinds' ).contains( 'all' ) ) );
+            query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.kinds)` ).where( 'value', req.query.kind ).orWhere( 'value', 'all' ) );
         }
 
         return query;
@@ -56,11 +56,11 @@ export class CollectionsController extends BaseTableController<CollectionRecord>
         const collections = await this.server.media.getCollections( mediaKind, mediaId );
 
         if ( collections.find( col => col.id == id ) ) {
-            await this.server.database.tables.collectionsMedia.deleteMany( {
+            await this.server.database.tables.collectionsMedia.deleteMany( query => query.andWhere( {
                 collectionId: id,
                 mediaKind: mediaKind,
                 mediaId: mediaId
-            } );
+            } ) );
         }
     }
 
@@ -79,14 +79,14 @@ export class CollectionsController extends BaseTableController<CollectionRecord>
             child.kinds = child.kinds.filter( eachKind => eachKind != kind );
 
             if ( child.kinds.length == 0 ) {
-                await this.server.database.tables.collectionsMedia.deleteMany( { collectionId: child.id } );
+                await this.server.database.tables.collectionsMedia.deleteMany( query => query.andWhere( { collectionId: child.id } ) );
 
                 await this.table.delete( child.id );
             } else {
-                await this.server.database.tables.collectionsMedia.deleteMany( {
+                await this.server.database.tables.collectionsMedia.deleteMany( query => query.andWhere( {
                     collectionId: child.id,
                     mediaKind: kind,
-                } );
+                } ) );
     
                 await this.table.update( child.id, { kinds: child.kinds } );
             }

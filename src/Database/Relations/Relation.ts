@@ -1,5 +1,5 @@
 import { NotImplementedError } from 'restify-errors';
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import type { BaseTable } from '../Database';
 import type { Relatable } from '../RelationGraph';
 
@@ -32,7 +32,7 @@ export function createPropertyAccessor<O = any, V = any> ( property : string | P
 export abstract class Relation<M extends TableRecord, R, E = {}> {
     member : string;
 
-    queryClauses ?: ( query : r.Sequence ) => r.Sequence;
+    queryClauses ?: ( query : Knex.QueryBuilder ) => Knex.QueryBuilder;
 
     abstract relatedTable: Relatable<any>;
 
@@ -44,13 +44,13 @@ export abstract class Relation<M extends TableRecord, R, E = {}> {
         throw new NotImplementedError();
     }
 
-    where ( query : ( query : r.Sequence ) => r.Sequence ) : this {
+    where ( query : ( query : Knex.QueryBuilder ) => Knex.QueryBuilder ) : this {
         this.queryClauses = query;
         
         return this;
     }
 
-    runQuery ( query : r.Sequence ) {
+    runQuery ( query : Knex.QueryBuilder ) {
         if ( this.queryClauses ) {
             return this.queryClauses( query );
         }
@@ -58,18 +58,8 @@ export abstract class Relation<M extends TableRecord, R, E = {}> {
         return query;
     }
 
-    protected findAll<T> ( table : BaseTable<T>, keys : string[], customQuery : ( query : r.Sequence ) => r.Sequence, fieldName : string, indexName ?: string ) : Promise<T[]> {
-        return indexName
-            ? table.findAll( keys, { index: indexName, query: customQuery } )
-            : table.find( query => {
-                query = query.filter( row => r.expr( keys ).contains( row( fieldName ) as any ) );
-
-                if ( customQuery ) {
-                    query = customQuery( query );
-                }
-
-                return query;
-            } );
+    protected findAll<T> ( table : BaseTable<T>, keys : string[], customQuery : ( query : Knex.QueryBuilder ) => Knex.QueryBuilder, fieldName : string ) : Promise<T[]> {
+        return table.findAll( keys, { column: fieldName, query: customQuery } );
     }
 
     abstract loadRelated ( items : M[] ) : Promise<any>;

@@ -1,7 +1,6 @@
 import { TableRecord, Relation } from "./Relation";
 import { BaseTable } from "../Database";
 import * as itt from "itt";
-import * as r from 'rethinkdb';
 import { MediaCastRecord } from '../../MediaRecord';
 
 export function mapMap<K, V, U> ( map : Map<K, V>, mapper : ( value : V, key : K ) => U ) : Map<K, U> {
@@ -25,7 +24,7 @@ export interface ManyToManyCache<R extends TableRecord> {
 }
 
 export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> extends Relation<M, R[]> {
-    public middleTable : BaseTable<any> | string;
+    public middleTable : BaseTable<any>;
 
     public relatedTable : BaseTable<R>;
 
@@ -39,15 +38,11 @@ export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> ex
 
     public recordForeignTypeValue : string;
 
-    public pivotField : string = null;
-
-    public pivotIndexIn : string = null;
-
-    public pivotIndexOut : string = null;
+    public pivotField : string = null;   
 
     public subRelations : Relation<R, any>[] = [];
 
-    constructor ( member : string, middleTable : string | BaseTable<any>, relatedTable : BaseTable<R>, recordForeign : string, relatedForeign : string ) {
+    constructor ( member : string, middleTable : BaseTable<any>, relatedTable : BaseTable<R>, recordForeign : string, relatedForeign : string ) {
         super( member );
 
         this.middleTable = middleTable;
@@ -84,13 +79,6 @@ export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> ex
         return this;
     }
 
-    pivotIndexedBy ( inputIndexName : string, outputIndexName : string = null ) : this {
-        this.pivotIndexIn = inputIndexName;
-        this.pivotIndexOut = outputIndexName;
-        
-        return this;
-    }
-
     async loadSubRelations ( records : R[] ) {
         for ( let relation of this.subRelations ) {
             await relation.applyAll( records );
@@ -101,34 +89,13 @@ export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> ex
         const keys = items.map( item => item.id );
 
         const middleTable = this.middleTable;
-        if ( typeof middleTable === 'string' ) {
-            return items.map( item => {
-                return item[ middleTable ]
-                    .map( link => {
-                        const foreign = typeof link === 'string' ? link : link[ this.relatedForeign ];
-
-                        return { [ this.recordForeign ]: item.id, [ this.relatedForeign ]: foreign };
-                    } ) ;
-            } );
-        } else {
-            if ( this.pivotIndexIn != null ) {
-                if ( this.recordForeignType != null ) {
-                    return await middleTable.findAll( keys.map( key => [ this.recordForeignTypeValue, key ] ), { index: this.pivotIndexIn } );
-                } else {
-                    return await middleTable.findAll( keys, { index: this.pivotIndexIn } );
-                }
-            } else {
-                return await middleTable.find( query => {
-                    query = query.filter( row => r.expr( keys ).contains( row( this.recordForeign ) as any ) ) 
-
-                    if ( this.recordForeignType ) {
-                        query = query.filter( row => row( this.recordForeignType ).eq( this.recordForeignTypeValue ) );
-                    }
-
-                    return query;
-                } );
-            }
-        }
+        
+        return await middleTable.findAll( keys, { 
+            column: this.recordForeign,
+            query: query => this.recordForeignType != null 
+                ? query.andWhere( this.recordForeignType, this.recordForeignTypeValue ) 
+                : query,
+        } );
     }
 
     buildRelatedCache ( middleTableItems : any[], related : R[] ) : ManyToManyCache<R> {
@@ -149,9 +116,10 @@ export class ManyToManyRelation<M extends TableRecord, R extends TableRecord> ex
 
         const middleKeys = middleTableItems.map( item => item[ this.relatedForeign ] );
 
-        const related = this.pivotIndexOut != null
-            ? await this.relatedTable.findAll( middleKeys, { index: this.pivotIndexOut } )
-            : await this.relatedTable.findAll( middleKeys );
+        // const related = this.pivotIndexOut != null
+        //     ? await this.relatedTable.findAll( middleKeys, { index: this.pivotIndexOut } )
+        //     : await this.relatedTable.findAll( middleKeys );
+        const related = await this.relatedTable.findAll( middleKeys );
         
         await this.loadSubRelations( related );
 

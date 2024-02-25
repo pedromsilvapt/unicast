@@ -1,8 +1,8 @@
 import { TvShowMediaRecord } from "../../../MediaRecord";
-import { MediaTable } from "../../../Database/Database";
+import { AbstractMediaTable, MediaTable } from "../../../Database/Database";
 import { Request, Response } from "restify";
 import { MediaTableController } from "./MediaController";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { Route } from '../../BaseController';
 
 export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
@@ -11,18 +11,20 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
         'year', 'lastPlayedAt', 'addedAt', 'playCount' 
     ];
 
-    get table () : MediaTable<TvShowMediaRecord> {
+    get table () : AbstractMediaTable<TvShowMediaRecord> {
         return this.server.database.tables.shows;
     }
 
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        return this.getTransientQuery( req,
-                this.getCollectionsQuery( req,
-                this.getGenresQuery( req, 
-                this.getRepositoryPathsQuery( req,
-                this.getWatchedQuery( req,
-                    super.getQuery( req, res, query )
-                ) ) ) ) );
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
+        query = super.getQuery( req, res, query );
+        query = this.getWatchedQuery( req, query );
+        query = this.getRepositoryPathsQuery( req, query );
+        query = this.getGenresQuery( req, query );
+        query = this.getCollectionsQuery( req, query );
+        query = this.getTransientQuery( req, query );
+        query = this.getSampleQuery( req, query );
+        
+        return query;
     }
 
     async transformAll ( req : Request, res : Response, shows : TvShowMediaRecord[] ) : Promise<any> {
@@ -59,8 +61,6 @@ export class TvShowsController extends MediaTableController<TvShowMediaRecord> {
 
     @Route( 'get', '/genres' )
     async genres ( req : Request, res : Response ) {
-        return this.table.find( query => {
-            return ( query as any ).distinct( { index: 'genres' } );
-        } );
+        return await this.table.queryDistinctJsonArray('genres', '$', { orderBy: 'asc' });
     }
 }

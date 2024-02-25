@@ -7,20 +7,11 @@ export abstract class OneToOneRelation<M extends TableRecord, R extends TableRec
 
     public foreignKey : string;
 
-    public indexName ?: string;
-
-    constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string, indexName ?: string ) {
+    constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string ) {
         super( member );
         
         this.relatedTable = relatedTable;
         this.foreignKey = foreignKey;
-        this.indexName = indexName;
-    }
-
-    public indexBy ( indexName : string ) : this {
-        this.indexName = indexName;
-        
-        return this;
     }
 }
 
@@ -32,8 +23,7 @@ export class HasOneRelation<M extends TableRecord, R extends TableRecord> extend
         const relation = new HasOneRelation<M, R>( 
             this.member, 
             this.relatedTable, 
-            this.foreignKey, 
-            this.indexName 
+            this.foreignKey
         );
 
         relation.subRelations = [ ...this.subRelations ];
@@ -51,7 +41,7 @@ export class HasOneRelation<M extends TableRecord, R extends TableRecord> extend
     async loadRelated ( items : M[] ) : Promise<Map<string, R>> {
         const keys = items.map( item => item.id );
 
-        const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey, this.indexName );
+        const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey );
         
         await this.loadSubRelations( related );
 
@@ -71,8 +61,7 @@ export class BelongsToOneRelation<M extends TableRecord, R extends TableRecord, 
         const relation = new BelongsToOneRelation<M, R, E>( 
             this.member, 
             this.relatedTable, 
-            this.foreignKey, 
-            this.indexName 
+            this.foreignKey
         );
 
         relation.subRelations = [ ...this.subRelations ];

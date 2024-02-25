@@ -1,7 +1,7 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
 import { PlayableMediaRecord } from "../MediaRecord";
 import * as shorthash from 'shorthash';
-import { MediaTable } from '../Database/Database';
+import { AbstractMediaTable } from '../Database/Database';
 
 interface UpdatePathsOptions {
     oldPath : string;
@@ -26,7 +26,7 @@ export class UpdatePathsTool extends Tool<UpdatePathsOptions> {
     async * findPlayableRecords () : AsyncIterableIterator<PlayableMediaRecord> {
         const { tables } = this.server.database;
 
-        let mediaTables: MediaTable<PlayableMediaRecord>[] = [ tables.movies, tables.episodes, tables.custom ];
+        let mediaTables: AbstractMediaTable<PlayableMediaRecord>[] = [ tables.movies, tables.episodes, tables.custom ];
 
         for ( let table of mediaTables ) {
             yield * await table.findStream();
