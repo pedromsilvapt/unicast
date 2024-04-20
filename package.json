@@ -105,7 +105,6 @@
     "opensubtitles.com": "^1.0.0",
     "parse-key": "^0.2.1",
     "parse-torrent-name": "^0.5.4",
-    "pgsql-ast-parser": "^12.0.1",
     "pidusage": "^1.2.0",
     "pump": "^1.0.2",
     "qs": "^6.11.2",

@@ -10,11 +10,6 @@ import { BaseRecord, BaseRecordSql, TimestampedRecord, TimestampedRecordSql } fr
 export class CollectionsTable extends BaseTable<CollectionRecord> {
     readonly tableName : string = 'collections';
 
-    // indexesSchema : IndexSchema[] = [
-    //     { name: 'title' },
-    //     { name: 'identifier' }
-    // ];
-
     declare relations: {
         records: ManyToManyPolyRelation<CollectionRecord, MediaRecord>;
         parent: BelongsToOneRelation<CollectionRecord, CollectionRecord>;

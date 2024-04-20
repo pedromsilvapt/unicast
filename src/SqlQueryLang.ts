@@ -1,5 +1,4 @@
 
-// import { Knex } from 'knex';
 import { Database } from  './Database/Database';
 import { BinaryOperator, CompiledQuery, InvalidOpError, PropertySemantics, QueryAst, QueryLang, QuerySemantics, UnaryOperator } from './QueryLang';
 import { SqlExpression } from './ES2017/SqlExpression';
