@@ -1,4 +1,4 @@
-import { BaseController, Route } from "../../BaseController";
+import { BaseController, BinaryResponse, EmptyResponse, FileInfo, Route } from "../../BaseController";
 import { Request, Response } from "restify";
 import { ISubtitle } from "../../../Subtitles/Providers/ISubtitlesProvider";
 import { ILocalSubtitle } from "../../../Subtitles/SubtitlesManager";
@@ -8,13 +8,12 @@ import { MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStrea
 import { FileSystemVideoMediaStream } from '../../../Extensions/MediaProviders/FileSystem/MediaStreams/FileSystemVideoStream';
 import { Semaphore } from "data-semaphore";
 import * as sortBy from 'sort-by';
-import { MpvSynchronizerController } from "../../../Subtitles/Validate/MPV/SynchronizerController";
 import { InvalidArgumentError, NotFoundError } from "restify-errors";
 import { measure } from '../../../Diagnostics';
-import { ExternalSynchronize, ExternalSynchronizeCommand } from '../../../Subtitles/Validate/ExternalSynchronize';
 import { ManagerSearchOptions } from '../../../Subtitles/ProvidersManager';
 import { MediaTools } from '../../../MediaTools';
 import { collect, groupingBy } from 'data-collectors';
+import { ExternalSynchronizeCommand } from '../../../Subtitles/Validate/ExternalSynchronize';
 
 export class SubtitlesController extends BaseController {
     protected validateSemaphore : Semaphore = new Semaphore( 1 );
@@ -122,83 +121,73 @@ export class SubtitlesController extends BaseController {
         return await this.server.subtitles.rename( media, subtitles, req.body.releaseName );
     }
 
-    protected async synchronizeSubtitle ( media : PlayableMediaRecord, subtitleFile : string, additionalSubtitles: ILocalSubtitle[], mode: string ) : Promise<boolean> {
+    protected async synchronizeSubtitle ( req : Request, mode : 'local' | 'remote', media : PlayableMediaRecord, subtitleFile : ILocalSubtitle, additionalSubtitles: ILocalSubtitle[], command: string ) : Promise<string> {
         const streams = await this.server.providers.streams( media.sources, { writeCache: false } );
 
         const video = streams.find( stream => stream.type === MediaStreamType.Video ) as FileSystemVideoMediaStream;
 
-        const release = await this.validateSemaphore.acquire();
+        const allConfigs = this.server.config.get<ExternalSynchronizeCommand[]>( 'subtitles.synchronize', [] );
 
-        try {
-            if ( mode === 'binary' ) {
-                const player = new MpvSynchronizerController( this.server );
+        const config = allConfigs.find( config => config.name === command );
 
-                return await player.play( video.file, subtitleFile );
-            } else {
-                const allConfigs = this.server.config.get<ExternalSynchronizeCommand[]>( 'subtitles.synchronize', [] );
+        if ( config != null ) {
+            const videoUrl = this.server.streams.getUrlFor( media.kind, media.id, video.id );
 
-                const config = allConfigs.find( config => config.name === mode );
+            const context: Record<string, string | string[]> = {
+                basePath: this.server.getMatchingUrl( req, '/api' ),
+                video: videoUrl,
+                subtitle: `/media/subtitles/${media.kind}/${media.id}/${command}/${subtitleFile.id}`,
+                additionalSubtitles: additionalSubtitles.map( subtitle => `/media/subtitles/${media.kind}/${media.id}/local/${subtitle.id}` ),
+            };
 
-                if ( config != null ) {
-                    const resolveSubtitle = async subtitle => {
-                        const file = await this.server.storage.getRandomFile( 'synchronize-additional-', 'srt', 'temp/subtitles' );
+            let uri = config.uri;
 
-                        await this.server.subtitles.storeLocalToFile( media, subtitle, file );
-
-                        return file;
-                    };
-
-                    const player = new ExternalSynchronize( config, resolveSubtitle );
-
-                    return await player.run( {
-                        video: video.file,
-                        subtitle: subtitleFile,
-                        additionalSubtitles: additionalSubtitles,
-                    } );
-                } else {
-                    const expectedModes = [ 'binary' ].concat( allConfigs.map( config => config.name ) );
-
-                    throw new InvalidArgumentError( `Invalid mode, expected ${ expectedModes.join( ', ' ) }, got "${mode}"` );
+            for ( const key of Object.keys( context ) ) {
+                let contextValue = context[ key ];
+                if ( typeof contextValue == 'string' ) {
+                    // Replace the token {subtitle} with the encoded URI to get that subtitle file
+                    uri = uri.replace( '{' + key + '}', encodeURIComponent( contextValue ) );
+                } else if ( contextValue instanceof Array ) {
+                    for ( let i = 0; i < contextValue.length; i++ ) {
+                        // Replace the token {additionalSubtitles[0]} with the encoded URI to get that subtitle file
+                        uri = uri.replace( '{' + key + '[' + i + ']}', encodeURIComponent( contextValue[ i ] ) );
+                    }
                 }
             }
-        } finally {
-            release();
+
+            return uri;
+        } else {
+            const expectedModes = allConfigs.map( config => config.name );
+
+            throw new InvalidArgumentError( `Invalid mode, expected ${ expectedModes.join( ', ' ) }, got "${command}"` );
         }
     }
 
-    @Route( 'get', '/:kind/:id/local/:sub/synchronize/:mode' )
+    @Route( 'get', '/:kind/:id/local/:sub/synchronize/:command' )
     async synchronizeLocal ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
 
         const subtitle = await this.server.subtitles.get( media, req.params.sub );
 
-        const mode = req.params.mode as string;
+        const command = req.params.command as string;
 
         if ( !subtitle ) {
             throw new NotFoundError( 'Requested subtitle was not found.' );
         }
 
-        const file = await this.server.storage.getRandomFile( 'synchronize-local-', 'srt', 'temp/subtitles' );
-
         const additionalSubtitles = ( await this.server.subtitles.list( media ) )
             .filter( additionalSub => additionalSub.id != subtitle.id );
 
-        await this.server.subtitles.storeLocalToFile( media, subtitle, file );
+        const uri = await this.synchronizeSubtitle( req, 'local', media, subtitle, additionalSubtitles, command );
 
-        // Only update the subtitles in the media repository
-        // if the synchronization is commited (the user sees it through)
-        // When it is canceled in the middle (returning false)
-        // ignore the changes
-        if ( await this.synchronizeSubtitle( media, file, additionalSubtitles, mode ) ) {
-            await this.server.subtitles.delete( media, subtitle );
+        this.logger.warn(uri);
 
-            await this.server.subtitles.updateFromFile( media, subtitle, file );
-        }
-
-        return this.server.subtitles.list( media );
+        return {
+            uri: uri
+        };
     }
 
-    @Route( 'get', '/:kind/:id/remote/:sub/synchronize/:mode' )
+    @Route( 'get', '/:kind/:id/remote/:sub/synchronize/:command' )
     async synchronizeRemote ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
 
@@ -206,29 +195,35 @@ export class SubtitlesController extends BaseController {
 
         const subtitle = subtitles.find( sub => sub.id === req.params.sub );
 
-        const mode = req.params.mode as string;
+        const command = req.params.command as string;
 
         if ( !subtitle ) {
             throw new NotFoundError( 'Requested subtitle was not found.' );
         }
 
-        const file = await this.server.storage.getRandomFile( 'synchronize-remote-', 'srt', 'temp/subtitles' );
+        const additionalSubtitles = ( await this.server.subtitles.list( media ) )
+            .filter( additionalSub => additionalSub.id != subtitle.id );
 
-        await this.server.subtitles.storeRemoteToFile( subtitle, file );
+        const uri = await this.synchronizeSubtitle( req, 'remote', media, subtitle, additionalSubtitles, command );
 
-        const additionalSubtitles = await this.server.subtitles.list( media );
+        this.logger.warn(uri);
 
-        // Only update the subtitles in the media repository
-        // if the synchronization is commited (the user sees it through)
-        // When it is canceled in the middle (returning false)
-        // ignore the changes
-        if ( await this.synchronizeSubtitle( media, file, additionalSubtitles, mode ) ) {
-            await this.server.subtitles.storeFromFile( media, subtitle, file );
-        }
-
-        return this.server.subtitles.list( media );
+        return {
+            uri: uri
+        };
     }
 
+    /**
+     * Launches an MPV player, to display a random selection of 3 subtitle lines,
+     * distributed across the duration of the video, to validate
+     * if they are synchronized with the video
+     *
+     * @deprecated The `synchronize` methods now support a `validate` command too that works even
+     *             when the server is not running on the machine where the Web page is open
+     * @param media
+     * @param subtitleFile
+     * @returns
+     */
     protected async validateSubtitle ( media : PlayableMediaRecord, subtitleFile : string ) {
         const streams = await this.server.providers.streams( media.sources, { writeCache: false } );
 
@@ -312,6 +307,77 @@ export class SubtitlesController extends BaseController {
         } else {
             return results.reduce( ( array, group ) => array.concat( group.subtitles ), [] as ILocalSubtitle[] );
         }
+    }
+
+    @Route( 'get', '/:kind/:id/local/:sub', BinaryResponse )
+    async downloadLocal ( req : Request ) : Promise<FileInfo> {
+        const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
+
+        const subtitles = await this.server.subtitles.list( media );
+
+        const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+
+        return {
+            data: await this.server.subtitles.read( media, subtitle )
+        };
+    }
+
+    @Route( 'put', '/:kind/:id/local/:sub' )
+    async uploadLocal ( req : Request ) : Promise<void> {
+        const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
+
+        const subtitles = await this.server.subtitles.list( media );
+
+        const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+
+        await this.server.subtitles.update( media, subtitle, req );
+    }
+
+    @Route( 'get', '/:kind/:id/remote/:sub', BinaryResponse )
+    async downloadRemote ( req : Request ) : Promise<FileInfo> {
+        const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
+
+        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestOptions( req ) );
+
+        const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+
+        return {
+            data: await await this.server.subtitles.providers.download( subtitle )
+        };
+    }
+
+    @Route( 'put', '/:kind/:id/remote/:sub', EmptyResponse )
+    async uploadRemote ( req : Request, res : Response ) : Promise<void> {
+        const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
+
+        const subtitles = await this.server.subtitles.providers.search( media, this.getRequestOptions( req ) );
+
+        const subtitle = subtitles.find( sub => sub.id === req.params.sub );
+
+        if ( !subtitle ) {
+            throw new NotFoundError( 'Requested subtitle was not found.' );
+        }
+
+        const storedSubtitle = await this.server.subtitles.store( media, subtitle, req );
+
+        const storedUrl = this.server.getMatchingUrl( req, `/api/media/subtitles/${media.kind}/${media.id}/local/${storedSubtitle.id}` );
+
+        // 303 should be used after POST/PUT requests to indicate the new URL of the uploaded resource
+        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections#temporary_redirections
+        res.header('Location', storedUrl);
+        res.status(303);
     }
 
     @Route( 'del', '/:kind/:id/local/:sub' )

@@ -43,7 +43,7 @@ export class MediaSync {
 
     /** Prevents multiple movies/tv shows with the same person that might be updating their cast concurrently to change the same person at the same time */
     protected castPersonLock : SemaphorePool<string> = new SemaphorePool( 1, true );
-    
+
     constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, scrapers : ScrapersManager, logger : SharedLogger ) {
         this.media = media;
         this.database = db;
@@ -63,9 +63,9 @@ export class MediaSync {
     }
 
     /**
-     * @param task 
-     * @param media 
-     * @param snapshot 
+     * @param task
+     * @param media
+     * @param snapshot
      */
     async runRecord ( context: MediaSyncContext, media : MediaRecord ) {
         const { task, snapshot, repair, cache } = context;
@@ -95,7 +95,7 @@ export class MediaSync {
 
         // When creating a new media record, for instance, a new Tv Show, we store it on the association map.
         // So if after that we create a new media record for, say, a season of that same Tv show, we can know it's id
-        // Since the insertion of records into the database is done concurrently, we might try to insert both the Tv show 
+        // Since the insertion of records into the database is done concurrently, we might try to insert both the Tv show
         // and the season at the same time. But doing that would result in an error, since we don't have the Tv show id yet
         // That's why we store the promise even before inserting the record, so any future media that needs it, can just wait for it
         snapshot.association.get( media.kind ).set( media.internalId, future );
@@ -115,7 +115,7 @@ export class MediaSync {
             await this.updateRecord( context, match, media, true );
         } else {
             const existingMatch = snapshot.getAnyExternal( media.external );
-            
+
             if ( existingMatch != null && snapshot.options.updateMoved ) {
                 snapshot.duplicated.push( media );
 
@@ -126,7 +126,7 @@ export class MediaSync {
                 await this.runRecordForeigns( table, media, snapshot );
 
                 match = await this.createRecord( context, media );
-    
+
                 future.resolve( match.id );
             }
         }
@@ -166,9 +166,9 @@ export class MediaSync {
         }
 
         task.reportCreate( media, context.repository );
-        
+
         await this.runCast( context, media );
-        
+
         return media;
     }
 
@@ -176,9 +176,9 @@ export class MediaSync {
         const { task, snapshot, repair } = context;
 
         const table = this.media.getTable( newRecord.kind );
-        
+
         newRecord = { ...newRecord };
-        
+
         for ( let property of Object.keys( table.foreignMediaKeys ) ) {
             delete newRecord[ property ];
         }
@@ -190,7 +190,7 @@ export class MediaSync {
         newRecord = await this.applyArtworkPolicies( context, oldRecord, newRecord );
 
         const changed = table.isChanged( oldRecord, newRecord );
-        
+
         if ( changed && !snapshot.options.dryRun ) {
             await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() } );
 
@@ -198,12 +198,12 @@ export class MediaSync {
 
             await repair.onUpdate( oldRecord );
         }
-        
+
         if ( changed && reportChanges ) {
             const changes = table.getLocalChanges( oldRecord, newRecord );
 
             task.reportUpdate( oldRecord, newRecord, changes );
-        } 
+        }
 
         await this.runCast( context, newRecord );
     }
@@ -234,7 +234,7 @@ export class MediaSync {
         const dryRun = context.snapshot.options.dryRun;
 
         let existingPeopleCount = 0;
-        
+
         let createdPeopleCount = 0;
 
         const peopleTable = this.database.tables.people;
@@ -246,10 +246,10 @@ export class MediaSync {
 
             return;
         }
-        
+
         if ( !this.scrapers.hasKeyed( media.scraper ) ) {
             task.reportError( media.kind, `Could not find scraper "${ media.scraper }". Could not get cast.`, media );
-            
+
             return;
         }
 
@@ -271,7 +271,7 @@ export class MediaSync {
         // and the existing person record in the local database
         // The role that associates the person and the media is accessible
         // via the `.cast` property on each PersonRecord
-        const existingRoles : Map<string, PersonRecord> = collect( 
+        const existingRoles : Map<string, PersonRecord> = collect(
             await table.relations.cast.load( media ),
             filtering( role => role.cast.scraper == media.scraper,
                 groupingBy( role => role.cast.internalId, first() ) )
@@ -291,16 +291,16 @@ export class MediaSync {
         // Load the people related to those records
         await this.database.tables.mediaCast.relations.person.applyAll( newPeopleRoles );
 
-        const newPeople = collect( 
+        const newPeople = collect(
             newPeopleRoles,
             filtering( role => role.person != null, groupingBy( role => role.internalId, mapping( person => ( {
                 ...person.person,
                 cast: person
             } ), first<PersonRecord>() ) ) )
         );
-        
+
         // We will iterate over the new roles we found to check if they are already present
-        // on the database or if they are new. 
+        // on the database or if they are new.
         // When we find one that is already in  the database, we remove it so that in the end
         // we can check which ones are stale (exist in the local database but not in scraper anymore)
         await new AsyncStream( newRoles ).parallel( async role => {
@@ -308,22 +308,22 @@ export class MediaSync {
 
             try {
                 let person : PersonRecord = null;
-            
+
                 const matchRole = existingRoles.get( role.internalId );
-    
+
                 if ( matchRole != null ) {
                     existingRoles.delete( role.internalId );
-    
+
                     person = matchRole;
                 }
-    
+
                 // Just because there was no match found for this person on the database
-                // as being part of the cast, the person's record might already exist 
+                // as being part of the cast, the person's record might already exist
                 // (associated to other media records) and as such we should reuse it
                 if ( person == null ) {
                     person = newPeople.get( role.internalId );
                 }
-    
+
                 if ( person != null ) {
                     if ( !dryRun ) {
                         person = await peopleTable.updateIfChanged( person, {
@@ -335,7 +335,7 @@ export class MediaSync {
                             art: role.art || person.art
                         }, null );
                     }
-    
+
                     existingPeopleCount++;
                 } else {
                     person = {
@@ -346,14 +346,14 @@ export class MediaSync {
                         name: role.name,
                         naturalFrom: role.naturalFrom
                     };
-    
+
                     if ( !dryRun ) {
                         person = await peopleTable.create( person );
                     }
-    
+
                     createdPeopleCount++;
                 }
-    
+
                 const cast : Partial<MediaCastRecord> = {
                     internalId: role.internalId,
                     external: {},
@@ -390,12 +390,12 @@ export class MediaSync {
         // by removing them in our database as well
         const toBeRemovedIds = Array.from( existingRoles.values() ).map( person => person.cast.id );
 
-        // NOTE: There may also exist some roles associated with this media record, but from a different scraper 
+        // NOTE: There may also exist some roles associated with this media record, but from a different scraper
         // (might happen after an existing repository changes scrapers, for example). In such cases, these casts
         // will not be included in the existingRoles, but we also want them to be removed, so we add them here
         // toBeRemovedIds.
-        toBeRemovedIds.push( ...collect( 
-            await table.relations.cast.load( media ), 
+        toBeRemovedIds.push( ...collect(
+            await table.relations.cast.load( media ),
             filtering( person => person.cast.scraper != media.scraper, mapping( person => person.cast.id ) )
         ) );
 
@@ -405,9 +405,9 @@ export class MediaSync {
     }
 
     /**
-     * Applies the settings given by the user regarding local artwork 
+     * Applies the settings given by the user regarding local artwork
      * preservation and incoming artwork acceptance for the new record.
-     * 
+     *
      * @param context The Media Sync Context object
      * @param oldRecord The local record that already exists in the Database
      * @param newRecord The incoming record recently scraped
@@ -423,7 +423,7 @@ export class MediaSync {
         const incomingArt = newRecord[ artKey ];
 
         // Create a shallow clone of the newRecord
-        const finalRecord = { 
+        const finalRecord = {
             art: {},
             ...newRecord
         };
@@ -436,7 +436,7 @@ export class MediaSync {
             }
         } else {
             // If the preservation mode is not Keep, then it is one of the Discard modes
-            
+
             // Create a distinct set with all the artwork keys from both the old
             // record and the new one
             const keys = new Set( [
@@ -471,7 +471,7 @@ export class MediaSync {
                 // Always convert undefineds to nulls
                 const newValue = incomingArt[ subKey ] ?? null;
 
-                // Only accept values that are null or string                
+                // Only accept values that are null or string
                 if ( newValue == null || typeof newValue === 'string' ) {
                     if ( acceptanceMode === ArtworkAcceptanceMode.Always ) {
                         acceptIncoming = true;
@@ -551,11 +551,11 @@ export class MediaSync {
 
         // Media Record Conditions that are shared by all the repositories
         let globalConditions: MediaRecordFilter[] = [];
-        
+
         if ( options.refreshRecords != null ) {
             // Convert the array of objects {kind, id} into the array of tuples [kind, id]
             const refs = options.refreshRecords.map( ( { kind, id } ) => [ kind, id ] as const );
-            
+
             // Convert the array of tuples into an array of MediaRecords, by fetching them from the database
             const records = await this.media.getAll( refs );
 
@@ -577,7 +577,7 @@ export class MediaSync {
 
                 // Allows setting up special conditions for refreshing particular media records
                 const conditions : MediaRecordFilter[] = [];
-                
+
                 if ( options.refetchIncomplete ) {
                     conditions.push( ...await this.findIncompleteRecords( repository ) );
                 }
@@ -589,26 +589,26 @@ export class MediaSync {
                 snapshot.scanBarrier.freeze();
 
                 task.reportsLogger = this.logger.service( repository.name )
-                
+
                 const recordsStream = repository.scan( options.kinds, snapshot, conditions, options.cache || {}, task );
 
                 for await ( let media of AsyncStream.from( recordsStream ).observe( { onError: err => this.logger.error( err + '\n' + err.stack ) } ).dropErrors() ) {
                     task.addTotal( 1 );
-                    
+
                     media = { ...media };
-                    
+
                     media.internalId = media.id;
                     delete media.id;
-                    
+
                     media.repository = repositoryName;
-                    
+
                     updating.push(
                         task.do(
-                            this.runRecord( context, media ), 
+                            this.runRecord( context, media ),
                         1 )
                     );
                 }
-                
+
                 snapshot.scanBarrier.unfreeze();
 
                 await snapshot.scanBarrier.block();
@@ -616,12 +616,12 @@ export class MediaSync {
                 if ( options.cleanMissing || options.updateMoved ) {
                     const deleting : Promise<void>[] = [];
                     const moving : Promise<void>[] = [];
-    
+
                     // Mark any media mean to be ignored as touched
                     if ( repository.ignoreUnreachableMedia ) {
                         for ( let [ record, touched ] of snapshot.recordsIter() ) {
                             if ( touched ) continue;
-    
+
                             if ( !await repository.isMediaReachable( record ) ) {
                                 // Mark this media as touched
                                 snapshot.touched.get( record.kind ).add( record.id );
@@ -633,11 +633,11 @@ export class MediaSync {
                         // not removed
                         for ( let [ record, touched ] of snapshot.recordsIter( [ MediaKind.TvEpisode, MediaKind.TvSeason ] ) ) {
                             if ( !touched ) continue;
-    
+
                             if ( isTvEpisodeRecord( record ) ) {
                                 snapshot.touched.get( MediaKind.TvSeason ).add( record.tvSeasonId );
                             }
-    
+
                             if ( isTvSeasonRecord( record ) ) {
                                 snapshot.touched.get( MediaKind.TvShow ).add( record.tvShowId );
                             }
@@ -664,22 +664,22 @@ export class MediaSync {
                     }
 
                     for ( let record of snapshot.duplicated ) {
-                        updating.push( 
+                        updating.push(
                             task.do(
-                                this.runDuplicate( context, record ), 
+                                this.runDuplicate( context, record ),
                             1 )
                         );
                     }
 
                     await task.do( Promise.all( updating ), 1 );
-    
+
                     await task.do( Promise.all( deleting ), 1 );
 
                     await task.do( Promise.all( moving ), 1 );
                 }
             }
         }
-        
+
         if ( options.autoFinishTask ?? true ) {
             task.setStateFinish();
         }
@@ -704,7 +704,7 @@ export class MediaSyncSnapshot {
     public records : RecordsMap<MediaRecord>;
 
     /**
-     * 
+     *
      */
     public association : RecordsMap<Future<string>>;
 
@@ -727,11 +727,11 @@ export class MediaSyncSnapshot {
      * Instead, it is temporarily saved in this array. Then, if before the sync process ends, a matching
      * media record (same external keys) is found to have been deleted, instead of removing that record from
      * the database, and creating a new one, a replacement happens.
-     * 
+     *
      * A replacement refers to the act of keeping the unique ID that identifies that media record, as well as
      * any relations it might have, while updating other info (such as the sources of the media record) with
      * the data from the new media record.
-     * 
+     *
      * Obviously, any new duplicated media records that don't have any matching deleted records, are inserted
      * as regular new media records into the database.
      */
@@ -755,7 +755,7 @@ export class MediaSyncSnapshot {
 
             if ( table ) {
                 const allRecords = table.findStream( query => query.where( { repository: repository } ) );
-                
+
                 for await ( let record of allRecords ) {
                     set.set( record.internalId, record );
                 }
@@ -765,13 +765,13 @@ export class MediaSyncSnapshot {
         return recordsSet;
     }
 
-    
+
     public addExternal ( type : string, id : string, media : MediaRecord ) {
         let dictionary = this.externals.get( type );
 
         if ( dictionary == null ) {
             dictionary = new Map();
-            
+
             this.externals.set( type, dictionary );
         }
 
@@ -917,7 +917,7 @@ export class Barrier {
     public get readyCount () {
         return this._readyCount;
     }
-    
+
     public get totalCount () {
         return this._totalCount;
     }
@@ -947,7 +947,7 @@ export class Barrier {
     public freeze () {
         this.froozen = true;
     }
-    
+
     public unfreeze () {
         this.froozen = false;
 
@@ -1066,7 +1066,7 @@ export type MediaSyncConfiguration = {
     data?: unknown;
 }
 
-export type MediaSyncReport = 
+export type MediaSyncReport =
       { type: 'error', kind : MediaKind, label : string, file ?: string, media ?: MediaRecord, new : boolean }
     | { type: 'create', record : MediaRecord }
     | { type: 'update', oldRecord : MediaRecord, newRecord : MediaRecord, changes : any }
@@ -1186,10 +1186,10 @@ export class MediaPostSyncRepair {
 }
 
 /**
- * TODO: Implement actual validation to verify if the artwork is valid: if it is 
+ * TODO: Implement actual validation to verify if the artwork is valid: if it is
  * reachable and the data is not corrupt
  * @param artwork The address (local file or http) to validate
- * @returns 
+ * @returns
  */
 export async function isArtworkValid ( artwork: string ) {
     return true;

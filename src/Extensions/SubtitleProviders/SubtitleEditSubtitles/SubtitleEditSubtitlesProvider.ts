@@ -10,28 +10,36 @@ import { waitForProcess } from '../../../ES2017/ChildProcess';
 import { Stopwatch } from '../../../BackgroundTask';
 import * as path from 'path';
 
-export interface IEmbeddedSubtitlesResult extends ISubtitle {
+export interface ISubtitleEditSubtitlesResult extends ISubtitle {
     filePath: string;
     trackIndex: number;
 }
 
-export interface IEmbeddedSubtitlesConfig {
+export interface ISubtitleEditSubtitlesConfig {
     enabled?: boolean;
     showExtractionOutput: boolean;
+    subtitleEditFolder: string;
+    subtitleEditExecutable: string;
+    maxWaitTime: number;
+    checkIntervalTime: number;
 }
 
-export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSubtitlesResult> {
-    readonly name: string = 'embedded';
+export class SubtitleEditSubtitlesProvider implements ISubtitlesProvider<ISubtitleEditSubtitlesResult> {
+    readonly name: string = 'subtitleEdit';
 
     server: UnicastServer;
 
     logger: LoggerInterface;
 
-    config : IEmbeddedSubtitlesConfig;
+    config : ISubtitleEditSubtitlesConfig;
 
-    public constructor ( config : Partial<IEmbeddedSubtitlesConfig> ) {
+    public constructor ( config : Partial<ISubtitleEditSubtitlesConfig> ) {
         this.config = {
             showExtractionOutput: false,
+            subtitleEditFolder: null,
+            subtitleEditExecutable: 'SubtitleEdit.exe',
+            maxWaitTime: 1000 * 60 * 5,
+            checkIntervalTime: 1000 * 10,
             ...config
         };
     }
@@ -40,7 +48,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
         this.logger = this.server.logger.service( `Subtitles/Providers/${ this.name }` );
     }
 
-    async search ( media: PlayableMediaRecord, searchOptions: SearchOptions ): Promise<IEmbeddedSubtitlesResult[]> {
+    async search ( media: PlayableMediaRecord, searchOptions: SearchOptions ): Promise<ISubtitleEditSubtitlesResult[]> {
         const repository = this.server.repositories.get( media.repository );
 
         if ( repository instanceof FileSystemRepository ) {
@@ -85,30 +93,55 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
         return [];
     }
 
-    async download ( subtitle: IEmbeddedSubtitlesResult ): Promise<NodeJS.ReadableStream> {
-        const tempFolder = await this.server.storage.getRandomFolder('embedded-subtitle');
-
-        const subtitleExtension = subtitle.format;
-
-        const tempFile = `${ path.basename( subtitle.filePath, path.extname( subtitle.filePath ) ) }.${ subtitleExtension }`;
+    async download ( subtitle: ISubtitleEditSubtitlesResult ): Promise<NodeJS.ReadableStream> {
+        const tempFolder = await this.server.storage.getRandomFolder('subtitle-edit-subtitle');
 
         const processArgs = [
-            '-i',
+            '/convert',
             subtitle.filePath,
-            '-map',
-            `0:${ subtitle.trackIndex }`,
-            path.join( tempFolder, tempFile ),
+            'subrip',
+            '/track-number:' + ( subtitle.trackIndex + 1 ),
+            '/outputfolder:' + tempFolder
         ];
 
         this.logger.info( 'Extracting: ' + subtitle.filePath );
 
-        const command = MediaTools.getCommandPath( this.server, "ffmpeg" );
-
-        const cp = spawn( command, processArgs, {
+        const cp = spawn( this.config.subtitleEditExecutable, processArgs, {
+            cwd: this.config.subtitleEditFolder,
             stdio: this.config.showExtractionOutput ? 'inherit' : 'ignore'
         } );
 
         await waitForProcess( cp );
+
+        const stopwatch = new Stopwatch().resume();
+
+        // Max wait time for the file to be created, in milliseconds
+        const maxWaitTime = this.config.maxWaitTime;
+
+        // The time to wait between consecutive checks for the file
+        const sleepTime = this.config.checkIntervalTime;
+
+        let tempFile: string = null;
+
+        while ( stopwatch.readMilliseconds() < maxWaitTime ) {
+            const files = ( await fs.readdir( tempFolder ) ).filter( f => f !== '.' && f !== '..' );
+
+            if ( files.length > 0 ) {
+                tempFile = path.join( tempFolder, files[ 0 ] );
+
+                await new Promise( resolve => setTimeout( resolve, sleepTime ) );
+
+                break;
+            }
+
+            await new Promise( resolve => setTimeout( resolve, sleepTime ) );
+        }
+
+        stopwatch.pause();
+
+        if ( tempFile === null ) {
+            throw new Error( `Process to extract subtitles failed` );
+        }
 
         this.logger.info( 'Extracted to ' + path.relative( this.server.storage.getPath(), tempFile ) );
 

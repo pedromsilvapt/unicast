@@ -26,7 +26,7 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
     }
 
     async getFileLanguage ( file : string ) : Promise<string> {
-        const pipeline = Pipeline.create( 
+        const pipeline = Pipeline.create(
             new FileReader(),
             new DecoderPipeline(),
             new ParserPipeline()
@@ -76,13 +76,13 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         const filePrefix = path.basename( file, path.extname( file ) );
 
         const otherFiles = await fs.readdir( folder );
-        
+
         const matchingFiles = otherFiles
             .filter( file => file.startsWith( filePrefix ) )
             .filter( file => isSubtitle( file ) );
-        
+
         const subtitles : ILocalFileSystemSubtitle[] = [];
-        
+
         for ( let subFile of matchingFiles ) {
             const subFilePath = path.join( folder, subFile );
 
@@ -94,13 +94,13 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
                 file: subFile
             } );
         }
-        
+
         return subtitles;
     }
 
     read ( media : MediaRecord, subtitle : ILocalFileSystemSubtitle ) : Promise<NodeJS.ReadableStream> {
         const folder = path.dirname( this.getMediaFile( media ) );
-        
+
         const file = path.join( folder, subtitle.releaseName + subtitle.format );
 
         return Promise.resolve( fs.createReadStream( file ) );
@@ -124,7 +124,7 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         } else {
             await new Promise<void>( ( resolve, reject ) =>
                 data.pipe( fs.createWriteStream( file ) ).on( 'error', reject ).on( 'finish', resolve )
-            ); 
+            );
         }
 
         return {
@@ -166,13 +166,13 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         const extension = ( subtitle.format || '.srt' ).toLowerCase();
 
         const oldFilePath = path.join( path.dirname( video ), subtitle.file );
-        
+
         const newFilePath = path.join( path.dirname( video ), name + extension );
 
         if ( await fs.exists( newFilePath ) ) {
             throw new Error( `Already exists a subtitle named "${ newFilePath }"` );
         }
-        
+
         await fs.rename( oldFilePath, newFilePath );
 
         return {
@@ -185,7 +185,7 @@ export class FileSystemSubtitlesRepository implements ISubtitlesRepository<ILoca
         const folder = path.dirname( this.getMediaFile( media ) );
 
         const file = path.join( folder, subtitle.file );
-        
+
         if ( await fs.exists( file ) ) {
             await fs.unlink( file );
         }

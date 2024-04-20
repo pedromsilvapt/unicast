@@ -6,11 +6,11 @@ import { AccessCard, IpIdentity, ScopeResource } from '../AccessControl';
 import { InvalidArgumentError, InvalidCredentialsError  } from 'restify-errors';
 import * as schema from '@gallant/schema';
 
-export type RoutesDeclarations = { 
-    methods: string[], 
-    path: string, 
-    propertyKey: string, 
-    handler: RouteTransform, 
+export type RoutesDeclarations = {
+    methods: string[],
+    path: string,
+    propertyKey: string,
+    handler: RouteTransform,
     appendLast: boolean,
     authScope: string,
     querySchema?: schema.Type,
@@ -38,7 +38,7 @@ export abstract class BaseController implements Annotated {
     }
 
     routes : RoutesDeclarations;
-    
+
     childControllers : BaseController[];
 
     router ( prefix : boolean = true ) {
@@ -57,7 +57,7 @@ export abstract class BaseController implements Annotated {
                     }
 
                     router[ method ](
-                        { 
+                        {
                             path,
                             querySchema: route.querySchema,
                             bodySchema: route.bodySchema,
@@ -70,7 +70,7 @@ export abstract class BaseController implements Annotated {
                 }
             }
         }
-        
+
         this.childControllers = this.childControllers || [];
 
         for ( let ann of annotations<ControllerAnnotation>( this, Controller ) ) {
@@ -124,17 +124,17 @@ export function SchemaMiddleware ( controller : { server : UnicastServer, logger
         try {
             if ( querySchema != null ) {
                 const errors = querySchema.validate( req.query );
-    
+
                 if ( errors != null ) {
                     const errorMessage = schema.errorsToString( schema.ValidationError.prefix( errors, 'query' ) );
 
                     return next( new InvalidArgumentError( errorMessage ) );
                 }
             }
-    
+
             if ( bodySchema != null ) {
                 const errors = bodySchema.validate( req.body );
-    
+
                 if ( errors != null ) {
                     const errorMessage = schema.errorsToString( schema.ValidationError.prefix( errors, 'body' ) );
 
@@ -149,19 +149,17 @@ export function SchemaMiddleware ( controller : { server : UnicastServer, logger
     };
 }
 
-export function JsonResponse ( controller : { server : UnicastServer, logger : Logger }, method : string ) {
+export function EmptyResponse ( controller : { server : UnicastServer, logger : Logger }, method : string ) {
     return async function ( req : Request, res : Response, next : Next ) {
         try {
-            const result = await controller[ method ]( req, res );
+            await controller[ method ]( req, res );
 
-            res.send( 200, result );
-            
             next();
         } catch ( error ) {
             const key = controller.logger.prefix + '.' + method;
 
             const message = error.message + ( error.stack ? ( '\n' + error.stack ) : '' );
-            
+
             controller.server.logger.error( key, message, error );
 
             next( error );
@@ -169,25 +167,51 @@ export function JsonResponse ( controller : { server : UnicastServer, logger : L
     };
 }
 
-export function BinaryResponse ( controller : any, method : any ) {
+export function JsonResponse ( controller : { server : UnicastServer, logger : Logger }, method : string ) {
+    return async function ( req : Request, res : Response, next : Next ) {
+        try {
+            const result = await controller[ method ]( req, res );
+
+            res.send( 200, result );
+
+            next();
+        } catch ( error ) {
+            const key = controller.logger.prefix + '.' + method;
+
+            const message = error.message + ( error.stack ? ( '\n' + error.stack ) : '' );
+
+            controller.server.logger.error( key, message, error );
+
+            next( error );
+        }
+    };
+}
+
+export function BinaryResponse ( controller : { server : UnicastServer, logger : Logger }, method : any ) {
     return async function ( req : Request, res : Response, next : Next ) {
         try {
             let file : FileInfo = await controller[ method ]( req, res );
 
             if ( file ) {
                 res.statusCode = 200;
-                
+
                 res.set( 'Content-Type', file.mime || 'application/octet-stream' );
 
-                if ( typeof file.length !== 'number' && !file.length ) {
+                if ( typeof file.length === 'number' ) {
                     res.set( 'Content-Length', '' + file.length );
                 }
-                
+
                 ( res as any ).writeHead( 200 );
 
                 if ( Buffer.isBuffer( file.data ) ) {
                     res.write( file.data );
+                    res.end();
                 } else {
+                    file.data.on('error', err => {
+                        res.end();
+
+                        controller.logger.error(err.message);
+                    });
                     file.data.pipe( res );
                 }
             }
@@ -224,15 +248,15 @@ export function Route ( method : string | string[], path : string, handler : Rou
 
         let authScope = 'read';
 
-        if ( methods.includes( 'post' ) 
-          || methods.includes( 'put' ) 
-          || methods.includes( 'patch' ) 
+        if ( methods.includes( 'post' )
+          || methods.includes( 'put' )
+          || methods.includes( 'patch' )
           || methods.includes( 'delete' ) ) {
             authScope = 'write';
         }
 
-        target.routes.push( { 
-            methods, path, propertyKey, handler, appendLast, authScope 
+        target.routes.push( {
+            methods, path, propertyKey, handler, appendLast, authScope
         } );
 
         return descriptor;
@@ -262,7 +286,7 @@ export function ValidateBody ( schemaType : schema.Type | string, options?: sche
         if ( route == null ) {
             throw new Error( `Could not find a route defined to set the body schema of: "${ propertyKey }"` );
         }
-        
+
         if ( typeof schemaType === 'string' ) {
             if ( options == null ) {
                 options = schema.createDefaultOptions( {
