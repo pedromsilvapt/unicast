@@ -63,6 +63,12 @@ export class Extension implements IEntity {
     }
 }
 
+export interface ExtensionsManagerConfig {
+    [name: string]: {
+        disable?: boolean
+    }
+}
+
 export class ExtensionsManager extends EntityManager<Extension> {
     extensionsFolder : string = 'Extensions';
 
@@ -70,12 +76,16 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
     protected loaded : boolean = false;
 
+    protected config : ExtensionsManagerConfig
+
     logger : Logger;
 
     constructor ( server : UnicastServer ) {
         super( server );
 
         this.logger = server.logger.service( 'Extensions' );
+
+        this.config = server.config.get('extensions');
     }
 
     protected getEntityKey ( entity : Extension ) : Extension {
@@ -121,7 +131,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
                 .filter( ( [ _, stat ] ) => stat.isFile() ).map( ( [ file ] ) => file )
                 .filter( file => {
                     const basename = path.basename( file ).toLowerCase();
-                    
+
                     return basename == 'extension.js' || basename == 'extension.ts';
                 } )
                 .filter( file => path.dirname( file ) !== folder )
@@ -134,6 +144,11 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
                 const namespacedName = path.relative( folder, path.dirname( file ) ).replace( /\\/g, '/' );
 
+                if ( this.config[ namespacedName ]?.disable ) {
+                    this.logger.info(`Extension ${ chalk.yellow( namespacedName ) } is disabled in config.`)
+                    continue;
+                }
+
                 // Require the extension main file
                 const exports = require( file );
 
@@ -144,7 +159,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
                     this.logger.error( `Extension ${ chalk.red( namespacedName ) } could not be loaded: No Extension object found.` );
                 } else {
                     const extension = new extensionClass( name );
-    
+
                     this.add( extension );
 
                     this.logger.info( `Extension ${ chalk.yellow( namespacedName ) } loaded.` );

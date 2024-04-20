@@ -79,7 +79,7 @@ export class PlayerController extends BaseController {
 
             const session = await device.sessions.register( record, options );
 
-            return this.preprocessStatus( req, await device.play( session ) );            
+            return this.preprocessStatus( req, await device.play( session ) );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -94,7 +94,7 @@ export class PlayerController extends BaseController {
 
             if ( next.isPresent() ) {
                 const [ record, options ] = next.get();
-    
+
                 return { record, options };
             } else {
                 return { record: null, options: null };
@@ -113,7 +113,7 @@ export class PlayerController extends BaseController {
 
             if ( previous.isPresent() ) {
                 const [ record, options ] = previous.get();
-    
+
                 return { record, options };
             } else {
                 return { record: null, options: null };
@@ -129,9 +129,9 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             const { kind, id } = req.params;
-            
+
             const record = await this.server.media.get( kind, id );
-    
+
             if ( record == null ) {
                 throw new NoMediaFound();
             }
@@ -170,9 +170,9 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             const sources : MediaSourceDetails[] = req.body.sources;
-            
+
             const record = await this.server.media.createFromSources( sources );
-    
+
             if ( record == null ) {
                 throw new NoMediaFound();
             }
@@ -180,7 +180,7 @@ export class PlayerController extends BaseController {
             const session = await device.sessions.register( record );
 
             return this.preprocessStatus( req, await device.play( session ) );
-            
+
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -192,7 +192,7 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             return this.preprocessStatus( req, await device.pause() );
-            
+
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -204,7 +204,7 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             return this.preprocessStatus( req, await device.resume() );
-            
+
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -216,7 +216,7 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             return this.preprocessStatus( req, await device.stop() );
-            
+
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
         }
@@ -258,7 +258,7 @@ export class PlayerController extends BaseController {
     protected async preprocessStatus ( req, status : ReceiverStatus ) : Promise<ReceiverStatus> {
         if ( status && status.media && status.media.record ) {
             const url = this.server.getMatchingUrl( req );
-    
+
             ( status.media.record as any ).cachedArtwork = this.server.artwork.getCachedObject( url, status.media.record.kind, status.media.record.id, status.media.record.art );
         }
 
@@ -339,9 +339,9 @@ export class PlayerController extends BaseController {
 
         if ( device ) {
             const size : number = parseFloat( req.params.size );
-            
+
             const status = await device.callCommand<ReceiverStatus>( 'changeSubtitlesSize', [ size ] );
-    
+
             return this.preprocessStatus( req, status );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
@@ -356,7 +356,7 @@ export class PlayerController extends BaseController {
             const args = req.query.args || req.body.args || [];
 
             const status = await device.callCommand<ReceiverStatus>( Case.camel( req.params.command ), args );
-    
+
             return this.preprocessStatus( req, status );
         } else {
             throw new InvalidDeviceArgumentError( req.params.device );
@@ -364,7 +364,7 @@ export class PlayerController extends BaseController {
     }
 
     @Route( 'get', '/:device/preview/:kind/:id/:time', BinaryResponse )
-    async preview ( req : Request, res : Response ) : Promise<FileInfo | Error> {
+    async preview ( req : Request, res : Response ) : Promise<FileInfo> {
         const device = this.server.receivers.get( req.params.device );
 
         if ( device ) {
@@ -379,13 +379,13 @@ export class PlayerController extends BaseController {
             const video = MediaStreamSelectors.firstVideo( streams );
 
             if ( video == null ) {
-                return new NotFoundError( 'Media item does not contain a video source.' );
+                throw new NotFoundError( 'Media item does not contain a video source.' );
             }
 
             const time = +req.params.time;
 
             if ( isNaN( time ) ) {
-                return new InvalidArgumentError( 'Time is not a number.' );
+                throw new InvalidArgumentError( 'Time is not a number.' );
             }
 
             const preview = new MediaPreview( this.server, media, video, time );

@@ -99,6 +99,7 @@
     "node-tvdb": "^4.1.0",
     "object-path": "^0.11.4",
     "opensubtitles-api": "^4.0.0",
+    "opensubtitles.com": "^1.0.0",
     "parse-key": "^0.2.1",
     "parse-torrent-name": "^0.5.4",
     "pidusage": "^1.2.0",
