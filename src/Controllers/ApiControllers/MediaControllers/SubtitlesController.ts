@@ -136,7 +136,7 @@ export class SubtitlesController extends BaseController {
             const context: Record<string, string | string[]> = {
                 basePath: this.server.getMatchingUrl( req, '/api' ),
                 video: videoUrl,
-                subtitle: `/media/subtitles/${media.kind}/${media.id}/${command}/${subtitleFile.id}`,
+                subtitle: `/media/subtitles/${media.kind}/${media.id}/${mode}/${subtitleFile.id}`,
                 additionalSubtitles: additionalSubtitles.map( subtitle => `/media/subtitles/${media.kind}/${media.id}/local/${subtitle.id}` ),
             };
 

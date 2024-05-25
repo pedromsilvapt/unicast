@@ -114,6 +114,6 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
 
         process.stdout.write('\x07');
 
-        return fs.createReadStream( tempFile );
+        return fs.createReadStream( path.join( tempFolder, tempFile ) );
     }
 }
