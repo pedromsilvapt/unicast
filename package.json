@@ -41,6 +41,7 @@
     "tape": "^4.8.0",
     "typescript": "^4.9.5"
   },
+  "bundleDependencies": ["unicast-interface"],
   "dependencies": {
     "@gallant/schema": "^0.1.2",
     "@pedromsilva/data-future": "^1.1.3",
