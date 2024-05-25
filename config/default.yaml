@@ -6,12 +6,12 @@ primaryLanguage: eng
 
 secondaryLanguages: []
 
-server: 
+server:
     port: 3030
 
     acl:
         - kind: ip
-          patterns: 
+          patterns:
             - 192.168.*.*
             - ::ffff:192.168.*.*
           allow: all
@@ -36,6 +36,33 @@ database:
         cwd: storage
         args: []
 
+databaseRethink:
+    db: unicast
+    host: "127.0.0.1"
+    port: 28015
+
+    autostart:
+        enable: true
+        cwd: storage
+        args: []
+
+database:
+    client: better-sqlite3
+    useNullAsDefault: true
+    debug: false
+    compileSqlOnError: true
+    asyncStackTraces: true
+    connection:
+        filename: ./storage/database.db
+    migrations:
+        directory: ./lib/Database/Migrations
+
+extensions:
+    # Generic extension configurations
+    #
+    # MediaReceivers/Chromecast:
+    #   disable: true
+
 receivers:
     # Can disable auto scanning for player devices in the network
     scan: true
@@ -55,29 +82,29 @@ repositories:
     # An array of repositories containing the media files. The only repository currently supported is the filesystem one~~
     # The 'content' property can be either 'tvshows' or 'movies'
     # The 'scraper' property can be either 'tvdb' or 'moviedb'
-    
+
 
     # - name: tvshows
     #   type: filesystem
     #   content: tvshows
     #   scrapper: tvdb
-    #   folders: 
+    #   folders:
     #     - D:\Series
     #     - E:\Shows
     #   exclude:
     #     - '{Vice|House of Anubis|Warehouse 13}/{**|*}'
-    
+
     ## ADVANCED SETTINGS
     # The 'ignoreUnreachableMedia' is helpeful when your media is spread across multiple removable hard drives, which
     # might not always be connected to the PC at all times, and thus syncing the repositories when one the them was
     # unconnected would cause the media files to be presumed deleted and removed from the database.
     # With this option enabled, when the server detects a missing file, it asks to the repository first if the
     # device is connected, and if it is not, it just ignored that media file
-    
+
     #   enableDefaultMounts: true
     #   ignoreUnreachableMedia: true
 
-    # The 'enableDefaultMounts' tells the system to assume the default mounting points (only useful in Windows, 
+    # The 'enableDefaultMounts' tells the system to assume the default mounting points (only useful in Windows,
     # where most removable devices are mounted as a letter K:\ for example)
     # On Linux, MacOS and other operating systems, each mount can be individually specified, for example, as:
     #   mounts:
