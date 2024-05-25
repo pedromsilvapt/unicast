@@ -31,7 +31,7 @@ export class MediaCastTable extends BaseTable<MediaCastRecord> {
 
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'kind', 'id' ),
-            person: new BelongsToOneRelation( 'person', tables.people, 'personId', 'personId' )
+            person: new BelongsToOneRelation( 'person', tables.people, 'personId' )
         };
     }
 }

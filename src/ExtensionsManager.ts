@@ -85,7 +85,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
         this.logger = server.logger.service( 'Extensions' );
 
-        this.config = server.config.get('extensions');
+        this.config = server.config.get( 'extensions', {} );
     }
 
     protected getEntityKey ( entity : Extension ) : Extension {

@@ -12,7 +12,7 @@ export class SqlExpression {
     }
     
     public toSQL () : string {
-        const select = {
+        const select: sql.AST = {
             type: "select",
             columns: [ {
                 expr: {
@@ -20,7 +20,16 @@ export class SqlExpression {
                     value: 1
                 }
             } ],
-            where: this.ast
+            where: this.ast,
+            
+            with: null,
+            options: null,
+            distinct: null,
+            from: null,
+            groupby: null,
+            having: null,
+            orderby: null,
+            limit: null,
         };
         
         return parser.sqlify( select ).slice( 'SELECT 1 WHERE '.length );

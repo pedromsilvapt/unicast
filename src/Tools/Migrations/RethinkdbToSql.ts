@@ -25,8 +25,8 @@ export class RethinkdbToSqlTool extends Tool<RethinkdbToSqlOptions> {
     
     getOptions () {
         return [
-            new ToolOption( 'source' ).setRequired( false ).setType( ToolValueType.String ).setDefaultValue( 'database' ),
-            new ToolOption( 'target' ).setRequired( false ).setType( ToolValueType.String ).setDefaultValue( 'databaseSql' ),
+            new ToolOption( 'source' ).setRequired( false ).setType( ToolValueType.String ).setDefaultValue( 'databaseRethink' ),
+            new ToolOption( 'target' ).setRequired( false ).setType( ToolValueType.String ).setDefaultValue( 'database' ),
             new ToolOption( 'dryRun' ).setRequired( false ).setType( ToolValueType.Boolean ).setDefaultValue( false )
         ]
     }
@@ -51,8 +51,8 @@ export class RethinkdbToSqlTool extends Tool<RethinkdbToSqlOptions> {
         const srcConfig = this.server.config.get( options.source );
         const dstConfig = this.server.config.get( options.target );
         
-        const src = new rethink.Database( this.server, Config.create( { database: srcConfig } ) );
-        const dst = new sql.Database( this.server, Config.create( { databaseSql: dstConfig } ) );
+        const src = new rethink.Database( this.server, Config.create( { databaseRethink: srcConfig } ) );
+        const dst = new sql.Database( this.server, Config.create( { database: dstConfig } ) );
         
         await src.install();
         await dst.install();

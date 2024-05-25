@@ -12,11 +12,6 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
 
     dateFields = [ 'createdAt' ];
 
-    // indexesSchema : IndexSchema[] = [
-    //     { name: 'collectionId' },
-    //     { name: 'reference', expression: [ r.row( 'mediaKind' ), r.row( 'mediaId' ) ] }
-    // ];
-
     declare relations: {
         record: BelongsToOnePolyRelation<CollectionMediaRecord, MediaRecord, { record : MediaRecord }>;
         collection: BelongsToOneRelation<CollectionMediaRecord, CollectionRecord, { collection : CollectionRecord }>;
@@ -27,7 +22,7 @@ export class CollectionMediaTable extends BaseTable<CollectionMediaRecord> {
 
         return {
             record: new BelongsToOnePolyRelation( 'record', map, 'mediaKind', 'mediaId' ),
-            collection: new BelongsToOneRelation( 'collection', tables.collections, 'collectionId', 'collectionId' )
+            collection: new BelongsToOneRelation( 'collection', tables.collections, 'collectionId' )
         };
     }
 

@@ -136,14 +136,12 @@ export class Database {
         const knexLogger = this.server.logger.service( 'database/sql' );
         
         this.connection = knex( {
-            ...this.config.get<knex.Knex.Config>( 'databaseSql' ),
+            ...this.config.get<knex.Knex.Config>( 'database' ),
             log: new DatabaseKnexLogger( knexLogger )
         } );
         
         this.connection.on( 'query-error', ( error, query ) => {
             knexLogger.error( error + '\n' + query );
-            // console.log(error, 'error');
-            // console.log(query, 'query');
         });
 
         this.tables = new DatabaseTables( this );
@@ -196,7 +194,15 @@ export class Database {
      * @param options
      * @returns
      */
-    for ( options: knex.Knex.Config ) : Database {
+    for ( options: string | knex.Knex.Config ) : Database {
+        if ( typeof options === 'string' ) {
+            options = {
+                connection: {
+                    filename: options
+                }
+            } as knex.Knex.Config;
+        }
+        
         const newConfig = Config.merge( [
             this.config.clone(),
             Config.create( { database: options } ),
@@ -213,7 +219,11 @@ export class Database {
      * @param logger
      * @returns
      */
-    async clone ( destination : Database | knex.Knex.Config, logger ?: LoggerInterface, transformer?: ( tableName: string ) => ( row: any ) => any ) {
+    async clone ( destination : Database | knex.Knex.Config | string, logger ?: LoggerInterface, transformer?: ( tableName: string ) => ( row: any ) => any ) {
+        if ( !( destination instanceof Database ) ) {
+            destination = this.for( destination );
+        }
+        
         throw new Error(`Not yet implemented`);
     }
 }

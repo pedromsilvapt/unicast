@@ -78,7 +78,7 @@ export class Database {
 
         this.tables = new DatabaseTables( this.connections );
 
-        if ( this.config.get( 'database.autostart.enable' ) ) {
+        if ( this.config.get( 'databaseRethink.autostart.enable' ) ) {
             this.daemon = new DatabaseDaemon( server );
         }
     }
@@ -88,12 +88,12 @@ export class Database {
             await this.daemon.start();
         }
 
-        return r.connect( this.config.get<r.ConnectionOptions>( 'database' ) );
+        return r.connect( this.config.get<r.ConnectionOptions>( 'databaseRethink' ) );
     }
 
     async install () {
         try {
-            const databaseName : string = this.config.get<string>( 'database.db' );
+            const databaseName : string = this.config.get<string>( 'databaseRethink.db' );
 
             const conn = await this.connections.acquire();
 
@@ -2073,7 +2073,7 @@ export class DatabaseDaemon {
             return this.futureStart.resolve();
         }
 
-        const config = this.server.config.get( 'database.autostart' );
+        const config = this.server.config.get( 'databaseRethink.autostart' );
 
         this.process = spawn( config.command, config.args, {
             cwd: config.cwd
