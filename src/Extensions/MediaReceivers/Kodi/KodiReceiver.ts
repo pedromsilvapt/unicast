@@ -59,7 +59,7 @@ function delay ( milliseconds : number ) {
 
 async function retry<T> ( fn : () => Promise<T> | T, base : number = 200, timeout : number = 60000, maxDelay : number = 0, multiplier = 4, additive = 0 ) : Promise<T> {
     const start = Date.now();
-    
+
     while ( true ) {
         try {
             return await fn();
@@ -89,7 +89,7 @@ async function retry<T> ( fn : () => Promise<T> | T, base : number = 200, timeou
 
     if ( base > 0 ) {
         await delay( base );
-    
+
         return await fn();
     }
 }
@@ -98,15 +98,15 @@ export class KodiReceiver extends BaseReceiver {
     readonly type : string = 'kodi';
 
     readonly address : string;
-    
+
     readonly port : number;
 
     protected connection : KodiConnection = null;
 
     subtitlesStyle : KodiSubtitlesStyles;
-    
+
     sender : HttpSender;
-    
+
     config : KodiConfig;
 
     logger : Logger;
@@ -220,8 +220,8 @@ export class KodiReceiver extends BaseReceiver {
     }
 
     protected async checkStatusState ( states : ReceiverStatusState | ReceiverStatusState[], error : string | Error | ( () => Error ) ) {
-        const status = await this.status(); 
-        
+        const status = await this.status();
+
         const predicate = states instanceof Array
             ? states.some( state => status.state == state )
             : status.state == states;
@@ -230,8 +230,8 @@ export class KodiReceiver extends BaseReceiver {
     }
 
     protected async checkStatusNotState ( states : ReceiverStatusState | ReceiverStatusState[], error : string | Error | ( () => Error ) ) {
-        const status = await this.status(); 
-               
+        const status = await this.status();
+
         const predicate = states instanceof Array
             ? states.every( state => status.state != state )
             : status.state != states;
@@ -240,7 +240,7 @@ export class KodiReceiver extends BaseReceiver {
     }
 
     protected async checkStatusPlaying ( session, error : string ) {
-        const status = await this.status(); 
+        const status = await this.status();
 
         const predicate = status.state == ReceiverStatusState.Stopped || !status.media.session || status.media.session.id != session;
 
@@ -309,14 +309,14 @@ export class KodiReceiver extends BaseReceiver {
             if ( this.sessions.current != null && this.sessions.current != id ) {
                 await this.sessions.release( this.sessions.current );
             }
-        
+
             await this.connection.playSession( id, {
                 options,
                 ...this.subtitlesStyle.currentStyle
             } );
-    
+
             this.sessions.current = id;
-    
+
             this.emit( 'play', id );
         } catch ( err ) {
             this.sessions.release( id );
@@ -333,7 +333,7 @@ export class KodiReceiver extends BaseReceiver {
         await this.connection.pause();
 
         this.emit( 'pause', this.sessions.current );
-        
+
         await this.connection.showProgress();
 
         return this.status();
@@ -357,7 +357,7 @@ export class KodiReceiver extends BaseReceiver {
         const id = this.sessions.current;
 
         this.sessions.current = null;
-        
+
         this.emit( 'stop', id );
 
         return this.status();
@@ -376,7 +376,7 @@ export class KodiReceiver extends BaseReceiver {
             return Promise.reject( err );
         } );
 
-        
+
         const session = this.sessions.current;
 
         if ( !status || !session ) {
@@ -404,9 +404,9 @@ export class KodiReceiver extends BaseReceiver {
             online: true,
             state: status.pause ? ReceiverStatusState.Paused : ReceiverStatusState.Playing,
             media: {
-                time: { 
-                    duration: status.totalTime, 
-                    current: status.time, 
+                time: {
+                    duration: status.totalTime,
+                    current: status.time,
                     speed: status.pause ? 0 : status.speed
                 },
                 transcoding: null,
@@ -468,27 +468,27 @@ export class KodiReceiver extends BaseReceiver {
             await this.connection.pages.openSingleTvShowList( show );
         } else if ( kind === MediaKind.TvSeason ) {
             const selectedSeason = await this.server.media.get( kind, id );
-            
+
             const show = await this.server.media.get( MediaKind.TvShow, selectedSeason.tvShowId );
 
             await this.connection.pages.openTvShow( show, { selectedSeason } );
         } else if ( kind === MediaKind.TvEpisode ) {
             const selectedEpisode = await this.server.media.get( kind, id );
-            
+
             const season = await this.server.media.get( MediaKind.TvSeason, selectedEpisode.tvSeasonId );
 
             await this.connection.pages.openTvSeason( season, { selectedEpisode } );
         } else {
             throw new InvalidArgumentError( `Kind ${ kind } is not supported.` );
         }
-        
+
         return this.status();
     }
 
     async setServerAddress (address?: string, port?: number) : Promise<any> {
         address ??= this.server.getIpV4();
         port ??= this.server.getPort();
-        
+
         return await this.connection.sendSetServerAddress( address, port );
     }
 
@@ -499,14 +499,14 @@ export class KodiReceiver extends BaseReceiver {
 
         throw new InvalidArgumentError();
     }
-    
+
     async getSubtitlesOffset () : Promise<number> {
         if ( !this.sessions.current ) {
             return 0;
         }
-        
+
         const { options } = await this.sessions.get( this.sessions.current );
-        
+
         return options.subtitlesOffset || 0;
     }
 
@@ -518,6 +518,18 @@ export class KodiReceiver extends BaseReceiver {
 
     async decreaseSubtitlesOffset () {
         await this.connection.subtitleDelayMinus();
+
+        return this.status();
+    }
+
+    async increaseAudioOffset () {
+        await this.connection.audioDelayPlus();
+
+        return this.status();
+    }
+
+    async decreaseAudioOffset () {
+        await this.connection.audioDelayMinus();
 
         return this.status();
     }

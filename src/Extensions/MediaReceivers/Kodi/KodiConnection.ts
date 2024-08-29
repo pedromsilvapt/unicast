@@ -254,13 +254,19 @@ export class KodiConnection {
     }
 
     subtitleDelayPlus () : Promise<void> {
-        // WARN Switched up
+        return this.call( 'Input.ExecuteAction', { action: 'subtitledelayplus' } );
+    }
+
+    subtitleDelayMinus () : Promise<void> {
         return this.call( 'Input.ExecuteAction', { action: 'subtitledelayminus' } );
     }
     
-    subtitleDelayMinus () : Promise<void> {
-        // WARN Switched down
-        return this.call( 'Input.ExecuteAction', { action: 'subtitledelayplus' } );
+    audioDelayPlus () : Promise<void> {
+        return this.call( 'Input.ExecuteAction', { action: 'audiodelayplus' } );
+    }
+
+    audioDelayMinus () : Promise<void> {
+        return this.call( 'Input.ExecuteAction', { action: 'audiodelayminus' } );
     }
 
     subtitleScale ( scale : number ) : Promise<void> {
