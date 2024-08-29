@@ -47,7 +47,7 @@ export class UpdatePathsTool extends Tool<UpdatePathsOptions> {
 
                     source.id = newPath;
 
-                    record.internalId = shorthash.unique( newPath );
+                    record.internalId = this.server.hash( newPath );
 
                     changed = true;
                 }
