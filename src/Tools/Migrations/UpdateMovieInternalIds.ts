@@ -15,24 +15,26 @@ export class UpdateMovieInternalIdsTool extends Tool<UpdateMovieInternalIdsOptio
     async run ( options : UpdateMovieInternalIdsOptions ) {
         const filesystem = this.server.providers.get( 'filesystem' );
 
-        for await ( let record of this.server.database.tables.movies.findStream() ) {
-            let changed = false;
+        for (const table of [this.server.database.tables.movies, this.server.database.tables.episodes]) {
+            for await ( let record of table.findStream() ) {
+                let changed = false;
 
-            for ( let source of record.sources ) {
-                if ( filesystem.match( source.id ) ) {
-                    this.log( 'Changing', source.id, 'with', this.server.hash( source.id ) );
-    
-                    record.internalId = this.server.hash( source.id );
-    
-                    changed = true;
+                for ( let source of record.sources ) {
+                    if ( filesystem.match( source.id ) ) {
+                        const new_hash = this.server.hash( source.id );
+
+                        if (record.internalId != new_hash) {
+                            this.log( 'Changing', source.id, 'with', new_hash );
+
+                            record.internalId = this.server.hash( source.id );
+
+                            changed = true;
+                        }
+                    }
                 }
-            }
 
-            if ( changed ) {
-                const table = this.server.media.getTable( record.kind );
-
-                if ( !options.dryRun ) {
-                    await table.update( record.id, { sources: record.sources, internalId: record.internalId } );
+                if ( changed && !options.dryRun ) {
+                    await table.update( record.id, { internalId: record.internalId } );
                 }
             }
         }

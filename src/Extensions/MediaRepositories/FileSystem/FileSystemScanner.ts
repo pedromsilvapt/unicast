@@ -14,7 +14,7 @@ import { CacheOptions } from '../../../MediaScrapers/ScraperCache';
 import { MediaRecordFiltersContainer } from '../../../MediaRepositories/ScanConditions';
 import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
-import * as yaml from 'js-yaml' 
+import * as yaml from 'js-yaml'
 import { isSameFile, MovieLocalSettings, TvEpisodeLocalSettings, TvShowLocalSettings } from './LocalSettings';
 import { MediaTools, ParsePathMode } from '../../../MediaTools';
 
@@ -78,11 +78,11 @@ export interface FileSystemScannerConfigBase<M> {
 }
 
 export interface FileSystemScannerConfig extends FileSystemScannerConfigBase<string | FileSystemMountConfig> {
-    
+
 }
 
 export interface FileSystemScannerConfigNormalized extends FileSystemScannerConfigBase<FileSystemMountConfig> {
-    
+
 }
 
 export class VideosFileWalker extends FileWalker {
@@ -215,7 +215,7 @@ export class FileSystemScanner {
 
     public static parseQuality ( file : string, mode : ParsePathMode = ParsePathMode.BaseName ) : PlayableQualityRecord {
         const quality = MediaTools.parsePath( file, mode );
-        
+
         return {
             codec: quality.codec || null,
             releaseGroup: quality.group || null,
@@ -285,7 +285,7 @@ export class FileSystemScanner {
 
         if ( !externalMovieId ) {
             const titleQuery = typeof year === 'number' ? ( title + ` (${ year })` ) : title;
-            
+
             return ( await scraper.searchMovie( titleQuery, 1, query, cache ) )[ 0 ];
         } else {
             return scraper.getMovie( externalMovieId, query, cache );
@@ -309,7 +309,7 @@ export class FileSystemScanner {
                     }
 
                     const dirname = path.basename( path.dirname( videoFile ) );
-                    
+
                     if ( !dirname ) {
                         logger.static().warn( `File ${ videoFile } is not inside a directory, will be skipped.` );
 
@@ -319,23 +319,23 @@ export class FileSystemScanner {
                     const details = parseTorrentName( dirname );
 
                     const fullVideoFile = path.join( folder, videoFile );
-                
+
                     const id = this.server.hash( fullVideoFile );
-                    
+
                     let movie = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.Movie ).get( id ) as MovieMediaRecord ) );
 
                     if ( movie != null && !this.refreshConditions.testMovie( id ) && movie.scraper === scraper.name ) {
                         yield movie;
-    
+
                         continue;
                     }
 
                     this.removeIgnore( MediaKind.Movie, id );
-    
+
                     const movieCache : CacheOptions = this.refreshConditions.testMovie( id ) ? { ...cache, readTtl: 60  } : cache;
 
                     const localSettings = await this.getMovieLocalSettings( path.dirname( fullVideoFile ) );
-    
+
                     // TODO We need to use || instead of ?? because the generated Typescript code is not hygienic otherwise
                     const movieName: string = localSettings.name || details.title;
                     const movieYear: number | null = localSettings.year || details.year;
@@ -346,12 +346,12 @@ export class FileSystemScanner {
 
                     if ( !movie ) {
                         this.logScanError( MediaKind.Movie, videoFile, 'Cannot find movie ' + id + ' ' + movieName + ' (' + movieYear + ')' );
-    
+
                         continue;
                     }
-    
+
                     this.logScanInfo( 'Found', movie.id, movie.title, movie.year );
-    
+
                     yield {
                         ...movie,
                         id: id,
@@ -389,7 +389,7 @@ export class FileSystemScanner {
         // that is not '.' or '..'. In the example above, `diskShowName` would be
         // 'Euphoria'
         const diskShowName = pathRootName( videoFile );
-        
+
         const localSettings = await this.getTvShowLocalSettings( folder, diskShowName );
 
         // Is used for logical operations about the TV show (like getting information)
@@ -397,11 +397,11 @@ export class FileSystemScanner {
         // actual show's location in storage
         const showName = localSettings.show?.name ?? diskShowName;
 
-        // Contains the entry stored in the pertaining to the current music 
+        // Contains the entry stored in the pertaining to the current music
         // file. If there was no entry, this variable is null
         const localSettingsEpisode = localSettings?.episodes
             ?.find( ep => isSameFile( folder, path.join( showName, ep.file ), videoFile ) );
-        
+
         if ( localSettingsEpisode?.ignore ?? false ) {
             return;
         }
@@ -413,7 +413,7 @@ export class FileSystemScanner {
         const id = shorthash.unique( showName );
 
         if ( !show ) {
-            // In case the option `refetchExisting` is false, the existing media records stored in the database are accessible in the 
+            // In case the option `refetchExisting` is false, the existing media records stored in the database are accessible in the
             // `ignore` variable. We try to retrieve the record (show can therefore be null or not)
             show = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.TvShow ).get( id ) as TvShowMediaRecord ) );
 
@@ -446,7 +446,7 @@ export class FileSystemScanner {
                 }
             }
 
-            // We only yield the show inside this if to not yield the same show more than once: once the show in the the 
+            // We only yield the show inside this if to not yield the same show more than once: once the show in the the
             // `showsByName` map, we can consider it has already been yielded
             if ( show != null ) {
                 yield show;
@@ -487,7 +487,7 @@ export class FileSystemScanner {
 
         if ( localSettingsEpisode?.id != null ) {
             var episodeInfo = await scraper.getTvEpisode( '' + localSettingsEpisode?.id, {}, cache );
-            
+
             scraperSeasonNumber = episodeInfo.seasonNumber;
             scraperEpisodeNumber = episodeInfo.number;
         }
@@ -498,7 +498,7 @@ export class FileSystemScanner {
         let episodeNumber: number = localSettingsEpisode?.override?.number ?? scraperEpisodeNumber;
 
         const logError = ( err ?: any ) => this.logScanError( MediaKind.TvEpisode, videoFile, `Cannot find ${ show.title } ${ seasonNumber } ${ episodeNumber } ` + (err || ''), show );
-        
+
         if ( isNaN( seasonNumber ) || isNaN( episodeNumber ) ) {
             return logError( 'Details isNaN' );
         }
@@ -510,8 +510,8 @@ export class FileSystemScanner {
         if ( season == null || this.refreshConditions.testTvSeason( id, seasonNumber ) || season.scraper !== scraper.name ) {
             this.removeIgnore( MediaKind.TvSeason, seasonId );
 
-            const seasonCache : CacheOptions = this.refreshConditions.testTvSeason( id, seasonNumber ) 
-                ? { ...cache, readTtl: 60  } 
+            const seasonCache : CacheOptions = this.refreshConditions.testTvSeason( id, seasonNumber )
+                ? { ...cache, readTtl: 60  }
                 : cache;
 
             // We search for the `seasonNumber` instead of `scraperSeasonNumber`
@@ -539,15 +539,15 @@ export class FileSystemScanner {
 
         const fullVideoFile = path.join( folder, videoFile );
 
-        const episodeId = shorthash.unique( fullVideoFile );
+        const episodeId = this.server.hash( fullVideoFile );
 
         let episode = unwrap( clone( this.snapshot.recordsToIgnore.get( MediaKind.TvEpisode ).get( episodeId ) as TvEpisodeMediaRecord ) );
-        
+
         if ( episode == null || this.refreshConditions.testTvEpisode( id, seasonNumber, episodeNumber ) || episode.scraper !== scraper.name ) {
             this.removeIgnore( MediaKind.TvEpisode, episodeId );
 
-            const episodeCache : CacheOptions = this.refreshConditions.testTvEpisode( id, seasonNumber, episodeNumber ) 
-                ? { ...cache, readTtl: 60  } 
+            const episodeCache : CacheOptions = this.refreshConditions.testTvEpisode( id, seasonNumber, episodeNumber )
+                ? { ...cache, readTtl: 60  }
                 : cache;
 
             const episodesConfig : IScraperQuery = {};
@@ -571,7 +571,7 @@ export class FileSystemScanner {
         if ( episode == null ) {
             return logError( 'Episode is null' );
         }
-        
+
         this.logScanInfo( 'Found', episode.id, show.title, seasonNumber, episodeNumber );
 
         yield {
@@ -632,13 +632,13 @@ export class FileSystemScanner {
         for ( let folder of this.config.folders ) {
             for await ( let [ videoFile, stats ] of walker.run( folder, null ).buffered( 50 ) ) {
                 const dirname = path.basename( path.dirname( videoFile ) );
-                
+
                 const details = parseTorrentName( dirname );
 
                 const fullVideoFile = path.join( folder, videoFile );
-            
+
                 const id = this.server.hash( fullVideoFile );
-                
+
                 const localSettings = await this.getMovieLocalSettings( path.dirname( fullVideoFile ) );
 
                 const movieName: string = localSettings.name || details.title;
@@ -675,7 +675,7 @@ export class FileSystemScanner {
                 // that is not '.' or '..'. In the example above, `diskShowName` would be
                 // 'Euphoria'
                 const diskShowName = pathRootName( videoFile );
-                
+
                 const localSettings = await this.getTvShowLocalSettings( folder, diskShowName );
 
                 // Is used for logical operations about the TV show (like getting information)
@@ -683,11 +683,11 @@ export class FileSystemScanner {
                 // actual show's location in storage
                 const showName = localSettings.show?.name ?? diskShowName;
 
-                // Contains the entry stored in the pertaining to the current music 
+                // Contains the entry stored in the pertaining to the current music
                 // file. If there was no entry, this variable is null
                 const localSettingsEpisode = localSettings?.episodes
                     ?.find( ep => isSameFile( folder, path.join( diskShowName, ep.file ), videoFile ) );
-                
+
                 if ( localSettingsEpisode?.ignore ?? false ) {
                     return;
                 }
@@ -711,7 +711,7 @@ export class FileSystemScanner {
 
                     yield show;
                 }
-                
+
                 const details = parseTorrentName( path.basename( videoFile ) );
 
                 let scraperSeasonNumber: number = details.season;
@@ -747,7 +747,7 @@ export class FileSystemScanner {
 
                 const fullVideoFile = path.join( folder, videoFile );
 
-                const episodeId = shorthash.unique( fullVideoFile );
+                const episodeId = this.server.hash( fullVideoFile );
 
                 yield {
                     kind: MediaKind.TvEpisode,
@@ -766,7 +766,7 @@ export class FileSystemScanner {
      * Performs a scan of the local file system, gathering as much information
      * locally about each potential media found, without attempting to scrape
      * information from any remote provider.
-     * @returns 
+     * @returns
      */
     public scanLocal () : AsyncIterable<LocalRecord> {
         if ( this.config.content === MediaScanContent.Movies ) {
