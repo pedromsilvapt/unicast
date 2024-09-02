@@ -1,3 +1,10 @@
+# WARNING
+Unicast is in the process of migrating the database from rethinkdb. The latest version of code using rethinkdb only, is being kept in the branch `archive/rethinkdb`.
+
+This branch currently still has the dependencies and most of the code to interface with both RethinkDB and SQLite, but SQLite is the DB used by default. The goal of this version of the code is to be used only during migration.
+
+If you are using this application and are facing issues with it, feel free to open a ticket, to make sure no data is lost during the migration.
+
 # unicast - The universal media server
 > **Warning** This project is still in alpha state and under heavy development, with many features still to be added and plenty of bugs to be fixed.
 
@@ -20,7 +27,7 @@ After that, install the NodeJs dependencies with the command
 npm install --save-dev
 ```
 
-Finally, download [RethinkDB](https://www.rethinkdb.com/) and save the executable somewhere on your disk. 
+Finally, download [RethinkDB](https://www.rethinkdb.com/) and save the executable somewhere on your disk.
 > **Tip** You may want to put it inside the `storage/` folder inside the unicast directory.
 
 After that, the sources need to be compiled to JavaScript (Really? Sadly, really.). Run the command
