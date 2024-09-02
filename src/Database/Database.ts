@@ -118,6 +118,10 @@ export class Database {
 
     tables : DatabaseTables;
 
+    logger: LoggerInterface;
+    
+    knexLogger: DatabaseKnexLogger;
+    
     protected installedFuture : Future<void> = new Future();
 
     installed : Promise<void> = this.installedFuture.promise;
@@ -133,15 +137,16 @@ export class Database {
 
         this.config = config || server.config;
 
-        const knexLogger = this.server.logger.service( 'database/sql' );
+        this.logger = this.server.logger.service( 'database/sql' );
+        this.knexLogger = new DatabaseKnexLogger( this.logger );
         
         this.connection = knex( {
             ...this.config.get<knex.Knex.Config>( 'database' ),
-            log: new DatabaseKnexLogger( knexLogger )
+            log: this.knexLogger
         } );
         
         this.connection.on( 'query-error', ( error, query ) => {
-            knexLogger.error( error + '\n' + query );
+            this.logger.error( error + '\n' + query );
         });
 
         this.tables = new DatabaseTables( this );

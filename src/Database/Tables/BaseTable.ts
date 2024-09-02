@@ -159,6 +159,10 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
             sequence = query( sequence );
         }
         
+        if ( this.database.config.get<boolean>( 'database.debug' ) ) {
+            this.database.knexLogger.debug( sequence.toSQL() );
+        }
+        
         return sequence.stream();
     }
 

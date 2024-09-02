@@ -24,7 +24,7 @@ export class Converters {
     
     public static bool () : Converter<boolean, number> {
         return {
-            serialize: ( value ) => typeof value == 'boolean' ? +value : value,
+            serialize: ( value ) => +(value ?? false),
             deserialize: ( value ) => typeof value == 'number' ? !!value : value,
         };
     }

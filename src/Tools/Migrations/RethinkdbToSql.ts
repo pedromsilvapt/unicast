@@ -139,6 +139,7 @@ export class RethinkdbToSqlTool extends Tool<RethinkdbToSqlOptions> {
         
         for ( const record of allMediaRecords ) {
             record.id = identifiers.get( record.kind, record.id );
+            record.transient ??= false;
             
             if ( isTvSeasonRecord( record ) )  {
                 record.tvShowId = identifiers.get( MediaKind.TvShow, record.tvShowId );

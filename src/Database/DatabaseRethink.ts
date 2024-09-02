@@ -1299,7 +1299,7 @@ export abstract class MediaTable<R extends MediaRecord> extends BaseTable<R> {
     installRelations ( tables : DatabaseTables ) {
         return {
             collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', this.kind ),
-            cast: new ManyToManyRelation( 'cast', tables.mediaCast, tables.people, 'mediaId', 'personId' ).savePivot( 'cast' ).pivotIndexedBy( 'reference' ).poly( 'mediaKind', this.kind )
+            cast: new ManyToManyRelation( 'cast', tables.mediaCast, tables.people, 'mediaId', 'personId' ).savePivot( 'cast' )/*.pivotIndexedBy( 'reference' )*/.poly( 'mediaKind', this.kind )
         };
     }
 
@@ -1427,7 +1427,7 @@ export class TvShowsMediaTable extends MediaTable<TvShowMediaRecord> {
     installRelations ( tables : DatabaseTables ) {
         return {
             ...super.installRelations( tables ),
-            seasons: new HasManyRelation( 'seasons', tables.seasons, 'tvShowId' ).indexBy( 'tvShowId' ).orderBy( 'number' )
+            seasons: new HasManyRelation( 'seasons', tables.seasons, 'tvShowId' )/*.indexBy( 'tvShowId' )*/.orderBy( 'number' )
         };
     }
 
@@ -1535,7 +1535,7 @@ export class TvSeasonsMediaTable extends MediaTable<TvSeasonMediaRecord> {
         return {
             ...super.installRelations( tables ),
             show: new BelongsToOneRelation( 'tvShow', tables.shows, 'tvShowId', 'tvShowId' ),
-            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' ).indexBy( 'tvSeasonId' ).orderBy( 'number' ),
+            episodes: new HasManyRelation( 'episodes', tables.episodes, 'tvSeasonId' )/*.indexBy( 'tvSeasonId' )*/.orderBy( 'number' ),
         };
     }
 
