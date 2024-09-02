@@ -21,7 +21,7 @@ const build = async ( isProduction, watch ) => {
         log: {
             showBundledFiles: false // Don't list all the bundled files every time we bundle
         },
-        plugins: [ 
+        plugins: [
             JSONPlugin(),
             RawPlugin( [ '.txt.js', '.txt', '.txt.ts' ] ),
             isProduction && QuantumPlugin( {
@@ -33,16 +33,16 @@ const build = async ( isProduction, watch ) => {
             } )
         ]
     } );
-    
+
     fuse.bundle( "vendor" )
         .instructions( "~ cli.ts" )
-    
+
     const app = fuse.bundle( "app" )
         .completed( proc => proc.start() )
         .instructions( "> [cli.ts]" );
 
     if ( watch ) app.watch();
-    
+
     await fuse.run();
 };
 
@@ -58,20 +58,27 @@ task( 'build:copy', async context => {
 
 let packageDependencies = {
     'win32': {
-        'ffmpeg': 'https://ffmpeg.zeranoe.com/builds/win64/static/ffmpeg-4.1-win64-static.zip',
-        'rethinkdb': 'https://download.rethinkdb.com/repository/raw/windows/rethinkdb-2.3.6.zip',
+        'ffmpeg': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n5.1-latest-win64-gpl-5.1.zip',
+        // 'rethinkdb': 'https://download.rethinkdb.com/repository/raw/windows/rethinkdb-2.3.6.zip',
         'sharp': 'https://github.com/lovell/sharp/releases/download/v0.21.1/sharp-v0.21.1-node-v64-win32-x64.tar.gz',
         'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-win32-x64.tar.gz'
     },
     'linux': {
-        'ffmpeg': 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz',
-        'rethinkdb': null,
+        'ffmpeg': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n5.1-latest-linux64-gpl-5.1.tar.xz',
+        // 'rethinkdb': null,
         'sharp': 'https://github.com/lovell/sharp/releases/download/v0.21.1/sharp-v0.21.1-node-v64-linux-x64.tar.gz',
         'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-linux-x64.tar.gz'
     },
+    'linux-arm64': {
+        'ffmpeg': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n5.1-latest-linuxarm64-gpl-5.1.tar.xz',
+        // 'rethinkdb': null,
+        'sharp': 'https://github.com/lovell/sharp/releases/download/v0.27.0/sharp-v0.27.0-napi-v3-linux-arm64.tar.gz',
+        // 'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-linux-armv7.tar.gz'
+        'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-linux-armv7.tar.gz'
+    },
     'darwin': {
         'ffmpeg': 'https://evermeet.cx/ffmpeg/ffmpeg-4.1.7z',
-        'rethinkdb': 'https://download.rethinkdb.com/repository/raw/osx/rethinkdb-2.3.6.dmg',
+        // 'rethinkdb': 'https://download.rethinkdb.com/repository/raw/osx/rethinkdb-2.3.6.dmg',
         'sharp': 'https://github.com/lovell/sharp/releases/download/v0.21.1/sharp-v0.21.1-node-v64-darwin-x64.tar.gz',
         'libvips': 'https://github.com/lovell/sharp-libvips/releases/download/v8.7.0/libvips-8.7.0-darwin-x64.tar.gz'
     }
@@ -87,7 +94,7 @@ async function fetch ( platform, dependency, force = false ) {
 
         return;
     }
-    
+
     const targetFolder = path.join( 'builds', '.cache', 'compressed', platform, dependency );
 
     if ( !force && await fs.exists( targetFolder ) ) {
@@ -99,7 +106,7 @@ async function fetch ( platform, dependency, force = false ) {
     if ( !url ) {
         return;
     }
- 
+
     try {
         const targetFile = path.join( targetFolder, path.basename( url ) );
 
@@ -132,7 +139,7 @@ function getPackageHost ( platform ) {
 async function package ( platform ) {
     // sharp: https://github.com/lovell/sharp/releases
     // lipvips: https://github.com/lovell/sharp-libvips/releases/
-    await fetch( platform, [ 'ffmpeg', 'rethinkdb', 'libvips', 'sharp' ] );
+    await fetch( platform, [ 'ffmpeg' /* , 'rethinkdb' */, 'libvips', 'sharp' ] );
 
     const buildFolder = `builds/${ platform }/`;
 
@@ -152,44 +159,46 @@ async function package ( platform ) {
             .exec();
     }
 
-    
-    await copy( 
+
+    await copy(
         './lib/Extensions',
         path.join( buildFolder, 'Extensions' )
     );
 
-    await copy( 
+    await copy(
         './config',
         path.join( buildFolder, 'config' ),
         [ 'default*.yaml' ]
     );
 
-    await copy( 
-        `./builds/.cache/uncompressed/${ platform }/rethinkdb`,
-        path.join( buildFolder, 'storage' )
-    );
-    
-    await copy( 
+    // await copy(
+    //     `./builds/.cache/uncompressed/${ platform }/rethinkdb`,
+    //     path.join( buildFolder, 'storage' )
+    // );
+
+    await copy(
         `./builds./cache/uncompressed/${ platform }/ffmpeg`,
         path.join( buildFolder, 'storage', 'ffmpeg' )
     );
 
-    await copy( 
+    await copy(
         `./builds/.cache/uncompressed/${ platform }/sharp`,
         path.join( buildFolder, 'node_modules', 'sharp' )
     );
 
-    await copy( 
+    await copy(
         `./builds/.cache/uncompressed/${ platform }/libvips/lib`,
         path.join( buildFolder, 'node_modules', 'sharp', 'build', 'Release' )
     );
 }
 
-task( 'package:win', context => package( 'win32' ) );
-task( 'package:linux', context => package( 'linux' ) );
-task( 'package:darwin', context => package( 'darwin' ) );
+const targets = [ 'win', 'linux', 'linux-arm64', 'darwin' ];
 
-task( 'package', [ 'package:win', 'package:linux', 'package:darwin' ] );
+for ( const target of [ 'host', ...targets ] ) {
+    task( 'package:' + target, context => package( target ) );
+}
+
+task( 'package', targets.map( target => 'package:' + target ) );
 
 task( 'check', async context => {
     await tsc( __dirname, {
@@ -214,7 +223,7 @@ async function reset ( folder ) {
 async function copy ( source, dest, filters = null ) {
     await makeDir( dest );
 
-    const globs = !filters || filters.len == 0 
+    const globs = !filters || filters.len == 0
         ? [ path.join( '**', '*' ) ]
         : filters;
 
