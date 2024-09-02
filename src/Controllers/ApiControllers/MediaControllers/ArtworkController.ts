@@ -1,8 +1,8 @@
 import { BaseController, Route } from "../../BaseController";
 import { Request, Response, Next } from "restify";
 import { NotFoundError } from "restify-errors";
-import * as objectPath from 'object-path';
 import * as mime from 'mime';
+import * as objectPath from 'object-path';
 import * as path from 'path';
 import * as fs from 'mz/fs';
 
@@ -24,7 +24,7 @@ export class ArtworkController extends BaseController {
         const stats : fs.Stats = await fs.stat( cachePath );
         
         return {
-            mime: mime.lookup( cachePath ),
+            mime: mime.getType( cachePath ),
             length: stats.size,
             lastModified: stats.mtime,
             data: fs.createReadStream( cachePath )
@@ -48,7 +48,7 @@ export class ArtworkController extends BaseController {
             const stats : fs.Stats = await fs.stat( cachePath );
             
             return {
-                mime: mime.lookup( cachePath ),
+                mime: mime.getType( cachePath ),
                 length: stats.size,
                 lastModified: stats.mtime,
                 data: fs.createReadStream( cachePath )
@@ -77,7 +77,7 @@ export class ArtworkController extends BaseController {
             const stats : fs.Stats = await fs.stat( cachePath );
             
             return {
-                mime: mime.lookup( cachePath ),
+                mime: mime.getType( cachePath ),
                 length: stats.size,
                 lastModified: stats.mtime,
                 data: fs.createReadStream( cachePath ),

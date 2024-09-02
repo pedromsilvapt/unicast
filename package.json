@@ -94,6 +94,7 @@
     "kodi-ws": "^2.4.3",
     "make-dir": "^1.3.0",
     "mess": "^0.1.2",
+    "mime": "^3.0.0",
     "minimatch": "^3.0.4",
     "mnml-tpl": "^1.0.2",
     "multicast-dns": "^6.1.1",

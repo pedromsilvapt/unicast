@@ -1,8 +1,8 @@
 import { SubtitlesMediaStream } from '../../../../MediaProviders/MediaStreams/SubtitlesStream';
 import { FileSystemMediaSource } from "../FileSystemMediaSource";
 import { MediaRange } from "../../../../MediaProviders/MediaStreams/MediaStream";
-import * as fs from 'mz/fs';
 import * as mime from 'mime';
+import * as fs from 'mz/fs';
 import * as path from 'path';
 
 export class FileSystemSubtitlesMediaStream extends SubtitlesMediaStream {
@@ -22,7 +22,7 @@ export class FileSystemSubtitlesMediaStream extends SubtitlesMediaStream {
         const file = this.file;
         
         this.size = ( await fs.stat( file ) ).size;
-        this.mime = mime.lookup( file );
+        this.mime = mime.getType( file );
         this.format = path.extname( file ).slice( 1 ).toLowerCase() || null;
     }
 

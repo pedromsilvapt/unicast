@@ -28,7 +28,7 @@ export class YoutubeSubtitlesMediaStream extends SubtitlesMediaStream {
 
     async init () : Promise<void> {
         this.size = await remoteFileSize( this.options.url );
-        this.mime = mime.lookup( this.options.format );
+        this.mime = mime.getType( this.options.format );
         this.format = this.options.format;
 
         // Size should not be bigger than 1MB

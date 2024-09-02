@@ -399,7 +399,7 @@ export class PlayerController extends BaseController {
             }
 
             return {
-                mime: mime.lookup( '.' + preview.getFileExtension() ),
+                mime: mime.getType( '.' + preview.getFileExtension() ),
                 data: preview.generate()
             };
         } else {

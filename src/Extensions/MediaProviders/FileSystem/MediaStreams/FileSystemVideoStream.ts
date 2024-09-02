@@ -1,8 +1,8 @@
 import { VideoMediaStream } from "../../../../MediaProviders/MediaStreams/VideoStream";
 import { FileSystemMediaSource } from "../FileSystemMediaSource";
 import { MediaRange } from "../../../../MediaProviders/MediaStreams/MediaStream";
-import * as fs from 'mz/fs';
 import * as mime from 'mime';
+import * as fs from 'mz/fs';
 import { MediaTools } from "../../../../MediaTools";
 import { ResilientReadStream } from "../../../../ES2017/ResilientStream";
 
@@ -24,7 +24,7 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
         
         this.metadata = this.metadata || await MediaTools.probe( file );
         this.size = +( await fs.stat( file ) ).size;
-        this.mime = mime.lookup( file );
+        this.mime = mime.getType( file );
         this.duration = +this.metadata.files[ 0 ].format.duration;
     }
 

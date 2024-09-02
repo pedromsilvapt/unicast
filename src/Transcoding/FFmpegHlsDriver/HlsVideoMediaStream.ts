@@ -143,7 +143,7 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
             this.size = +( await fs.stat( this.file ) ).size;
         }
 
-        this.mime = mime.lookup( this.file );
+        this.mime = mime.getType( this.file );
     }
 
     async openAsync ( range : MediaRange, readable : Readable ) : Promise<void> {
