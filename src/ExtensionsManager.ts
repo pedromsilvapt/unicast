@@ -144,7 +144,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
                 const namespacedName = path.relative( folder, path.dirname( file ) ).replace( /\\/g, '/' );
 
-                if ( this.config[ namespacedName ]?.disable ) {
+                if ( this.config?.[ namespacedName ]?.disable ) {
                     this.logger.info(`Extension ${ chalk.yellow( namespacedName ) } is disabled in config.`)
                     continue;
                 }
