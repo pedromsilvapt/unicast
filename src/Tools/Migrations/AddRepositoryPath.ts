@@ -1,8 +1,8 @@
 import { Tool, ToolOption, ToolValueType } from "../Tool";
 import { isCustomRecord, isMovieRecord, isTvEpisodeRecord, isTvSeasonRecord, isTvShowRecord, MediaRecord, TvSeasonMediaRecord, TvShowMediaRecord } from '../../MediaRecord';
-import { MediaTable, TvSeasonsMediaTable, TvShowsMediaTable } from '../../Database/Database';
+import { AbstractMediaTable, TvSeasonsMediaTable, TvShowsMediaTable } from '../../Database/Database';
 import { format } from 'date-fns';
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { FileSystemRepository } from '../../Extensions/MediaRepositories/FileSystem/FileSystemRepository';
 
 export interface AddRepositoryPathOptions {
@@ -27,7 +27,7 @@ export class AddRepositoryPathTool extends Tool<AddRepositoryPathOptions> {
 
         const allTables = this.server.database.tables;
 
-        const tables : MediaTable<MediaRecord>[] = [
+        const tables : AbstractMediaTable<MediaRecord>[] = [
             allTables.custom, allTables.movies, 
             // The order of the tables is important, since seasons depends on
             // the information discovered by episodes, and shows by seasons

@@ -4,9 +4,8 @@ import { BaseTable } from "../Database/Database";
 import { Response, Request } from "restify";
 import { ResourceNotFoundError, NotAuthorizedError, InvalidArgumentError } from "restify-errors";
 import { EntityResource } from '../AccessControl';
-import { RethinkLang, RethinkCompiledQuery } from '../RethinkQueryLang';
-import * as r from 'rethinkdb';
-import * as regexEscape from 'regex-escape';
+import { SqlLang, SqlCompiledQuery } from '../SqlQueryLang';
+import { Knex } from 'knex';
 import * as schema from '@gallant/schema';
 
 export const TableListQuerySchema = schema.parse( `{
@@ -35,33 +34,23 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
 
     allowedActions : string[] = [ 'list', 'get', 'create', 'update', 'delete' ];
 
-    getSearchQuery ( search : string, query : r.Sequence ) : r.Sequence {
+    getSearchQuery ( search : string, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( this.searchFields.length === 0 ) {
             return query;
         }
 
-        const regex = '(?i)' + regexEscape( search );
-
-        return query.filter( doc => {
-            let conditional = doc;
-
-            for ( let [ index, field ] of this.searchFields.entries() ) {
-                if ( index === 0 ) {
-                    conditional = ( doc as any )( field ).match( regex );
-                } else {
-                    conditional = conditional.or( ( doc as any )( field ).match( regex ) );
-                }
+        return query.where( q => {
+            for ( let field of this.searchFields ) {
+                q = q.orWhereLike( field, '%' + search + '%' );
             }
-
-            return conditional;
         } );
     }
 
-    getQueryCustomOrder ( query: r.Sequence, field: string, direction: 'asc' |  'desc', list: string ) : r.Sequence {
+    getQueryCustomOrder ( query: Knex.QueryBuilder, field: string, direction: 'asc' |  'desc', list: string ) : Knex.QueryBuilder {
         throw new InvalidArgumentError( `Custom ordering not supported.` );
     }
 
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         const reqQuery: RequestQuery<R> = req.query;
 
         if ( reqQuery.filterSort ) {
@@ -76,15 +65,15 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
             if ( sort.field.startsWith( '$' ) ) {
                 query = this.getQueryCustomOrder( query, sort.field, sort.direction, sort.list );
             } else if ( sort.direction == 'desc' ) {
-                query = query.orderBy( { index: r.desc( sort.field ) } );
+                query = query.orderBy( sort.field, 'desc' );
             } else {
-                query = query.orderBy( { index: r.asc( sort.field ) } );
+                query = query.orderBy( sort.field, 'asc' );
             }
         } else if ( this.defaultSortField ) {
             if ( this.defaultSortFieldDirection === 'desc' ) {
-                query = query.orderBy( { index: r.desc( this.defaultSortField ) } );
+                query = query.orderBy( this.defaultSortField, 'desc' );
             } else {
-                query = query.orderBy( { index: this.defaultSortField } );
+                query = query.orderBy( this.defaultSortField, 'asc' );
             }
         }
 
@@ -93,19 +82,19 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         }
 
         if ( reqQuery.search?.embeddedQuery ) {
-            query = reqQuery.search.embeddedQuery( query );
+            query = query.andWhereRaw( reqQuery.search.embeddedQuery( null ).toSQL() );
         }
-
+        
         return query;
     }
 
-    getPagination ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
+    getPagination ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         if ( req.query.skip ) {
-            query = query.skip( +req.query.skip );
+            query = query.offset( +req.query.skip );
         }
 
         if ( req.query.take && req.query.take !== Infinity ) {
-            query = query.limit( +req.query.take );
+            query = query.limit( +req.query.take, { skipBinding: true } );
         }
 
         return query;
@@ -129,7 +118,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
                 query.search.embeddedQueryAst = QueryLang.parse( parsedQuery.embeddedQuery );
                 query.search.embeddedQuerySemantics = this.createCustomQuerySemantics( req, query.search.embeddedQueryAst ) || new QuerySemantics();
                 // query.search.embeddedQuery = QueryLang.compile( query.search.embeddedQueryAst, query.search.embeddedQuerySemantics );
-                query.search.embeddedQuery = await new RethinkLang( this.server.database, query.search.embeddedQueryAst ).analyzeAndCompile();
+                query.search.embeddedQuery = new SqlLang( this.server.database, this.table.tableName, query.search.embeddedQueryAst ).analyzeAndCompile();
             }
         }
     };
@@ -170,7 +159,7 @@ export abstract class BaseTableController<R, T extends BaseTable<R> = BaseTable<
         return items;
     }
 
-    public createQuery ( req : Request, res : Response, query : ( query : r.Sequence ) => r.Sequence ) : Promise<R[]> {
+    public createQuery ( req : Request, res : Response, query : ( query : Knex.QueryBuilder ) => Knex.QueryBuilder ) : Promise<R[]> {
         return this.table.find( query );
     }
 
@@ -301,7 +290,7 @@ export interface RequestQuery<R> {
     take?: number;
     search?: {
         body: string;
-        embeddedQuery?: RethinkCompiledQuery;
+        embeddedQuery?: SqlCompiledQuery;
         embeddedQueryAst?: QueryAst;
         embeddedQuerySemantics?: QuerySemantics<R>;
     };

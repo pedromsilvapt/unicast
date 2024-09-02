@@ -1,4 +1,4 @@
-import { Database, MediaTable } from './Database/Database';
+import { AbstractMediaTable, Database, MediaTable } from './Database/Database';
 import { RepositoriesManager } from './MediaRepositories/RepositoriesManager';
 import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord, isTvSeasonRecord, isTvShowRecord, isCustomRecord } from './MediaRecord';
 import { BackgroundTask } from './BackgroundTask';
@@ -12,6 +12,7 @@ import { ScrapersManager } from './MediaScrapers/ScrapersManager';
 import { collect, groupingBy, first, mapping, distinct, filtering } from 'data-collectors';
 import { AsyncStream } from 'data-async-iterators';
 import { SemaphorePool } from 'data-semaphore';
+import { Knex } from 'knex';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -51,7 +52,7 @@ export class MediaSync {
         this.logger = logger.service( 'media/sync' );
     }
 
-    async runRecordForeigns ( table : MediaTable<any>, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
+    async runRecordForeigns ( table : AbstractMediaTable<any>, media : MediaRecord, snapshot : MediaSyncSnapshot ) {
         for ( let property of Object.keys( table.foreignMediaKeys ) ) {
             if ( media[ property ] ) {
                 const kind = table.foreignMediaKeys[ property ];
@@ -102,7 +103,7 @@ export class MediaSync {
         // WARNING MUST BE BEFORE ANY AWAIT
         snapshot.touched.get( media.kind ).add( media.internalId );
 
-        let match = ( await table.findAll( [ media.internalId ], { index: 'internalId', query : query => query.filter( { repository: media.repository } ).limit( 1 ) } ) ) [ 0 ];
+        let match = await table.findOne( q => q.where( 'internalId', media.internalId ).where( 'repository', media.repository ) );
 
         if ( match ) {
             snapshot.scanBarrier.ready();
@@ -157,7 +158,7 @@ export class MediaSync {
                 ...media as any,
                 createdAt: now,
                 updatedAt: now
-            }, { durability: 'soft' } );
+            } );
 
             await repair.onCreate( media );
         } else {
@@ -191,7 +192,7 @@ export class MediaSync {
         const changed = table.isChanged( oldRecord, newRecord );
 
         if ( changed && !snapshot.options.dryRun ) {
-            await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() }, { durability: 'soft' } );
+            await table.updateIfChanged( oldRecord, newRecord, { updatedAt: new Date() } );
 
             newRecord.id = oldRecord.id;
 
@@ -221,7 +222,7 @@ export class MediaSync {
 
             await repair.onRemove( record );
 
-            await table.delete( record.id, { durability: 'soft' } );
+            await table.delete( record.id );
         }
 
         task.reportRemove( record );
@@ -281,8 +282,9 @@ export class MediaSync {
         const newPeopleRolesId = newRoles.map( role => role.internalId ).filter( id => id && !existingRoles.has( id ) );
 
         // And we will search OTHER media records for the same person and see what we find
-        const newPeopleRoles : MediaCastRecord[] = collect(
-            await this.database.tables.mediaCast.findAll( newPeopleRolesId, { index: 'internalId' } ),
+        const newPeopleRoles : MediaCastRecord[] = collect( 
+            await this.database.tables.mediaCast.find( q => q.whereIn( 'internalId', newPeopleRolesId ).where( 'scraper', media.scraper ) ), 
+            // TODO SQL personId != null needed?
             filtering( p => p.personId != null && p.scraper == media.scraper, distinct( p => p.internalId ) )
         );
 
@@ -331,7 +333,7 @@ export class MediaSync {
                             deathday: role.deathday || person.deathday,
                             naturalFrom: role.naturalFrom || person.naturalFrom,
                             art: role.art || person.art
-                        }, null, { durability: 'soft' } );
+                        }, null );
                     }
 
                     existingPeopleCount++;
@@ -346,7 +348,7 @@ export class MediaSync {
                     };
 
                     if ( !dryRun ) {
-                        person = await peopleTable.create( person, { durability: 'soft' } );
+                        person = await peopleTable.create( person );
                     }
 
                     createdPeopleCount++;
@@ -368,13 +370,13 @@ export class MediaSync {
                     if ( matchRole != null ) {
                         await this.database.tables.mediaCast.updateIfChanged( matchRole.cast, cast, {
                             updatedAt: new Date()
-                        }, { durability: 'soft' } );
+                        } );
                     } else {
                         await this.database.tables.mediaCast.create( {
                             ...cast as any,
                             updatedAt: new Date(),
                             createdAt: new Date(),
-                        }, { durability: 'soft' } );
+                        } );
                     }
                 }
             } finally {
@@ -509,8 +511,8 @@ export class MediaSync {
             const table = this.media.getTable( kind );
 
             if ( table ) {
-                const allRecords = table.findStream( query => query.filter( { repository: repository.name } ) );
-
+                const allRecords = table.findStream( query => query.where( { repository: repository.name } ) );
+                
                 for await ( let record of allRecords ) {
                     set.set( record.internalId, record );
                 }
@@ -521,11 +523,11 @@ export class MediaSync {
     }
 
     async findIncompleteRecords ( repository : IMediaRepository ) : Promise<MediaRecordFilter[]> {
-        const episodes = await this.database.tables.episodes.findStream( query => query.filter( { repository: repository.name } ) )
+        const episodes = await this.database.tables.episodes.findStream( query => query.where( { repository: repository.name } ) )
             .filter( ep => ep.art.thumbnail == null || ep.plot == null || !ep.external )
             .toArray();
 
-        const seasons = await this.database.tables.seasons.findStream( query => query.filter( { repository: repository.name } ) )
+        const seasons = await this.database.tables.seasons.findStream( query => query.where( { repository: repository.name } ) )
             .filter( se => se.art.poster == null )
             .toArray();
 
@@ -590,7 +592,7 @@ export class MediaSync {
 
                 const recordsStream = repository.scan( options.kinds, snapshot, conditions, options.cache || {}, task );
 
-                for await ( let media of AsyncStream.from( recordsStream ).observe( { onError: err => this.logger.error( err ) } ).dropErrors() ) {
+                for await ( let media of AsyncStream.from( recordsStream ).observe( { onError: err => this.logger.error( err + '\n' + err.stack ) } ).dropErrors() ) {
                     task.addTotal( 1 );
 
                     media = { ...media };
@@ -752,7 +754,7 @@ export class MediaSyncSnapshot {
             const table = media.getTable( kind );
 
             if ( table ) {
-                const allRecords = table.findStream( query => query.filter( { repository: repository } ) );
+                const allRecords = table.findStream( query => query.where( { repository: repository } ) );
 
                 for await ( let record of allRecords ) {
                     set.set( record.internalId, record );

@@ -9,6 +9,7 @@
         "noImplicitAny": false,
         "sourceMap": true,
         "allowJs": true,
+        "noEmitOnError": false,
         "outDir": "lib/",
         "lib": [
             "es7", "esnext"

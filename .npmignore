@@ -58,15 +58,17 @@ typings/
 # dotenv environment variables file
 .env
 
-storage/
+src/Tools/Local/
+src/Extensions/CustomActions/Local/
+
+lib/Tools/Local/
+lib/Extensions/CustomActions/Local/
 
 config/local.yaml
 config/local-*.yaml
 
+/storage/
 .vscode
-
 .fusebox
-
 /dist/
-
 /builds/

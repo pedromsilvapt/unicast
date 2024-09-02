@@ -114,9 +114,10 @@ export class MediaSessionsManager {
 
     async register ( record : MediaRecord, options : MediaPlayOptions = {} ) : Promise<string> {
         const history = await this.mediaManager.database.tables.history.create( {
-            playlist: options.playlistId,
+            playlistId: options.playlistId,
             playlistPosition: options.playlistPosition,
-            reference: { id: record.id, kind: record.kind  },
+            mediaId: record.id, 
+            mediaKind: record.kind,
             position: options.startTime || 0,
             receiver: this.receiver.name,
             positionHistory: [ { start: options.startTime || 0, end: options.startTime || 0 } ],
@@ -139,8 +140,8 @@ export class MediaSessionsManager {
 
             await this.mediaManager.database.tables.history.update( history.id, { watched: true } );
 
-            const media = await this.mediaManager.get( history.reference.kind, history.reference.id );
-                        
+            const media = await this.mediaManager.get( history.mediaKind, history.mediaId );
+
             await this.mediaManager.watchTracker.watch( media );
         }
     }
@@ -155,7 +156,7 @@ export class MediaSessionsManager {
         if ( history ) {
             const cancel = new CancelToken();
 
-            const record = await this.mediaManager.get( history.reference.kind, history.reference.id ) as PlayableMediaRecord;
+            const record = await this.mediaManager.get( history.mediaKind, history.mediaId ) as PlayableMediaRecord;
             
             const originalStreams = await this.mediaManager.providers.streams( record.sources );
             
@@ -403,24 +404,25 @@ export class AutoZappingStrategy implements IZappingStrategy {
 }
 export class PlaylistZappingStrategy implements IZappingStrategy {
     async applies ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<boolean> {
-        return session.playlist != null;
+        return session.playlistId != null;
     }
 
     protected async offset ( session : HistoryRecord, manager : MediaSessionsManager, offset : number ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
-        if ( !session.playlist ) {
+        if ( !session.playlistId ) {
             return Optional.empty<[ MediaRecord, MediaPlayOptions ]>();
         }
 
-        const playlist = await manager.mediaManager.database.tables.playlists.get( session.playlist );
+        const playlist = await manager.mediaManager.database.tables.playlists.get( session.playlistId );
 
+        const items = await manager.mediaManager.database.tables.playlists.relations.items.load( playlist );
         
         const index = session.playlistPosition;
 
-        if ( index + offset < 0 || index + offset >= playlist.references.length ) {
+        if ( index + offset < 0 || index + offset >= items.length ) {
             return Optional.empty();
         }
 
-        const media = await manager.mediaManager.get( playlist.references[ index + offset ].kind, playlist.references[ index + offset ].id );
+        const media = await manager.mediaManager.get( items[ index + offset ].kind, items[ index + offset ].id );
 
         if ( !media ) {
             return Optional.empty();
@@ -440,13 +442,13 @@ export class PlaylistZappingStrategy implements IZappingStrategy {
 
 export class TvShowZappingStrategy implements IZappingStrategy {
     async applies ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<boolean> {
-        const record = await manager.mediaManager.get( session.reference.kind, session.reference.id );
+        const record = await manager.mediaManager.get( session.mediaKind, session.mediaId );
 
         return record.kind === MediaKind.TvEpisode;
     }
 
     protected async offset ( session : HistoryRecord, manager : MediaSessionsManager, offset : number ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
-        const record = await manager.mediaManager.get( session.reference.kind, session.reference.id ) as TvEpisodeMediaRecord;
+        const record = await manager.mediaManager.get( session.mediaKind, session.mediaId ) as TvEpisodeMediaRecord;
 
         if ( record.kind !== MediaKind.TvEpisode ) {
             return Optional.empty();

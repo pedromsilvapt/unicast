@@ -1,10 +1,10 @@
 import { ResourceNotFoundError, InvalidArgumentError } from "restify-errors";
-import { PlaylistRecord, BaseTable } from "../../Database/Database";
+import { PlaylistRecord, BaseTable, PlaylistsTable, PlaylistMediaRecord } from "../../Database/Database";
 import { BaseTableController } from "../BaseTableController";
 import { Request, Response } from "restify";
 import { Route } from "../BaseController";
-import * as r from 'rethinkdb';
-import { MediaRecord } from "../../MediaRecord";
+import { Knex } from 'knex';
+import { MediaKind, MediaRecord } from "../../MediaRecord";
 import { MediaSourceLike } from "../../MediaProviders/ProvidersManager";
 
 export class PlaylistsController extends BaseTableController<PlaylistRecord> {
@@ -14,23 +14,15 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
 
     searchFields : string[] = [];
 
-    get table () : BaseTable<PlaylistRecord> {
+    get table () : PlaylistsTable {
         return this.server.database.tables.playlists;
     }
 
     async transformDocument ( req : Request, res : Response, playlist : any, isNew : boolean ) : Promise<any> {
         playlist = {
             ...playlist,
-            device: req.params.device,
-            updatedAt: new Date()
+            device: req.params.device
         };
-
-        if ( isNew ) {
-            playlist.createdAt = new Date();
-            playlist.references = playlist.references || [];
-        } else {
-            delete playlist.createdAt;
-        }
 
         delete playlist.items;
 
@@ -87,19 +79,23 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
         return playlists;
     }
 
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
-        return super.getQuery( req, res, query ).filter( { device: req.params.device } );
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
+        return super.getQuery( req, res, query ).where( { device: req.params.device } );
     }
 
     @Route( 'get', '/last' )
     async last ( req : Request, res : Response ) {
         const playlists = await this.table.find( query => {
-            query = query.orderBy( { index: r.desc( 'createdAt' ) } ).filter( { device: req.params.device } );
+            query = query.orderBy( 'createdAt', 'desc' ).where( { device: req.params.device } );
 
             if ( req.query.empty === 'exclude' ) {
-                query.filter( doc => ( doc as any )( 'references' ).count().gt( 0 ) )
-            } else if ( req.query.empty === 'include' ) {
-                query.filter( doc => ( doc as any )( 'references' ).count().lt( 0 ) )
+                const playlistsMedia = this.server.database.tables.playlistsMedia;
+                
+                const includedQuery = playlistsMedia.query()
+                    .select( 'mediaId' )
+                    .whereRaw( `${ this.table.tableName }.id = ${ playlistsMedia.tableName }.playlistId` );
+                
+                query = query.whereExists( includedQuery );
             }
 
             return query.limit( 1 );
@@ -150,12 +146,19 @@ export class PlaylistsController extends BaseTableController<PlaylistRecord> {
                 }
             }
         }
+        
+        const playlistMedia = references.map( ( ref, index ) => ( {
+            playlistId: playlist.id,
+            mediaKind: ref.kind,
+            mediaId: ref.id,
+            order: index
+        } ) as Partial<PlaylistMediaRecord> );
 
-        playlist = await this.table.update( playlist.id, {
-            references: references,
-            updatedAt: new Date()
-        } );
-
-        return await Promise.all( playlist.references.map( ( { kind, id } ) => this.server.media.get( kind, id ) ) );
+        await this.table.relations.items.sync( playlist, playlistMedia );
+        
+        // Bump the updatedAt field
+        await this.table.update( playlist.id, playlist );
+        
+        return await this.table.relations.items.load( playlist );
     }
 }

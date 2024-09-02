@@ -1,7 +1,7 @@
 import { BaseTableController } from "../../BaseTableController";
 import { BaseTable, HistoryRecord } from "../../../Database/Database";
 import { Request, Response } from "restify";
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 import { MediaKind, MediaRecord } from '../../../MediaRecord';
 import { AsyncStream } from 'data-async-iterators';
 
@@ -51,21 +51,22 @@ export class SessionsController extends BaseTableController<HistoryRecord> {
         }
     }
 
-    getQuery ( req : Request, res : Response, query : r.Sequence ) : r.Sequence {
+    getQuery ( req : Request, res : Response, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
         query = super.getQuery( req, res, query );
 
         if ( req.query.filterPlayableMedia ) {
             const media : string[] = req.query.filterPlayableMedia;
 
-            query = query.filter( row => r.expr( media ).contains( ( row( 'reference' )( 'kind' ) as any ).add(',').add( row( 'reference' )( 'id' ) ) ) );
+            // We can compare only by the Media Id because it is unique across all kinds
+            query = query.whereIn( 'mediaId', media.map( pair => pair.split( ',' )[ 1 ] ) );
         }
 
         if ( req.query.filterDateStart ) {
-            query = query.filter( row => row( 'createdAt' ).gt( new Date( +req.query.filterDateStart ) ) );
+            query = query.where( 'createdAt', '>', +req.query.filterDateStart );
         }
 
         if ( req.query.filterDateEnd ) {
-            query = query.filter( row => row( 'createdAt' ).lt( new Date( +req.query.filterDateEnd ) ) );
+            query = query.where( 'createdAt', '<', +req.query.filterDateEnd );
         }
 
         return query;

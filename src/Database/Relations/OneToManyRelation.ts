@@ -6,12 +6,7 @@ import * as sortBy from "sort-by";
 export abstract class OneToManyRelation<M extends TableRecord, R extends TableRecord> extends Relation<M, R[]> {
     public relatedTable : BaseTable<R>;
 
-    public member : string;
-
     public foreignKey : string;
-
-    public indexName : string = null;
-
 
     protected orderByFields : string[] = null;
 
@@ -20,13 +15,6 @@ export abstract class OneToManyRelation<M extends TableRecord, R extends TableRe
 
         this.relatedTable = relatedTable;
         this.foreignKey = foreignKey;
-        this.indexName = indexName;
-    }
-
-    public indexBy ( indexName : string ) : this {
-        this.indexName = indexName;
-        
-        return this;
     }
 
     public orderBy ( orderByFields : string | string[] ) : this {
@@ -47,8 +35,7 @@ export class HasManyRelation<M extends TableRecord, R extends TableRecord> exten
         const relation = new HasManyRelation( 
             this.member, 
             this.relatedTable, 
-            this.foreignKey, 
-            this.indexName 
+            this.foreignKey,
         );
 
         relation.subRelations = [ ...this.subRelations ];
@@ -66,7 +53,7 @@ export class HasManyRelation<M extends TableRecord, R extends TableRecord> exten
     async loadRelated ( items : M[] ) : Promise<Map<string, R[]>> {
         const keys = items.map( item => item.id );
 
-        const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey, this.indexName );
+        const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey );
         
         await this.loadSubRelations( related );
 

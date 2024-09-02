@@ -1,8 +1,8 @@
 import { Tool, ToolOption, ToolValueType } from "../Tool";
 import { ExternalReferences, isPlayableRecord, MediaRecord, PlayableMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord } from '../../MediaRecord';
-import { DatabaseTables, HistoryTable, MediaTable, TvSeasonsMediaTable, TvShowsMediaTable } from '../../Database/Database';
+import { AbstractMediaTable, DatabaseTables, HistoryTable, MediaTable, TvSeasonsMediaTable, TvShowsMediaTable } from '../../Database/Database';
 import { addDays, format, subDays } from 'date-fns';
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 
 export interface LastPlayedNormalizationOptions {
     dryRun : boolean;
@@ -35,7 +35,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
         // } );
 
         let nearbySessions = await history.find( query => {
-            return query.between( startDate, endDate, { index: 'createdAt' } );
+            return query.whereBetween( 'createdAt', [startDate, endDate] );
         } );
 
         await history.relations.record.applyAll( nearbySessions );
@@ -57,10 +57,11 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                 position: record.runtime * 1000,
                 positionHistory: [ { start: 0, end: record.runtime * 1000 } ],
                 receiver: 'Unknown',
-                reference: { kind: record.kind, id: record.id },
+                mediaKind: record.kind, 
+                mediaId: record.id,
                 updatedAt: date,
                 watched: true,
-                playlist: null,
+                playlistId: null,
                 playlistPosition: null,
                 transcoding: null,
             } );
@@ -76,7 +77,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
 
         const allTables = this.server.database.tables;
 
-        const tables : MediaTable<CommonRecord>[] = [
+        const tables : AbstractMediaTable<CommonRecord>[] = [
             allTables.custom, allTables.movies, 
             allTables.shows, allTables.seasons, allTables.episodes,
         ];
@@ -145,7 +146,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                 if ( record.lastPlayed != null && record.lastPlayedAt == null ) {
                     if ( !options.dryRun ) {
                         await table.update( record.id, { 
-                            lastPlayed: ( r as any ).literal(),
+                            lastPlayed: null,
                             lastPlayedAt: record.lastPlayed 
                         } );
                     }
@@ -155,7 +156,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                     // logger.info( `${record.title} -> ${fmt( record.lastPlayed )} ${fmt(record.lastPlayedAt)}` );
                 } else if ( record.lastPlayed != null && record.lastPlayedAt != null ) {
                     if ( !options.dryRun ) {
-                        await table.update( record.id, { lastPlayed: ( r as any ).literal() } );
+                        await table.update( record.id, { lastPlayed: null } );
                     }
 
                     updated = true;

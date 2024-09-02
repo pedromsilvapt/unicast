@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Keyboard } from './Keyboard';
 import * as argvSetEnv from 'argv-set-env';
 

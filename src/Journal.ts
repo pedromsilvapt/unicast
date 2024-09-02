@@ -4,7 +4,7 @@ import { ExternalReferences, MediaRecord, MediaKind, AllMediaKinds } from './Med
 import { AsyncIterableLike, AsyncStream } from 'data-async-iterators';
 import { Hook, HookSubscription, HookSubscriptionCancellation } from './Hookable';
 import { CollectionRecord, CollectionMediaRecord } from './Database/Database';
-import * as r from 'rethinkdb';
+import { Knex } from 'knex';
 
 export type JournalEntry = 
       { action: 'CREATE_COLLECTION', title: string }
@@ -213,7 +213,7 @@ export class CollectionsMediaJournalAction extends BaseJournalAction {
     rebuild () : AsyncIterable<[JournalEntry, number]> {
         const collectionsMedia = this.journal.server.database.tables.collectionsMedia;
 
-        return collectionsMedia.findStream( query => query.orderBy( { index: r.asc( 'createdAt' ) } ) )
+        return collectionsMedia.findStream( query => query.orderBy( 'createdAt', 'asc' ) )
             .map( async record => [ await this.createRecord( 'ADD_TO_COLLECTION', record ), record.createdAt.getTime() ] as [ JournalEntry, number ] );
     }
 }
@@ -240,7 +240,7 @@ export class MediaJournalAction extends BaseJournalAction {
     rebuildKind ( kind : MediaKind ) : AsyncIterable<[JournalEntry, number]> {
         const table = this.journal.server.media.getTable( kind );
 
-        return table.findStream( query => query.orderBy( { index: r.asc( 'addedAt' ) } ) );
+        return table.findStream( query => query.orderBy( 'addedAt', 'asc' ) );
     }
 
     rebuild () {

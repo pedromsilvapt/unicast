@@ -85,7 +85,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
         this.logger = server.logger.service( 'Extensions' );
 
-        this.config = server.config.get('extensions');
+        this.config = server.config.get( 'extensions', {} );
     }
 
     protected getEntityKey ( entity : Extension ) : Extension {
@@ -144,7 +144,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
 
                 const namespacedName = path.relative( folder, path.dirname( file ) ).replace( /\\/g, '/' );
 
-                if ( this.config[ namespacedName ]?.disable ) {
+                if ( this.config?.[ namespacedName ]?.disable ) {
                     this.logger.info(`Extension ${ chalk.yellow( namespacedName ) } is disabled in config.`)
                     continue;
                 }

@@ -148,19 +148,19 @@ export class QueryLang {
     } 
 }
 
-export class QuerySemantics<C = any> {
-    properties : Record<string, PropertySemantics<C>>;
+export class QuerySemantics<C = any, R = unknown> {
+    properties : Record<string, PropertySemantics<C, R>>;
 
     dynamicProperties: {
         predicate: (key: string) => boolean,
-        semantics: PropertySemantics<C>
+        semantics: PropertySemantics<C, R>
     }[] = [];
 
-    public constructor ( properties : Record<string, PropertySemantics<C>> = {} ) {
+    public constructor ( properties : Record<string, PropertySemantics<C, R>> = {} ) {
         this.properties = properties;
     }
     
-    public getPropertyFor ( ast : QueryAst ) : PropertySemantics<C> | null {
+    public getPropertyFor ( ast : QueryAst ) : PropertySemantics<C, R> | null {
         if ( ast.kind === 'identifier' ) {
             if ( ast.name in this.properties ) {
                 return this.properties[ ast.name ];
@@ -176,7 +176,7 @@ export class QuerySemantics<C = any> {
         return null;
     }
 
-    public getPropertyBinaryOperatorFor ( ast : QueryAst ) : BinaryOperatorSemantics<C> | null {
+    public getPropertyBinaryOperatorFor ( ast : QueryAst ) : BinaryOperatorSemantics<C, R> | null {
         if ( ast.kind === 'binaryOperator' ) {
             let propertySemantics = this.getPropertyFor( ast.lhs );
 
@@ -188,14 +188,14 @@ export class QuerySemantics<C = any> {
         return null;
     }
 
-    public static computed<C extends object> ( computed : ( ctx : C ) => unknown ) : PropertySemantics<C> {
-        return new PropertySemantics<C>( {}, (_, __) => computed );
+    public static computed<C extends object, R = unknown> ( computed : CompiledQuery<C, R> ) : PropertySemantics<C, R> {
+        return new PropertySemantics<C, R>( {}, (_, __) => computed );
     }
 
-    public static flagsEnum<C extends object> ( flagsGetter ?: ( ctx : C, property: string ) => string[] ) : PropertySemantics<C> {
+    public static flagsEnum<C extends object> ( flagsGetter ?: ( ctx : C, property: string ) => string[] ) : PropertySemantics<C, boolean> {
         flagsGetter = flagsGetter ?? ( ( ctx, prop ) => ctx[ prop ] );
         
-        const propertySemantics = new PropertySemantics<C>();
+        const propertySemantics = new PropertySemantics<C, boolean>();
         
         propertySemantics.binaryOperators[ BinaryOperator.EqualTo ] = ( lhsAst, _, rhsAst, semantics ) => {
             const lhsName = lhsAst.kind == 'identifier' ? lhsAst.name : void 0;
@@ -261,16 +261,16 @@ export enum UnaryOperator {
     Not,
 }
 
-export class PropertySemantics<C> {
-    binaryOperators: Partial<Record<BinaryOperator, BinaryOperatorSemantics<C>>>;
-    lookup: LookupSemantics<C>;
+export class PropertySemantics<C, R = unknown> {
+    binaryOperators: Partial<Record<BinaryOperator, BinaryOperatorSemantics<C, R>>>;
+    lookup: LookupSemantics<C, R>;
 
-    public constructor ( operators : Partial<Record<BinaryOperator, BinaryOperatorSemantics<C>>> = {}, lookup ?: LookupSemantics<C> ) {
+    public constructor ( operators : Partial<Record<BinaryOperator, BinaryOperatorSemantics<C, R>>> = {}, lookup ?: LookupSemantics<C, R> ) {
         this.binaryOperators = operators;
         this.lookup = lookup;
     }
 
-    public getOperatorFor ( operator : BinaryOperator ) : BinaryOperatorSemantics<C> | null {
+    public getOperatorFor ( operator : BinaryOperator ) : BinaryOperatorSemantics<C, R> | null {
         if ( operator in this.binaryOperators ) {
             return this.binaryOperators[ operator ];
         }
@@ -279,9 +279,9 @@ export class PropertySemantics<C> {
     }
 }
 
-export  type LookupSemantics<C> = ( name: string, semantics: QuerySemantics<C> ) => ( ctx : C ) => unknown;
+export  type LookupSemantics<C, R = unknown> = ( name: string, semantics: QuerySemantics<C, R> ) => CompiledQuery<C, R>;
 
-export type BinaryOperatorSemantics<C> = ( lhs : QueryAst, operator : BinaryOperator, rhs : QueryAst, semantics : QuerySemantics<C> ) => ( ctx : C ) => unknown;
+export type BinaryOperatorSemantics<C, R = unknown> = ( lhs : QueryAst, operator : BinaryOperator, rhs : QueryAst, semantics : QuerySemantics<C, R> ) => CompiledQuery<C, R>;
 
 export type QueryAst = 
       { kind: 'binaryOperator', op: BinaryOperator, lhs: QueryAst, rhs: QueryAst }
@@ -291,7 +291,7 @@ export type QueryAst =
     ;
 export type EmbeddedQueryAst = { kind: 'root', body: string, embeddedQuery: string };
 
-export type CompiledQuery<C> = ( context : C ) => unknown;
+export type CompiledQuery<C, R = unknown> = ( context : C ) => R;
 
 /* Lexer & Parser */
 import { Lexer, createToken, CstParser, ICstVisitor, TokenType } from 'chevrotain';
