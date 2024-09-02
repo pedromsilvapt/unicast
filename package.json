@@ -1,6 +1,6 @@
 {
   "name": "unicast",
-  "version": "2.7.0",
+  "version": "3.0.0-alpha.0",
   "description": "Media Center. Modern. Web based. Self hosted. Extensible.",
   "main": "lib/cli.js",
   "bin": "lib/cli.js",
