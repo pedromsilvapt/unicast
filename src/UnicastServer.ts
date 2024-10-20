@@ -736,8 +736,8 @@ export class MediaManager {
         if ( itemsToRemove.length > 0 ) {
             const keys = itemsToRemove.map( record => record.id );
 
-            await this.server.database.tables.collectionsMedia.deleteMany( 
-                query => query.where( { collectionId } ).whereIn( 'mediaId', keys ) 
+            await this.server.database.tables.collectionsMedia.deleteMany(
+                query => query.where( { collectionId } ).whereIn( 'mediaId', keys )
             );
         }
     }
@@ -1080,7 +1080,7 @@ export class MediaUserRanksList {
 
             if ( oldPosition == 0 ) {
                 const now = new Date();
-                
+
                 changes.create( {
                     list: this.id,
                     mediaKind: record.kind,
@@ -1379,22 +1379,32 @@ export class MediaWatchTracker {
             } ) );
 
             // Only update the season and show counters if either:
-            //  - this IS the same version of this episode watched 
-            //  - this WAS the only version of this episode that was watched
-            if ( ( watched && similarEpisodes.length === 0 ) || ( !watched && similarEpisodes.length === 1 ) ) {
+            //  - !watched: this WAS the only version of this episode that was watched
+            //              (there are no others makred as watched now)
+            //  - watched: this IS the same version of this episode watched
+            //             (there is only one record returned, and since this was just marked watched,
+            //             it has to be this one, meaning there were no others before)
+            if ( ( !watched && similarEpisodes.length === 0 ) || ( watched && similarEpisodes.length === 1 ) ) {
                 const offset = watched ? 1 : -1;
-                
-                await this.mediaManager.database.tables.seasons.update( episode.tvSeasonId, q => q.increment( 'watchedEpisodesCount', offset ) );
 
+                // Update Season
                 const season = await this.mediaManager.database.tables.seasons.get( episode.tvSeasonId );
-                
+
+                const newSeasonsWatchedCount = season.watchedEpisodesCount + offset;
+
+                await this.mediaManager.database.tables.seasons.update( episode.tvSeasonId, {
+                    watchedEpisodesCount: newSeasonsWatchedCount,
+                    watched: newSeasonsWatchedCount >= season.episodesCount,
+                } );
+
+                // Update the show
                 const show = await this.mediaManager.database.tables.shows.get( season.tvShowId );
 
-                const newWatchedCount = show.watchedEpisodesCount + offset;
-                
+                const newShowWatchedCount = show.watchedEpisodesCount + offset;
+
                 await this.mediaManager.database.tables.shows.updateIfChanged( show, {
-                    watchedEpisodesCount: newWatchedCount,
-                    watched: newWatchedCount >= show.episodesCount,
+                    watchedEpisodesCount: newShowWatchedCount,
+                    watched: newShowWatchedCount >= show.episodesCount,
                 } );
             }
         } catch ( err ) {
