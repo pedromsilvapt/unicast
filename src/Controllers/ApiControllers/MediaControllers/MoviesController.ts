@@ -7,11 +7,11 @@ import { Route } from "../../BaseController";
 import { InvalidArgumentError } from 'restify-errors';
 
 export class MoviesController extends MediaTableController<MovieMediaRecord> {
-    sortingFields: string[] = [ 
-        'title', 'rating', 'runtime', 'parentalRating', 
+    sortingFields: string[] = [
+        'title', 'rating', 'runtime', 'parentalRating',
         'year', 'lastPlayedAt', 'playCount', 'addedAt', '$userRank'
     ];
-    
+
     get table () : AbstractMediaTable<MovieMediaRecord> {
         return this.server.database.tables.movies;
     }
@@ -39,8 +39,8 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
 
             if ( included.length > 0 ) {
                 query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.quality.${ field })` ).whereIn( 'value', included ) );
-            } 
-            
+            }
+
             if ( excluded.length > 0 ) {
                 query = query.whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.quality.${ field })` ).whereIn( 'value', excluded ) );
             }
@@ -61,19 +61,13 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
         items = await super.transformAll( req, res, items );
 
         const url = this.server.getMatchingUrl( req );
-        
+
         for ( let movie of items ) {
             ( movie as any ).cachedArtwork = this.server.artwork.getCachedObject( url, movie.kind, movie.id, movie.art );
         }
 
         if ( req.query.collections === 'true' ) {
             await this.server.database.tables.movies.relations.collections.applyAll( items );
-
-            for ( let item of items ) {
-                if ( ( item as any ).collections.some( c => !c ) ) {
-                    ( item as any ).collections = ( item as any ).collections.filter( c => !!c );
-                }
-            }
         }
 
         return items;
