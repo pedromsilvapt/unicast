@@ -5,6 +5,7 @@ import type { DatabaseTables } from '../Database';
 import type { CollectionRecord } from './CollectionsTable';
 import type { PersonRecord } from './PeopleTable';
 import type { MediaSourceDetails } from '../../MediaProviders/MediaSource';
+import { pp } from 'clui-logger';
 
 export abstract class AbstractMediaTable<R extends MediaRecord> extends BaseTable<R> {
     protected readonly abstract kind : MediaKind;
@@ -27,47 +28,60 @@ export abstract class AbstractMediaTable<R extends MediaRecord> extends BaseTabl
 
     protected async createUniqueMediaIds ( kinds : MediaKind[], options : QueryOptions = {} ) : Promise<number[]> {
         const rows = kinds.map( kind => ( { kind } ) );
-        
+
         let query = this.connection.table( 'media' );
-        
+
         if ( options.transaction != null ) {
             query = query.transacting( options.transaction );
         }
-        
+
         const ids = await query.insert( rows, [ 'id' ] );
-        
+
         return ids.map( s => s.id );
     }
-    
+
     async create ( record : R, options : QueryOptions = {} ) : Promise<R> {
         // TODO Transaction
         if ( record.id == null ) {
             const id = ( await this.createUniqueMediaIds( [ this.kind ], options ) )[ 0 ];
-            
+
             record.id = '' + id;
         }
-        
+
         return super.create( record, options );
     }
 
     async createMany ( recordsIter : Iterable<R>, options : QueryOptions = {} ) : Promise<R[]> {
         const recordsWithNoId = Array.from( recordsIter ).filter( rec => rec.id == null );
-        
+
         if ( recordsWithNoId.length > 0 ) {
             // TODO Transaction
             const ids = await this.createUniqueMediaIds( recordsWithNoId.map( _ => this.kind ), options );
-            
+
             let index = 0;
-            
+
             for ( const record of recordsWithNoId ) {
                 record.id = '' + ids[ index++ ];
             }
         }
-        
+
         return super.createMany( recordsIter, options );
     }
 
     async repair ( records : string[] = null ) {
+        const phantomIds = await this.connection.table( 'media' )
+            .select('media.id')
+            .leftJoin(this.tableName,
+                join => join.on('media.id', '=', this.tableName + '.id'))
+            .whereNull(this.tableName + '.id')
+            .andWhere('media.kind', '=', this.kind);
+
+        if ( phantomIds.length > 0 ) {
+            this.database.logger.warn(pp`Found ${phantomIds.length} phantom records on media table for kind ${this.kind}. Deleting them.`);
+
+            await this.connection.table( 'media' ).whereIn( 'id', phantomIds.map( r => r.id ) ).delete();
+        }
+
         if ( !records ) {
             records = ( await this.find() ).map( record => record.id );
         }
