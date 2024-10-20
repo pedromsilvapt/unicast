@@ -12,7 +12,7 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     abstract readonly tableName : string;
 
     readonly timestamped : boolean = true;
-    
+
     connection : Knex;
 
     dateFields : string[] = [];
@@ -32,7 +32,11 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     identifierFields : Array<string> = null;
 
     fieldConverters : FieldConverters<R, any> = {} as any;
-    
+
+    columns: Record<string | number | symbol, Knex.ColumnInfo>;
+
+    columnNames: Set<string>;
+
     readonly database : Database;
 
     constructor ( database : Database ) {
@@ -42,17 +46,17 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
     query ( options: QueryOptions | null = null ) : Knex.QueryBuilder {
         let query = this.connection.queryBuilder().table( this.tableName );
-        
+
         if (options?.transaction != null) {
             query = query.transacting( options.transaction );
         }
-        
+
         return query;
     }
 
     async install () {
         this.relations = this.installRelations( this.database.tables );
-        
+
         if ( this.changesHistoryEnabled && this.changesHistory != null ) {
             this.changesHistory = new ChangeHistoryTable( this.database, this.tableName + 'History' );
 
@@ -64,6 +68,9 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         if ( this.changesHistoryEnabled ) {
             await this.changesHistory.install();
         }
+
+        this.columns = await this.connection.table( this.tableName ).columnInfo();
+        this.columnNames = new Set( Object.keys( this.columns ) );
     }
 
     installRelations ( tables : DatabaseTables ) {
@@ -77,35 +84,38 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     // createRelationsQuery ( ...relations : string[] ) : RelationsQuery<R, this> {
     //     return new RelationsQuery( this, this.tableChainDeep( expandDotStrings( relations ) ) );
     // }
-    
+
     protected serialize ( record : R ) : object {
-        const result = { ...record } as object;
-        
-        for ( const key of Object.keys( this.fieldConverters ) ) {
-            if ( key in record ) {
+        const result = {} as object;
+
+        for ( const key of Object.keys( record ) ) {
+            if ( key in this.fieldConverters ) {
                 result[ key ] = this.fieldConverters[ key ].serialize( record[ key ] );
+            } else if ( key in this.columns ) {
+                // Ignore keys that are not columns in the tables
+                result[ key ] = record[ key ];
             }
         }
-         
+
         return result;
     }
-    
+
     protected serializeMany ( record : R[] ) : object {
         return record.map( v => this.serialize( v ) );
     }
-    
+
     protected deserialize ( record : object ) : R {
         const result = { ...record } as R;
-        
+
         for ( const key of Object.keys( this.fieldConverters ) ) {
             if ( key in record ) {
                 result[ key ] = this.fieldConverters[ key ].deserialize( record[ key ] );
             }
         }
-        
+
         return result;
     }
-    
+
     protected deserializeMany ( record : object[] ) : R[] {
         return record.map( v => this.deserialize( v ) );
     }
@@ -116,7 +126,11 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         }
 
         const record = await this.query( options ).where( 'id', id ).limit( 1 ).first();
-        
+
+        if ( record == null ) {
+            throw new Error(`No record with id "${id}" found in table ${this.tableName}`);
+        }
+
         return this.deserialize( record );
     }
 
@@ -132,15 +146,15 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         if ( keys.length === 0 ) {
             return [];
         }
-        
+
         let query = this.query( options ).whereIn( options.column ?? 'id', keys );
-        
+
         if ( options.query ) {
             query = options.query( query );
         }
-        
+
         const result = this.deserializeMany( await query );
-        
+
         return result;
     }
 
@@ -158,11 +172,11 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         if ( query ) {
             sequence = query( sequence );
         }
-        
+
         if ( this.database.config.get<boolean>( 'database.debug' ) ) {
             this.database.knexLogger.debug( sequence.toSQL() );
         }
-        
+
         return sequence.stream();
     }
 
@@ -190,45 +204,45 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     public raw ( expr : string ) : Knex.Raw {
         return this.database.connection.raw( expr );
     }
-    
+
     async queryDistinctJson<V = any>( column: string, jsonPath : string, options : DistinctJsonQueryOptions = null ) : Promise<V[]> {
         let query: Knex.QueryBuilder = this.query( options )
             .distinct()
             .select(this.raw(`json_extract(${ column }, '${ jsonPath }') AS value`))
             .whereRaw(`json_extract(${ column }, '${ jsonPath }') IS NOT NULL`);
-        
+
         if ( options?.orderBy != null ) {
             query = query.orderBy( 'value', options.orderBy );
         }
-            
+
         if ( options?.query != null ) {
             query = options.query.apply( query, query );
         }
-            
+
         const results = await query;
-        
+
         return results.map( row => row.value );
     }
-    
+
     async queryDistinctJsonArray<V = any>( column: string, jsonPath : string = '$', options : DistinctJsonQueryOptions = null ) : Promise<V[]> {
         let query = this.query( options )
             .distinct()
             .select(this.raw(`__jsonArrayTable.value AS value`))
             .fromRaw(`${this.tableName}, json_each(${ column }, '${ jsonPath }') __jsonArrayTable`);
-            
+
         if ( options?.orderBy != null ) {
             query = query.orderBy( 'value', options.orderBy );
         }
-            
+
         if ( options?.query != null ) {
             query = options.query.apply( query, query );
         }
-        
+
         const results = await query;
-        
+
         return results.map( row => row.value );
     }
-    
+
     public getIdentifier ( record : R ) : string {
         if ( this.identifierFields == null || this.identifierFields.length == 0 ) {
             return null;
@@ -264,7 +278,7 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
         return record;
     }
-    
+
     public isTimestamped( records : R[] ) : records is ( R & TimestampedRecord )[];
     public isTimestamped( record : R ) : record is ( R & TimestampedRecord );
     public isTimestamped( _ : R | R[] ) : boolean {
@@ -273,10 +287,10 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
     public prepare ( record : R, action : 'create' | 'update' ) : any {
         this.applyIdentifier( record );
-            
+
         if ( this.isTimestamped( record ) ) {
             const now = new Date();
-            
+
             if ( action == 'create' && record.createdAt == null ) {
                 record.createdAt = now;
             }
@@ -285,13 +299,14 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
                 record.updatedAt = now;
             }
         }
-        
+
         return this.serialize( record );
     }
-    
+
     async create ( record : R, options : QueryOptions = null ) : Promise<R> {
+
         const res = await this.query( options ).insert( this.prepare( record, 'create' ), [ 'id' ] );
-        
+
         record.id = res[ 0 ].id;
 
         this.onCreate.notify( record );
@@ -300,28 +315,28 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     }
 
     async createMany ( recordsIter : Iterable<R>, options : QueryOptions = null ) : Promise<R[]> {
-        const records: R[] = recordsIter instanceof Array 
+        const records: R[] = recordsIter instanceof Array
             ? recordsIter
             : Array.from( recordsIter );
-        
+
         if ( records.length === 0 ) {
             return [];
         }
-        
+
         var chunkSize = Math.floor( 500 / ( Object.keys( records[ 0 ] ).length ) );
-        
+
         for ( const chunkRecords of chunk( records, chunkSize ) ) {
             const res = await this.query( options ).insert( chunkRecords.map( r => this.prepare( r, 'create' ) ), [ 'id' ] );
-            
+
             let index = 0;
-    
+
             for ( let record of chunkRecords ) {
                 if ( !record.id ) {
                     record.id = res[ index++ ].id;
                 }
             }
         }
-        
+
         for ( const record of records ) {
             this.onCreate.notify( record );
         }
@@ -335,12 +350,12 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
             delete record[ "id" ];
         }
-        
+
         let updateCallback = typeof record === 'function'
             ? record
             : q => q.update( this.prepare( record, 'update' ) );
-        
-        
+
+
         await updateCallback( this.query( options )
             .where( 'id', id ) );
 
@@ -356,7 +371,10 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     }
 
     isChanged ( baseRecord : object, changes : object ) : boolean {
-        return Object.keys( changes ).some( key => !equals( baseRecord[ key ], changes[ key ] ) );
+        const baseRecordSerialized = this.serialize( baseRecord as R );
+        const changesSerialized = this.serialize( changes as R );
+
+        return Object.keys( changesSerialized ).some( key => !equals( baseRecordSerialized[ key ], changesSerialized[ key ] ) );
     }
 
     async updateIfChanged ( baseRecord : object, changes : object, conditionalChanges : object = null, options : QueryOptions = {} ) : Promise<R> {
@@ -370,7 +388,7 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
                 delete changes[ "id" ];
             }
-            
+
             await this.update( baseRecord[ "id" ], changes, options );
         }
 
@@ -385,12 +403,12 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         }
 
         let updatedCount = 0;
-        
+
         let updateCallback = typeof update === 'function'
             ? update
             : q => q.update( this.prepare( update, 'update' ) );
-        
-            
+
+
         if ( this.onUpdate.isSubscribed() ) {
             const ids : number[] = await queryBuilder
                 .select( 'id' )
@@ -440,7 +458,7 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
             const columnConverter = this.fieldConverters[ column ];
             keysSerialized = keys.map( value => columnConverter.serialize( value ) );
         }
-        
+
         let table = this.query( options ).whereIn( column, keysSerialized );
 
         if ( options.query ) {
@@ -451,7 +469,7 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
         if ( this.onDelete.isSubscribed() ) {
             const records : R[] = this.deserializeMany( await table );
-            
+
             const primaryKeys : any[] = column == primaryKey
                 ? keys
                 : records.map( r => r[ primaryKey ] )
@@ -502,16 +520,16 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
 
     async deleteAll ( limit : number = Infinity, options : QueryOptions = {} ) : Promise<number> {
         let query = this.query( options );
-        
+
         if ( limit != Infinity && typeof limit === 'number' ) {
             query = query.limit( limit );
         }
-        
+
         return await query.delete();
     }
 
     async repair ( records : string[] = null ) {
-        
+
     }
 }
 
@@ -520,7 +538,7 @@ export function * chunk<T> ( iterable : Iterable<T>, chunkSize : number ) {
     let hasNext = true;
 
     const iter = iterable[ Symbol.iterator ]();
-    
+
     try {
         while ( hasNext ) {
             const chunk: T[] = [];
@@ -573,7 +591,7 @@ export interface EntityRecordSql extends BaseRecordSql, TimestampedRecordSql {
     external : string;
 }
 
-export type ExternalReferences = { 
+export type ExternalReferences = {
     imdb ?: string;
     tvdb ?: string;
     [ key : string ] : string
@@ -593,7 +611,7 @@ export class ChangeHistoryTable<R extends BaseRecord> extends BaseTable<ChangeHi
         data: Converters.json(),
         changedAt: Converters.date(),
     };
-    
+
     public constructor ( database : Database, tableName: string ) {
         super( database );
 
