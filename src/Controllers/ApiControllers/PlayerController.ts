@@ -4,7 +4,7 @@ import { PlaylistsController } from "./PlaylistsController";
 import { MediaSourceDetails } from "../../MediaProviders/MediaSource";
 import { InvalidArgumentError, HttpError, NotFoundError } from 'restify-errors';
 import { MediaPlayOptions, ReceiverStatus } from "../../Receivers/BaseReceiver/IMediaReceiver";
-import { MediaRecord, isPlayableRecord } from "../../MediaRecord";
+import { MediaKind, MediaRecord, isPlayableRecord } from "../../MediaRecord";
 import * as Case from 'case';
 import { MediaStreamSelectors } from '../../MediaProviders/MediaStreams/MediaStreamSelectors';
 import * as mime from 'mime';
@@ -24,6 +24,16 @@ export class NoMediaFound extends HttpError {
             statusCode: 412,
             message: `No media available to fulfill the request.`,
             code: 'ENOMEDIA'
+        } );
+    }
+}
+
+export class InvalidPlayableMedia extends HttpError {
+    constructor ( kind: MediaKind ) {
+        super( {
+            statusCode: 400,
+            message: `Media kind "${kind}" is not playable.`,
+            code: 'ENOTPLAYABLE'
         } );
     }
 }

@@ -120,7 +120,7 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         return record.map( v => this.deserialize( v ) );
     }
 
-    async get ( id : string, options : QueryOptions = null ) : Promise<R> {
+    async tryGet ( id : string, options : QueryOptions = null ) : Promise<R | null> {
         if ( !id ) {
             return null;
         }
@@ -128,10 +128,20 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         const record = await this.query( options ).where( 'id', id ).limit( 1 ).first();
 
         if ( record == null ) {
-            throw new Error(`No record with id "${id}" found in table ${this.tableName}`);
+            return null;
         }
 
         return this.deserialize( record );
+    }
+
+    async get ( id : string, options : QueryOptions = null ) : Promise<R> {
+        const row = this.tryGet( id, options );
+
+        if ( row == null ) {
+            throw new RowNotFound(id, this.tableName);
+        }
+
+        return row;
     }
 
     async has ( id : string, options : QueryOptions = null ) : Promise<boolean> {
@@ -684,4 +694,10 @@ export interface ChangeHistorySql {
     dataId : number;
     data : string;
     changedAt : number;
+}
+
+export class RowNotFound extends Error {
+    constructor (id: string, tableName: string) {
+        super(`No record with id "${id}" found in table ${tableName}`);
+    }
 }

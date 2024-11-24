@@ -8,8 +8,8 @@ import * as fs from 'mz/fs';
 
 export interface IDatabaseLocalSubtitle extends ILocalSubtitle {
     file : string;
-    mediaKind : MediaKind, 
-    mediaId : string, 
+    mediaKind : MediaKind,
+    mediaId : string,
 }
 
 export interface ISubtitlesRepository<S extends ILocalSubtitle = ILocalSubtitle> {
@@ -54,7 +54,7 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
     }
 
     async get ( media : MediaRecord, id : string ) : Promise<IDatabaseLocalSubtitle> {
-        const subtitles = await this.table.get( id );
+        const subtitles = await this.table.tryGet( id );
 
         if ( !subtitles || subtitles.mediaKind != media.kind || subtitles.mediaId !== media.id ) {
             return null;
@@ -81,7 +81,7 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
         const folder = this.folder;
 
         await this.server.storage.ensureDir( folder );
-        
+
         const prefix = path.join( folder, subtitle.releaseName );
 
         let file = prefix + extension;
@@ -103,7 +103,7 @@ export class FallbackSubtitlesRepository implements ISubtitlesRepository<IDataba
             language: null,
             releaseName: subtitle.releaseName,
             file: path.basename( file ),
-            mediaKind: media.kind, 
+            mediaKind: media.kind,
             mediaId : media.id
         };
 
