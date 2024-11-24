@@ -43,7 +43,7 @@ export class MediaSessionsManager {
         this.statusPoller = new PriorityPoller( async poller => {
             try {
                 const status = await this.receiver.status();
-                
+
                 if ( status && !status.online ) {
                     return;
                 }
@@ -51,12 +51,12 @@ export class MediaSessionsManager {
                 if ( status && ( status.state == ReceiverStatusState.Playing
                     || status.state == ReceiverStatusState.Buffering
                     || status.state == ReceiverStatusState.Paused ) ) {
-                        
+
                     poller.currentPriority = 0;
                 } else {
                     poller.currentPriority = 1;
                 }
-                    
+
                 await this.updateStatus( status );
             } catch ( err ) {
                 this.mediaManager.server.onError.notify( err );
@@ -79,7 +79,7 @@ export class MediaSessionsManager {
     async updateStatus ( status : ReceiverStatus ) {
         if ( status && status.media && status.media.session ) {
             const id = status.media.session.id;
-    
+
             const history = await this.mediaManager.database.tables.history.get( id );
 
             if ( history ) {
@@ -93,7 +93,7 @@ export class MediaSessionsManager {
                     history.positionHistory.push( { start: history.position, end: history.position } );
 
                     lastIndex += 1;
-                    
+
                     last = history.positionHistory[ lastIndex ];
                 }
 
@@ -104,20 +104,23 @@ export class MediaSessionsManager {
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
                     await this.watch( history );
                 }
-                
+
                 history.updatedAt = new Date();
-        
+
                 await this.mediaManager.database.tables.history.update( id, history );
             }
         }
     }
 
-    async register ( record : MediaRecord, options : MediaPlayOptions = {} ) : Promise<string> {
+    async register ( record : PlayableMediaRecord, options : MediaPlayOptions = {} ) : Promise<string> {
         const history = await this.mediaManager.database.tables.history.create( {
             playlistId: options.playlistId,
             playlistPosition: options.playlistPosition,
-            mediaId: record.id, 
+            mediaId: record.id,
             mediaKind: record.kind,
+            mediaTitle: record.title,
+            mediaSubTitle: await this.mediaManager.getRecordSubTitle( record ),
+            mediaSources: record.sources,
             position: options.startTime || 0,
             receiver: this.receiver.name,
             positionHistory: [ { start: options.startTime || 0, end: options.startTime || 0 } ],
@@ -152,18 +155,18 @@ export class MediaSessionsManager {
 
     async create ( id : string ) : Promise<ActiveMediaSession> {
         const history = await this.mediaManager.database.tables.history.get( id );
-        
+
         if ( history ) {
             const cancel = new CancelToken();
 
             const record = await this.mediaManager.get( history.mediaKind, history.mediaId ) as PlayableMediaRecord;
-            
+
             const originalStreams = await this.mediaManager.providers.streams( record.sources );
-            
+
             const transcoding = this.receiver.transcoder ? await this.receiver.transcoder.transcode( history, record, originalStreams, history.transcoding || {}, cancel ) : null;
 
             const streams = transcoding ? transcoding.outputs : originalStreams;
-            
+
             cancel.cancellationPromise.then( () => {
                 for ( let stream of streams ) {
                     stream.close();
@@ -183,7 +186,7 @@ export class MediaSessionsManager {
         return null;
     }
 
-    async getNext ( id : string, strategy : string = 'auto' ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    async getNext ( id : string, strategy : string = 'auto' ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         if ( !id ) {
             return Optional.empty();
         }
@@ -193,7 +196,7 @@ export class MediaSessionsManager {
         }
 
         const session = await this.mediaManager.database.tables.history.get( id );
-                
+
         return this.zapping.get( strategy ).next( session, this );
     }
 
@@ -205,9 +208,9 @@ export class MediaSessionsManager {
         if ( !this.zapping.has( strategy ) ) {
             throw new Error( `Zapping strategy ${ strategy } not defined.` );
         }
-        
+
         const session = await this.mediaManager.database.tables.history.get( id );
-                
+
         return this.zapping.get( strategy ).previous( session, this );
     }
 
@@ -260,7 +263,7 @@ export class MediaSessionsManager {
 /**
  * Receives a list of number intervals in milliseconds, and runs the callback with each interval.
  * The interval duration currently in use can be switched at any time.
- * 
+ *
  * @export
  * @class PriorityPoller
  * @extends {EventEmitter}
@@ -308,7 +311,7 @@ export class PriorityPoller extends EventEmitter {
         if ( this.intervalTimer ) {
             clearTimeout( this.intervalTimer );
         }
-        
+
         if ( !this.isPolling ) {
             const interval = this.priorities[ this.currentPriority ];
 
@@ -327,15 +330,15 @@ export class PriorityPoller extends EventEmitter {
             if ( this.onPollCallback ) {
                 try {
                     this.intervalTimer = null;
-    
+
                     this.isPolling = true;
-    
+
                     await Promise.resolve( this.onPollCallback( this ) );
                 } catch ( error ) {
                     this.emit( 'error', error );
                 } finally {
                     this.isPolling = false;
-    
+
                     if ( !this.isPaused ) {
                         this.setupInterval();
                     }
@@ -364,9 +367,9 @@ export class PriorityPoller extends EventEmitter {
 export interface IZappingStrategy {
     applies ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<boolean>;
 
-    next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>>;
+    next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>>;
 
-    previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>>;
+    previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>>;
 }
 
 export class AutoZappingStrategy implements IZappingStrategy {
@@ -382,7 +385,7 @@ export class AutoZappingStrategy implements IZappingStrategy {
         return false;
     }
 
-    async next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    async next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         for ( let strategy of this.strategies ) {
             if ( manager.zapping.has( strategy ) && await manager.zapping.get( strategy ).applies( session, manager ) ) {
                 return manager.zapping.get( strategy ).next( session, manager );
@@ -392,7 +395,7 @@ export class AutoZappingStrategy implements IZappingStrategy {
         return Optional.empty();
     }
 
-    async previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    async previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         for ( let strategy of this.strategies ) {
             if ( manager.zapping.has( strategy ) && await manager.zapping.get( strategy ).applies( session, manager ) ) {
                 return manager.zapping.get( strategy ).previous( session, manager );
@@ -407,35 +410,35 @@ export class PlaylistZappingStrategy implements IZappingStrategy {
         return session.playlistId != null;
     }
 
-    protected async offset ( session : HistoryRecord, manager : MediaSessionsManager, offset : number ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    protected async offset ( session : HistoryRecord, manager : MediaSessionsManager, offset : number ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         if ( !session.playlistId ) {
-            return Optional.empty<[ MediaRecord, MediaPlayOptions ]>();
+            return Optional.empty<[ PlayableMediaRecord, MediaPlayOptions ]>();
         }
 
         const playlist = await manager.mediaManager.database.tables.playlists.get( session.playlistId );
 
         const items = await manager.mediaManager.database.tables.playlists.relations.items.load( playlist );
-        
+
         const index = session.playlistPosition;
 
         if ( index + offset < 0 || index + offset >= items.length ) {
             return Optional.empty();
         }
 
-        const media = await manager.mediaManager.get( items[ index + offset ].kind, items[ index + offset ].id );
+        const media = await manager.mediaManager.get( items[ index + offset ].kind, items[ index + offset ].id ) as PlayableMediaRecord;
 
         if ( !media ) {
             return Optional.empty();
         }
 
-        return Optional.of<[ MediaRecord, MediaPlayOptions ]>( [ media, { playlistId: playlist.id, playlistPosition: index + offset } ] );
+        return Optional.of<[ PlayableMediaRecord, MediaPlayOptions ]>( [ media, { playlistId: playlist.id, playlistPosition: index + offset } ] );
     }
 
-    async next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    async next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         return this.offset( session, manager, 1 );
     }
-    
-    async previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+
+    async previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         return this.offset( session, manager, -1 );
     }
 }
@@ -447,7 +450,7 @@ export class TvShowZappingStrategy implements IZappingStrategy {
         return record.kind === MediaKind.TvEpisode;
     }
 
-    protected async offset ( session : HistoryRecord, manager : MediaSessionsManager, offset : number ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    protected async offset ( session : HistoryRecord, manager : MediaSessionsManager, offset : number ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         const record = await manager.mediaManager.get( session.mediaKind, session.mediaId ) as TvEpisodeMediaRecord;
 
         if ( record.kind !== MediaKind.TvEpisode ) {
@@ -462,14 +465,14 @@ export class TvShowZappingStrategy implements IZappingStrategy {
 
         const index = episodes.findIndex( ep => ep.id === record.id );
 
-        return Optional.ofNullable( episodes[ index + offset ] ).map<[ MediaRecord, MediaPlayOptions ]>( ep => [ ep, {  } ] );
+        return Optional.ofNullable( episodes[ index + offset ] ).map<[ PlayableMediaRecord, MediaPlayOptions ]>( ep => [ ep, {  } ] );
     }
 
-    async next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    async next ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         return this.offset( session, manager, 1 );
     }
-    
-    async previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+
+    async previous ( session : HistoryRecord, manager : MediaSessionsManager ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         return this.offset( session, manager, -1 );
     }
 }

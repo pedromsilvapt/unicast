@@ -638,6 +638,23 @@ export class MediaManager {
         }
     }
 
+    async getRecordSubTitle( record : MediaRecord ) : Promise<string | undefined> {
+        let mediaSubTitle: string | undefined;
+
+        if ( isTvEpisodeRecord( record ) ) {
+            const season = await this.get( MediaKind.TvSeason, record.tvSeasonId )
+
+            const show = await this.get( MediaKind.TvShow, season.tvShowId );
+
+            const seasonNumber = record.seasonNumber.toString().padStart(2, '0');
+            const episodeNumber = record.number.toString().padStart(2, '0');
+
+            mediaSubTitle = `${show.title} S${seasonNumber}E${episodeNumber}`;
+        }
+
+        return mediaSubTitle;
+    }
+
     async createFromSources ( sources : MediaSourceLike ) : Promise<MediaRecord> {
         let normalized = this.server.providers.normalizeSources( sources );
 

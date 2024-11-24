@@ -20,6 +20,7 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
         playlistId: Converters.id(),
         positionHistory: Converters.json(),
         transcoding: Converters.json(),
+        mediaSources: Converters.json(),
         watched: Converters.bool(),
         createdAt: Converters.date(),
         updatedAt: Converters.date(),
@@ -37,6 +38,9 @@ export class HistoryTable extends BaseTable<HistoryRecord> {
 export interface HistoryRecord extends BaseRecord, TimestampedRecord {
     mediaId : string;
     mediaKind : MediaKind;
+    mediaTitle : string;
+    mediaSubTitle ?: string;
+    mediaSources ?: any;
     playlistId ?: string;
     playlistPosition ?: number;
     receiver : string;
@@ -49,6 +53,7 @@ export interface HistoryRecord extends BaseRecord, TimestampedRecord {
 
 export interface HistoryRecordSql extends BaseRecordSql, TimestampedRecordSql {
     mediaId : number;
+    mediaSources : string;
     playlistId ?: number;
     positionHistory: string;
     transcoding: string;

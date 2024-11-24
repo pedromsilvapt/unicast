@@ -39,7 +39,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
         } );
 
         await history.relations.record.applyAll( nearbySessions );
-        
+
         history.relations.record.typed( nearbySessions );
 
         return nearbySessions.some( session => {
@@ -57,8 +57,11 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                 position: record.runtime * 1000,
                 positionHistory: [ { start: 0, end: record.runtime * 1000 } ],
                 receiver: 'Unknown',
-                mediaKind: record.kind, 
+                mediaKind: record.kind,
                 mediaId: record.id,
+                mediaTitle: record.title,
+                mediaSubTitle: await this.server.media.getRecordSubTitle(record),
+                mediaSources: record.sources,
                 updatedAt: date,
                 watched: true,
                 playlistId: null,
@@ -78,7 +81,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
         const allTables = this.server.database.tables;
 
         const tables : AbstractMediaTable<CommonRecord>[] = [
-            allTables.custom, allTables.movies, 
+            allTables.custom, allTables.movies,
             allTables.shows, allTables.seasons, allTables.episodes,
         ];
 
@@ -124,17 +127,17 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                 if ( isPlayableRecord( record ) ) {
                     if ( ( record as any ).lastPlayed != null ) {
                         const date = new Date( ( record as any ).lastPlayed );
-    
+
                         if ( !await this.hasSessionFor( date, record.external ) ) {
                             messages.push( { date, msg: 'Create history for ' + await this.server.media.humanize( record ) + ' at ' + fmt( date ) } );
-                            
+
                             await this.createSessionFor( options, date, record );
                         }
                     }
-    
+
                     if ( record.lastPlayedAt != null ) {
                         const date = new Date( record.lastPlayedAt );
-    
+
                         if ( !await this.hasSessionFor( date, record.external ) ) {
                             messages.push( { date, msg: 'Create history for ' + await this.server.media.humanize( record ) + ' at ' + fmt( date ) } );
 
@@ -145,14 +148,14 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
 
                 if ( record.lastPlayed != null && record.lastPlayedAt == null ) {
                     if ( !options.dryRun ) {
-                        await table.update( record.id, { 
+                        await table.update( record.id, {
                             lastPlayed: null,
-                            lastPlayedAt: record.lastPlayed 
+                            lastPlayedAt: record.lastPlayed
                         } );
                     }
 
                     updated = true;
-                    
+
                     // logger.info( `${record.title} -> ${fmt( record.lastPlayed )} ${fmt(record.lastPlayedAt)}` );
                 } else if ( record.lastPlayed != null && record.lastPlayedAt != null ) {
                     if ( !options.dryRun ) {
@@ -160,8 +163,8 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                     }
 
                     updated = true;
-                } 
-                
+                }
+
                 if ( table instanceof TvSeasonsMediaTable && tvSeasonsChanged.has( record.id ) ) {
                     const episodes = await table.relations.episodes.load( record as TvSeasonMediaRecord );
 
@@ -169,7 +172,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                         .filter( ep => ep.lastPlayedAt != null )
                         .map( ep => ep.lastPlayedAt )
                         .reduce( ( previous, current ) => maxDate( previous, current ), null );
-                    
+
                     if ( !options.dryRun ) {
                         await table.update( record.id, { lastPlayedAt } );
                     }
@@ -186,7 +189,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                         .filter( ep => ep.lastPlayedAt != null )
                         .map( ep => ep.lastPlayedAt )
                         .reduce( ( previous, current ) => maxDate( previous, current ), null );
-                    
+
                     if ( !options.dryRun ) {
                         await table.update( record.id, { lastPlayedAt } );
                     }
@@ -196,7 +199,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
 
                 if ( updated ) {
                     recordsChanged += 1;
-    
+
                     log();
 
                     if ( record.tvSeasonId != null ) {
@@ -205,7 +208,7 @@ export class LastPlayedNormalizationTool extends Tool<LastPlayedNormalizationOpt
                 }
              }, 20 ).drain();
         }
-        
+
         statsLogger.close();
 
         messages.sort( (a, b) => <any>a.date - <any>b.date );
