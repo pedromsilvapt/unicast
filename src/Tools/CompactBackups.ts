@@ -70,6 +70,7 @@ export class CompactBackupsTool extends Tool<CompactBackupsOptions> {
     }
 }
 
+// TODO Deduplicate
 export function streamToPromise( stream: Writable ) : Promise<void> {
     return new Promise<void>( ( resolve, reject ) => {
         try {
