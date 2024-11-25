@@ -71,39 +71,39 @@ export { SubtitlesTable, SubtitleRecord };
 
 export class DatabaseKnexLogger {
     protected logger : LoggerInterface;
-    
+
     public constructor ( logger : LoggerInterface ) {
         this.logger = logger;
     }
-    
+
     protected messageToString( message : string | Array<{sql: string, bindings: any[]}> | {sql: string, bindings: any[]} ) : string {
         if ( message == null ) {
             return "null";
         }
-        
+
         if ( typeof message === 'string' ) {
             return message;
         }
-        
+
         if ( message instanceof Array ) {
             return message.map( subMsg => this.messageToString( subMsg ) ).join( '; ' );
         }
-        
+
         return message.sql + ' % (' + message.bindings.join( ', ' ) + ')';
     }
-    
+
     warn = ( message ) => {
         this.logger.warn( this.messageToString( message ) );
     }
-    
+
     error = ( message ) => {
         this.logger.error( this.messageToString( message ) );
     }
-    
+
     deprecate = ( message ) => {
         this.logger.warn( 'DEPRECATED: ' + this.messageToString( message ) );
     }
-    
+
     debug = ( message ) => {
         this.logger.debug( this.messageToString( message ) );
     }
@@ -119,9 +119,9 @@ export class Database {
     tables : DatabaseTables;
 
     logger: LoggerInterface;
-    
+
     knexLogger: DatabaseKnexLogger;
-    
+
     protected installedFuture : Future<void> = new Future();
 
     installed : Promise<void> = this.installedFuture.promise;
@@ -139,12 +139,12 @@ export class Database {
 
         this.logger = this.server.logger.service( 'database/sql' );
         this.knexLogger = new DatabaseKnexLogger( this.logger );
-        
+
         this.connection = knex( {
             ...this.config.get<knex.Knex.Config>( 'database' ),
             log: this.knexLogger
         } );
-        
+
         this.connection.on( 'query-error', ( error, query ) => {
             this.logger.error( error + '\n' + query );
         });
@@ -156,7 +156,7 @@ export class Database {
         try {
             // Make sure to run any migrations needed
             await this.connection.migrate.latest();
-            
+
             await this.tables.install();
 
             if ( this.onInstall != null ) {
@@ -207,7 +207,7 @@ export class Database {
                 }
             } as knex.Knex.Config;
         }
-        
+
         const newConfig = Config.merge( [
             this.config.clone(),
             Config.create( { database: options } ),
@@ -228,14 +228,14 @@ export class Database {
         if ( !( destination instanceof Database ) ) {
             destination = this.for( destination );
         }
-        
+
         throw new Error(`Not yet implemented`);
     }
 }
 
 export class DatabaseTables {
     media : MediaTable;
-    
+
     movies : MoviesMediaTable;
 
     shows : TvShowsMediaTable;
@@ -249,7 +249,7 @@ export class DatabaseTables {
     history : HistoryTable;
 
     playlists : PlaylistsTable;
-    
+
     playlistsMedia : PlaylistsMediaTable;
 
     collections : CollectionsTable;
@@ -270,7 +270,7 @@ export class DatabaseTables {
 
     constructor ( database : Database ) {
         this.media = new MediaTable( database );
-        
+
         this.movies = new MoviesMediaTable( database );
 
         this.shows = new TvShowsMediaTable( database );
@@ -284,7 +284,7 @@ export class DatabaseTables {
         this.history = new HistoryTable( database );
 
         this.playlists = new PlaylistsTable( database );
-        
+
         this.playlistsMedia = new PlaylistsMediaTable( database );
 
         this.collections = new CollectionsTable( database );
@@ -318,7 +318,7 @@ export class DatabaseTables {
         await this.history.install();
 
         await this.playlists.install();
-        
+
         await this.playlistsMedia.install();
 
         await this.collections.install();
@@ -369,13 +369,19 @@ export class DatabaseTables {
             return this[ name ];
         }
 
+        for ( let table of this.tables() ) {
+            if ( table.tableName == name ) {
+                return table;
+            }
+        }
+
         throw new Error( `Could not find a table named "${name}".` );
     }
 }
 
 export class DatabaseTransaction {
     protected parentTransaction : DatabaseTransaction | knex.Knex.Transaction;
-    
+
     protected get raw () : knex.Knex.Transaction {
         if ( this.parentTransaction instanceof DatabaseTransaction ) {
             return this.parentTransaction.raw;
@@ -383,11 +389,11 @@ export class DatabaseTransaction {
             return this.parentTransaction;
         }
     }
-    
+
     public constructor ( parent : DatabaseTransaction | knex.Knex.Transaction ) {
         this.parentTransaction = parent;
     }
-    
+
     public async commit () : Promise<void> {
         throw new Error('Not yet implemented.');
     }

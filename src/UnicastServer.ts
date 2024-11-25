@@ -553,7 +553,7 @@ export class MediaManager {
 
     async getSeasonEpisode ( season : string, episode : number ) : Promise<TvEpisodeMediaRecord> {
         const episodes = await this.database.tables.episodes.find( query => query.where( {
-            tvSeasonId: season,
+            tvSeasonId: +season,
             number: episode
         } ).limit( 1 ) );
 
@@ -566,7 +566,7 @@ export class MediaManager {
 
     async getSeasonEpisodes ( season : string ) : Promise<TvEpisodeMediaRecord[]> {
         return await this.database.tables.episodes.find( query => query.where( {
-            tvSeasonId: season
+            tvSeasonId: +season
         } ) );
     }
 
@@ -583,9 +583,13 @@ export class MediaManager {
     async getEpisodesBySeason ( show : string ) : Promise<Map<number, { season: TvSeasonMediaRecord, episodes: TvEpisodeMediaRecord[] }>> {
         const seasons = await this.getSeasons( show );
 
+        if ( seasons.length === 0 ) {
+            return new Map();
+        }
+
         const ids = seasons.map( season => season.id );
 
-        const episodes = await this.database.tables.episodes.find( query => query.whereIn( 'tvSeasonId', ids ) );
+        const episodes = await this.database.tables.episodes.find( query => query.whereIn( 'tvSeasonId', ids.map( id => +id ) ) );
 
         const episodesBySeason : Map<number, { season: TvSeasonMediaRecord, episodes: TvEpisodeMediaRecord[] }> = new Map();
 
@@ -775,27 +779,21 @@ export class MediaManager {
         await table.update( media.id, { art: media.art } );
 
         // Update related media
-        if ( media.kind === MediaKind.TvShow ) {
-            await this.server.database.tables.seasons.updateMany( q => q.where( {
-                tvShowId: media.id
-            } ), {
-                art: {
-                    tvshow: {
-                        [ property ]: url
-                    }
-                }
-            } );
+        if ( isTvShowRecord( media ) ) {
+            const seasons = await this.server.media.getSeasons( media.id );
 
-            for ( let season of await this.getSeasons( media.id ) ) {
-                await this.server.database.tables.episodes.updateMany( q => q.where( {
-                    tvSeasonId: season.id
-                } ), {
-                    art: {
-                        tvshow: {
-                            [ property ]: url
-                        }
-                    }
-                } );
+            for ( const season of seasons ) {
+                season.art.tvshow[ property ] = url;
+
+                await this.server.database.tables.seasons.update( season.id, season );
+
+                const episodes = await this.server.media.getSeasonEpisodes( season.id );
+
+                for ( const episode of episodes ) {
+                    episode.art.tvshow[ property ] = url;
+
+                    await this.server.database.tables.episodes.update( episode.id, episode );
+                }
             }
         }
     }
