@@ -9,20 +9,20 @@ export abstract class OneToOneRelation<M extends TableRecord, R extends TableRec
 
     constructor ( member : string, relatedTable : BaseTable<R>, foreignKey : string ) {
         super( member );
-        
+
         this.relatedTable = relatedTable;
         this.foreignKey = foreignKey;
     }
 }
 
 // The foreign key is stored in the related record
-export class HasOneRelation<M extends TableRecord, R extends TableRecord> extends OneToOneRelation<M, R> {
+export class HasOneRelation<M extends TableRecord, R extends TableRecord, E = {}> extends OneToOneRelation<M, R, E> {
     subRelations : Relation<R, any>[] = [];
 
-    public with ( ...subRelations : Relation<R, any>[] ) : HasOneRelation<M, R> {
-        const relation = new HasOneRelation<M, R>( 
-            this.member, 
-            this.relatedTable, 
+    public with ( ...subRelations : Relation<R, any>[] ) : HasOneRelation<M, R, E> {
+        const relation = new HasOneRelation<M, R, E>(
+            this.member,
+            this.relatedTable,
             this.foreignKey
         );
 
@@ -37,15 +37,15 @@ export class HasOneRelation<M extends TableRecord, R extends TableRecord> extend
             await relation.applyAll( records );
         }
     }
-    
+
     async loadRelated ( items : M[] ) : Promise<Map<string, R>> {
         const keys = items.map( item => item.id );
 
         const related = await this.findAll( this.relatedTable, keys, this.runQuery.bind( this ), this.foreignKey );
-        
+
         await this.loadSubRelations( related );
 
-        return itt( related ).keyBy( rel => rel.id )
+        return itt( related ).keyBy( rel => rel[ this.foreignKey ] )
     }
 
     findRelated ( item : M, related : Map<string, R> ) : R {
@@ -58,9 +58,9 @@ export class BelongsToOneRelation<M extends TableRecord, R extends TableRecord, 
     subRelations : Relation<R, any>[] = [];
 
     public with ( ...subRelations : Relation<R, any>[] ) : BelongsToOneRelation<M, R> {
-        const relation = new BelongsToOneRelation<M, R, E>( 
-            this.member, 
-            this.relatedTable, 
+        const relation = new BelongsToOneRelation<M, R, E>(
+            this.member,
+            this.relatedTable,
             this.foreignKey
         );
 

@@ -3,6 +3,7 @@ import { MediaRange } from "../../../../MediaProviders/MediaStreams/MediaStream"
 import { SubboxPipeline, SubsMessageProtocol, CompilerPipeline, EncoderPipeline, StreamDuplex, StdContext, SubsPipeline } from "subbox";
 import * as rangeStream from 'range-stream';
 import * as pump from 'pump';
+import { MediaTools } from '../../../../MediaTools';
 
 export type SubtitlesStreamPipeline = SubboxPipeline<AsyncIterable<SubsMessageProtocol>, AsyncIterable<SubsMessageProtocol>>;
 
@@ -30,8 +31,8 @@ export class SubtitlesPipelineMediaStream extends SubtitlesMediaStream {
         this.transform = transform;
     }
 
-    async init () : Promise<void> {
-        await this.original.init();
+    async init ( mediaTools : MediaTools ) : Promise<void> {
+        await this.original.init( mediaTools );
     }
 
     pipeline () : SubsPipeline {

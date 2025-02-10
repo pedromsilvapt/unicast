@@ -1,4 +1,4 @@
-import { MovieMediaRecord, TvEpisodeMediaRecord, TvShowMediaRecord, MediaRecord, PlayableQualityRecord, MediaKind, RecordsMap, TvSeasonMediaRecord, createRecordsMap } from "../../../MediaRecord";
+import { MovieMediaRecord, TvEpisodeMediaRecord, TvShowMediaRecord, MediaRecord, MediaKind, RecordsMap, TvSeasonMediaRecord, createRecordsMap } from "../../../MediaRecord";
 import * as parseTorrentName from 'parse-torrent-name';
 import { FileWalker } from "../../../ES2017/FileWalker";
 import * as path from 'path';
@@ -213,17 +213,6 @@ export class FileSystemScanner {
         }
     }
 
-    public static parseQuality ( file : string, mode : ParsePathMode = ParsePathMode.BaseName ) : PlayableQualityRecord {
-        const quality = MediaTools.parsePath( file, mode );
-
-        return {
-            codec: quality.codec || null,
-            releaseGroup: quality.group || null,
-            resolution: quality.resolution || null,
-            source: quality.source || null
-        };
-    }
-
     /// Each show folder can contain a 'media.yaml' file that stores information
     /// to customize how the scanner will work with the show and it's seasons/episodes.
     async getTvShowLocalSettings ( folder : string, showName : string ) : Promise<TvShowLocalSettings> {
@@ -357,7 +346,6 @@ export class FileSystemScanner {
                         id: id,
                         internalId: movie.id,
                         sources: [ { "id": fullVideoFile } ],
-                        quality: FileSystemScanner.parseQuality( fullVideoFile, ParsePathMode.Both ),
                         addedAt: stats.mtime,
                         ...localSettings?.override ?? {},
                     } as MovieMediaRecord;
@@ -580,7 +568,6 @@ export class FileSystemScanner {
             internalId: episode.id,
             tvSeasonId: season.id,
             sources: [ { "id": fullVideoFile } ],
-            quality: FileSystemScanner.parseQuality( videoFile ),
             addedAt: stats.mtime,
             ...localSettingsEpisode?.override ?? {},
         } as TvEpisodeMediaRecord;

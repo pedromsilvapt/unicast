@@ -56,7 +56,7 @@ export class SubtitleEditSubtitlesProvider implements ISubtitlesProvider<ISubtit
 
             if ( videoPath != null ) {
                 if ( await fs.exists( videoPath ) ) {
-                    const metadata = await MediaTools.probe( videoPath );
+                    const metadata = await this.server.mediaTools.probe( videoPath );
 
                     const subtitles = metadata.tracks.filter( track => track.type === 'subtitle' );
 

@@ -9,7 +9,7 @@ export class FileSystemMediaProvider extends BaseMediaProvider {
     readonly type : string = 'filesystem';
 
     WINDOWS_MATCH = /^[a-zA-Z]:(\\|\/)/;
-    
+
     UNIX_MATCH = /^(\.|~)?\//;
 
     cacheKey () {
@@ -21,6 +21,6 @@ export class FileSystemMediaProvider extends BaseMediaProvider {
     }
 
     make ( manager : ProvidersManager, source : MediaSourceDetails ) : FileSystemMediaSource {
-        return new FileSystemMediaSource( manager, this, source );
+        return new FileSystemMediaSource( manager, this.server.mediaTools, this, source );
     }
 }

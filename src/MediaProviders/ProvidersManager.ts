@@ -2,7 +2,7 @@ import { MediaSource, MediaSourceDetails } from "./MediaSource";
 import { EntityManager, EntityFactoryManager } from "../EntityManager";
 import { IMediaProvider } from "./BaseMediaProvider/IMediaProvider";
 import { MediaStream } from "./MediaStreams/MediaStream";
-import { MediaRecord } from "../MediaRecord";
+import { PlayableMediaRecord } from "../MediaRecord";
 import { ProviderFactory } from "./BaseMediaProvider/ProviderFactory";
 import { UnicastServer } from "../UnicastServer";
 
@@ -21,7 +21,7 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
     constructor ( server : UnicastServer ) {
         super( server );
 
-        this.factories = new ProviderFactoriesManager( this, server );        
+        this.factories = new ProviderFactoriesManager( this, server );
     }
 
     add ( entity : IMediaProvider ) : this {
@@ -50,9 +50,9 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
 
     /**
      * Finds a provider that accepts the requested source.
-     * 
-     * @param {MediaSourceDetails} source 
-     * @returns {IMediaProvider} 
+     *
+     * @param {MediaSourceDetails} source
+     * @returns {IMediaProvider}
      * @memberof ProvidersManager
      */
     match ( source : MediaSourceDetails ) : IMediaProvider {
@@ -62,7 +62,7 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
 
         return this.entities.find( provider => provider.match( source.id ) );
     }
-    
+
     make ( provider : IMediaProvider, source : MediaSourceDetails ) : MediaSource {
         return provider.make( this, source );
     }
@@ -149,7 +149,7 @@ export class ProvidersManager extends EntityManager<IMediaProvider, string> {
         return sources.streams;
     }
 
-    async getMediaRecordFor ( sourcesList : MediaSourceDetails[], cacheOptions : CacheOptions = {} ) : Promise<MediaRecord> {
+    async getMediaRecordFor ( sourcesList : MediaSourceDetails[], cacheOptions : CacheOptions = {} ) : Promise<PlayableMediaRecord> {
         const primary = sourcesList.find( source => typeof source !== 'string' && source.primary );
 
         const selected = primary || sourcesList[ 0 ];

@@ -81,7 +81,7 @@ export class OpenSubtitlesRPCProvider implements ISubtitlesProvider<IOpenSubtitl
 
             let results : any[] = await this.api.search( this.token, options.lang, query );
 
-            const mediaSource = media.quality.source;
+            const mediaSource = media.metadata?.source;
 
             return results.map<IOpenSubtitlesResult>( result => ( {
                 provider: this.name,

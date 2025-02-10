@@ -4,6 +4,9 @@ import { AbstractMediaTable, PlayableMediaRecord, PlayableMediaRecordSql } from 
 import type { CollectionRecord } from './CollectionsTable';
 import type { PersonRecord } from './PeopleTable';
 import { ManyToManyRelation } from '../Relations/ManyToManyRelation';
+import { HasOneRelation } from '../Relations/OneToOneRelation';
+import { MediaProbeRecord } from './MediaProbesTable';
+import { DatabaseTables } from '../Database';
 
 export class MoviesMediaTable extends AbstractMediaTable<MovieMediaRecord> {
     readonly tableName : string = 'mediaMovies';
@@ -13,8 +16,8 @@ export class MoviesMediaTable extends AbstractMediaTable<MovieMediaRecord> {
     fieldConverters: FieldConverters<MovieMediaRecord, MovieMediaRecordSql> = {
         id: Converters.id(),
         sources: Converters.json(),
+        metadata: Converters.json(),
         genres: Converters.json(),
-        quality: Converters.json(),
         external: Converters.json(),
         art: Converters.json(),
         repositoryPaths: Converters.json(),
@@ -26,12 +29,13 @@ export class MoviesMediaTable extends AbstractMediaTable<MovieMediaRecord> {
         lastPlayedAt: Converters.date(),
         lastPlayedAtLegacy: Converters.json(),
     };
-    
+
     dateFields = [ 'addedAt', 'lastPlayedAt' ];
 
     declare relations : {
         collections: ManyToManyRelation<MovieMediaRecord, CollectionRecord>,
-        cast: ManyToManyRelation<MovieMediaRecord, PersonRecord>
+        cast: ManyToManyRelation<MovieMediaRecord, PersonRecord>,
+        probe: HasOneRelation<MovieMediaRecord, MediaProbeRecord>,
     };
 
     baseline : Partial<MovieMediaRecord> = {
@@ -47,7 +51,7 @@ export class MoviesMediaTable extends AbstractMediaTable<MovieMediaRecord> {
         }
 
         await super.repair( movies );
-        
+
         const movieRecords = await this.findAll( movies );
 
         await Promise.all( movieRecords.map( async movie => {

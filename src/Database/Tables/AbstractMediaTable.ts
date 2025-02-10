@@ -6,6 +6,8 @@ import type { CollectionRecord } from './CollectionsTable';
 import type { PersonRecord } from './PeopleTable';
 import type { MediaSourceDetails } from '../../MediaProviders/MediaSource';
 import { pp } from 'clui-logger';
+import { HasOneRelation } from '../Relations/OneToOneRelation';
+import { MediaProbeRecord } from './MediaProbesTable';
 
 export abstract class AbstractMediaTable<R extends MediaRecord> extends BaseTable<R> {
     protected readonly abstract kind : MediaKind;
@@ -17,12 +19,14 @@ export abstract class AbstractMediaTable<R extends MediaRecord> extends BaseTabl
     declare relations : {
         collections: ManyToManyRelation<R, CollectionRecord>,
         cast: ManyToManyRelation<R, PersonRecord>
+        probe: HasOneRelation<R, MediaProbeRecord, { probe: MediaProbeRecord | null }>
     };
 
     installRelations ( tables : DatabaseTables ) {
         return {
             collections: new ManyToManyRelation( 'collections', tables.collectionsMedia, tables.collections, 'mediaId', 'collectionId' ).poly( 'mediaKind', this.kind ),
-            cast: new ManyToManyRelation( 'cast', tables.mediaCast, tables.people, 'mediaId', 'personId' ).savePivot( 'cast' ).poly( 'mediaKind', this.kind )
+            cast: new ManyToManyRelation( 'cast', tables.mediaCast, tables.people, 'mediaId', 'personId' ).savePivot( 'cast' ).poly( 'mediaKind', this.kind ),
+            probe: new HasOneRelation( 'probe', tables.probes, 'mediaId' ),
         };
     }
 
@@ -114,14 +118,14 @@ export interface MediaRecordSql extends EntityRecordSql {
 export interface PlayableMediaRecord extends MediaRecord {
     runtime : number;
     sources : MediaSourceDetails[];
-    quality : PlayableQualityRecord;
+    metadata : MediaMetadata | null; // TODO
     watched : boolean;
     addedAt : Date;
 }
 
 export interface PlayableMediaRecordSql extends MediaRecordSql {
     sources : string;
-    quality : string;
+    metadata : string;
     watched : number;
     addedAt : number;
 }
@@ -134,11 +138,49 @@ export interface MediaRecordArt {
     banner : string;
 }
 
-export interface PlayableQualityRecord {
-    source : string;
-    resolution : string;
-    releaseGroup : string;
-    codec : string;
+export type MediaResolution = '4320p' | '2160p' | '1440p' | '1080p' | '720p' | '480p' | '360p' | '240p';
+export type MediaBitDepth = '8bit' | '10bit';
+export type MediaColorSpace = 'SDR' | 'HDR';
+export type MediaSource = 'BluRay' | 'WEB-DL' | 'WEBRIP' | 'WEBCAP' |
+                          'HDTV' | 'DVDR' | 'SCR' | 'CAMRip' | 'TS' |
+                          'WP' | 'PPV' | 'VODRip' | 'DVDRip' | 'R5'
+                          ;
+
+export interface MediaMetadataVideo {
+    resolution: MediaResolution | null;
+    codec: string;
+    framerate: number;
+    bitdepth: MediaBitDepth | null;
+    colorspace: MediaColorSpace | null;
+}
+
+export interface MediaMetadataAudio {
+    codec: string;
+    bitrate: number;
+    /** List of possible values: http://web.archive.org/web/20250105210052/https://github.com/FFmpeg/FFmpeg/blob/539cea31830e71f1ce290c56ff2d639b209c2ac2/libavutil/channel_layout.c#L189C21-L189C41  */
+    channels: string;
+    channelsLayout?: string;
+    language: string;
+}
+
+export interface MediaMetadataSubtitles {
+    codec: string;
+    language: string;
+    forced: boolean;
+    hearingImpaired: boolean;
+}
+
+export interface MediaMetadata {
+    video: MediaMetadataVideo;
+    additionalVideo: MediaMetadataVideo[];
+    audio?: MediaMetadataAudio;
+    additionalAudio: MediaMetadataAudio[];
+    subtitles?: MediaMetadataSubtitles;
+    additionalSubtitles: MediaMetadataSubtitles[];
+    source: MediaSource | null;
+    bitrate: number | null;
+    duration: number;
+    size: number;
 }
 
 export enum MediaKind {

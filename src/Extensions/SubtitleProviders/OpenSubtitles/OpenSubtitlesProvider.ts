@@ -108,7 +108,7 @@ export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesR
 
             let results = await this.api.subtitles( query );
 
-            const mediaSource = media.quality.source;
+            const mediaSource = media.metadata?.source;
 
             return results.data.map<IOpenSubtitlesResult>( result => ( {
                 provider: this.name,

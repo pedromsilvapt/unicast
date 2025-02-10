@@ -157,7 +157,15 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
             return [];
         }
 
-        let query = this.query( options ).whereIn( options.column ?? 'id', keys );
+        const column = options.column ?? 'id';
+
+        if ( column in this.fieldConverters ) {
+            const converter = this.fieldConverters[ column ];
+
+            keys = keys.map( value => converter.serialize( value ) );
+        }
+
+        let query = this.query( options ).whereIn( column, keys );
 
         if ( options.query ) {
             query = options.query( query );
@@ -232,6 +240,42 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
         const results = await query;
 
         return results.map( row => row.value );
+    }
+
+    async queryMultipleDistinctJsons<V extends object = Record<string, any[]>>( columns: DistinctMultipleJsonColumns[], options : DistinctMultipleJsonQueryOptions = null ) : Promise<V> {
+        if ( columns.length === 0 ) {
+            return {} as V;
+        }
+
+        let query: Knex.QueryBuilder = this.query( options );
+
+        for ( const { column, jsonPath, result } of columns ) {
+            query = query.select(this.raw(`json_group_array(DISTINCT json_extract(${ column }, '${ jsonPath }')) AS ${result}`));
+        }
+
+        if ( options?.query != null ) {
+            query = options.query.apply( query, query );
+        }
+
+        const rows = await query;
+
+        const results = rows[ 0 ];
+
+        for ( const { result, orderBy, includeNulls } of columns ) {
+            let resultValues: string[] = JSON.parse( results[ result ] );
+
+            if ( !( includeNulls ?? false ) ) {
+                resultValues = resultValues.filter( v => v != null );
+            }
+
+            if ( orderBy != null ) {
+                resultValues.sort( orderBy );
+            }
+
+            results[ result ] = resultValues;
+        }
+
+        return results;
     }
 
     async queryDistinctJsonArray<V = any>( column: string, jsonPath : string = '$', options : DistinctJsonQueryOptions = null ) : Promise<V[]> {
@@ -381,6 +425,10 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     }
 
     isChanged ( baseRecord : object, changes : object ) : boolean {
+        if ( baseRecord == null && changes == null ) return false;
+        if ( baseRecord == null && changes != null ) return true;
+        if ( baseRecord != null && changes == null ) return true;
+
         const baseRecordSerialized = this.serialize( baseRecord as R );
         const changesSerialized = this.serialize( changes as R );
 
@@ -679,6 +727,18 @@ export interface DeleteKeysQueryOptions extends QueryOptions {
 export interface DistinctJsonQueryOptions extends QueryOptions {
     orderBy ?: 'asc' | 'desc' | null | undefined;
     query ?: Knex.QueryCallback;
+}
+
+export interface DistinctMultipleJsonQueryOptions extends QueryOptions {
+    query ?: Knex.QueryCallback;
+}
+
+export interface DistinctMultipleJsonColumns {
+    column: string;
+    jsonPath: string;
+    result: string;
+    orderBy?: (a: string, b: string) => number;
+    includeNulls?: boolean;
 }
 
 export interface ChangeHistory<R> {

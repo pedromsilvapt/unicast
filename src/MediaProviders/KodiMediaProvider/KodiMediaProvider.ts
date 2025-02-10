@@ -45,6 +45,6 @@ export class KodiMediaProvider extends BaseMediaProvider {
     }
 
     make ( manager : ProvidersManager, source : MediaSourceDetails ) : KodiMediaSource {
-        return new KodiMediaSource( manager, this, source );
+        return new KodiMediaSource( manager, this.server.mediaTools, this, source );
     }
 }

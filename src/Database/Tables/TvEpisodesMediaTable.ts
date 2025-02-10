@@ -1,11 +1,12 @@
 import { DatabaseTables } from '../Database';
 import { ManyToManyRelation } from '../Relations/ManyToManyRelation';
-import { BelongsToOneRelation } from '../Relations/OneToOneRelation';
+import { BelongsToOneRelation, HasOneRelation } from '../Relations/OneToOneRelation';
 import { MediaKind, AbstractMediaTable, PlayableMediaRecord, PlayableMediaRecordSql, MediaTableForeignKeys } from './AbstractMediaTable';
 import type { TvSeasonMediaRecord, TvSeasonMediaRecordArt } from './TvSeasonsMediaTable';
 import type { CollectionRecord } from './CollectionsTable';
 import type { PersonRecord } from './PeopleTable';
 import { Converters, FieldConverters } from '../Converters';
+import { MediaProbeRecord } from './MediaProbesTable';
 
 export class TvEpisodesMediaTable extends AbstractMediaTable<TvEpisodeMediaRecord> {
     readonly tableName : string = 'mediaTvEpisodes';
@@ -24,7 +25,7 @@ export class TvEpisodesMediaTable extends AbstractMediaTable<TvEpisodeMediaRecor
     fieldConverters: FieldConverters<TvEpisodeMediaRecord, TvEpisodeMediaRecordSql> = {
         id: Converters.id(),
         sources: Converters.json(),
-        quality: Converters.json(),
+        metadata: Converters.json(),
         external: Converters.json(),
         art: Converters.json(),
         repositoryPaths: Converters.json(),
@@ -46,7 +47,8 @@ export class TvEpisodesMediaTable extends AbstractMediaTable<TvEpisodeMediaRecor
     declare relations : {
         season: BelongsToOneRelation<TvEpisodeMediaRecord, TvSeasonMediaRecord>,
         collections: ManyToManyRelation<TvEpisodeMediaRecord, CollectionRecord>,
-        cast: ManyToManyRelation<TvEpisodeMediaRecord, PersonRecord>
+        cast: ManyToManyRelation<TvEpisodeMediaRecord, PersonRecord>,
+        probe: HasOneRelation<TvEpisodeMediaRecord, MediaProbeRecord>,
     };
 
     installRelations ( tables : DatabaseTables ) {
@@ -89,7 +91,7 @@ export class TvEpisodesMediaTable extends AbstractMediaTable<TvEpisodeMediaRecor
         await super.repair( episodes );
 
         const episodeRecords = await this.findAll( episodes );
-        
+
         await Promise.all( episodeRecords.map( async episode => {
             const changes = {
                 ...await this.repairTvShowArt( episode ),
@@ -108,7 +110,7 @@ export interface TvEpisodeMediaRecord extends PlayableMediaRecord {
     art: TvSeasonMediaRecordArt,
     kind : MediaKind.TvEpisode;
     number : number;
-    seasonNumber : number;   
+    seasonNumber : number;
     tvSeasonId : string;
     tvSeasonKind : MediaKind.TvSeason;
     rating : number;

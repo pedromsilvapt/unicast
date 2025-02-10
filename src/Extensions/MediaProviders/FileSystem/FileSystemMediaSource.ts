@@ -1,6 +1,6 @@
 import { MediaSource } from "../../../MediaProviders/MediaSource";
 import { MediaStream } from "../../../MediaProviders/MediaStreams/MediaStream";
-import { MediaRecord, CustomMediaRecord, MediaKind, PlayableQualityRecord, MediaRecordArt } from "../../../MediaRecord";
+import { MediaRecord, CustomMediaRecord, MediaKind, MediaRecordArt, PlayableMediaRecord } from "../../../MediaRecord";
 import * as isSubtitle from 'is-subtitle';
 import * as isVideo from 'is-video';
 import * as path from 'path';
@@ -20,7 +20,7 @@ export class FileSystemMediaSource extends MediaSource {
         }
 
         if ( isVideo( file ) ) {
-            const metadata = await MediaTools.probe( file );
+            const metadata = await this.mediaTools.probe( file );
 
             streams.push( new FileSystemVideoMediaStream( file, this, metadata ) );
 
@@ -37,7 +37,7 @@ export class FileSystemMediaSource extends MediaSource {
             const filePrefix = path.basename( file, path.extname( file ) );
 
             const otherFiles = await fs.readdir( folder );
-            
+
             const matchingFiles = otherFiles
                 .filter( file => file.startsWith( filePrefix ) )
                 .filter( file => isSubtitle( file ) );
@@ -65,19 +65,12 @@ export class FileSystemMediaSource extends MediaSource {
         return null;
     }
 
-    async info () : Promise<MediaRecord> {
+    async info () : Promise<PlayableMediaRecord> {
         if ( this.details.record ) {
             return this.details.record;
         }
 
         let runtime = null;
-
-        let quality : PlayableQualityRecord = {
-            codec: null,
-            releaseGroup: null,
-            resolution: null,
-            source: null
-        };
 
         let art : MediaRecordArt = {
             thumbnail: null,
@@ -87,14 +80,11 @@ export class FileSystemMediaSource extends MediaSource {
         };
 
         if ( isVideo( this.details.id ) ) {
-            const metadata = await MediaTools.probe( this.details.id );
+            const metadata = await this.mediaTools.probe( this.details.id );
 
             const video = metadata.tracks.find( stream => stream.type == 'video' );
-            
-            runtime = video.duration;
 
-            quality.codec = video.codec;
-            quality.resolution = '' + video.height + 'p';
+            runtime = video.duration;
         }
 
         let rest : Partial<MediaRecord> = {};
@@ -116,7 +106,7 @@ export class FileSystemMediaSource extends MediaSource {
             runtime: runtime,
             lastPlayedAt: null,
             playCount: 0,
-            quality: quality
+            metadata: null
         } as CustomMediaRecord;
     }
 }

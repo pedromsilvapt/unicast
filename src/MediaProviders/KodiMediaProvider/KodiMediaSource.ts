@@ -1,11 +1,11 @@
 import { MediaSource } from "../MediaSource";
 import { MediaStream } from "../MediaStreams/MediaStream";
-import { MediaRecord } from "../../MediaRecord";
+import { MediaRecord, PlayableMediaRecord } from "../../MediaRecord";
 import { KodiMediaProvider } from "./KodiMediaProvider";
 
 export class KodiMediaSource extends MediaSource {
     provider : KodiMediaProvider;
-    
+
     async scan () : Promise<MediaStream[]> {
         return [];
     }
@@ -17,7 +17,7 @@ export class KodiMediaSource extends MediaSource {
 
         return [ protocol, ...segments.split( '/' ) ];
     }
-    
+
     get sourceKind () {
         return this.sourceComponents[ 2 ];
     }
@@ -26,7 +26,7 @@ export class KodiMediaSource extends MediaSource {
         return this.sourceComponents[ 3 ];
     }
 
-    info () : Promise<MediaRecord> {
+    info () : Promise<PlayableMediaRecord> {
         let [ kind, id ] = [ this.sourceKind, this.sourceId ];
 
         // if ( kind === 'movie' ) {

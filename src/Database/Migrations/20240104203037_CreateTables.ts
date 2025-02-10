@@ -2,17 +2,17 @@ import type { Knex } from 'knex';
 import { AllMediaKinds, MediaKind } from '../../MediaRecord';
 
 export async function up(knex: Knex): Promise<void> {
-    
+
     return knex.schema.createTable('collectionMedia', table => {
         table.increments('id');
         table.integer('collectionId');
         table.integer('mediaId');
         table.enum('mediaKind', AllMediaKinds);
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.foreign('collectionId').references('id').inTable('collections').onDelete('CASCADE').onUpdate('CASCADE');
         table.foreign(['mediaId', 'mediaKind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.unique(['collectionId', 'mediaId']);
     }).createTable('collections', table => {
         table.increments('id');
@@ -23,7 +23,7 @@ export async function up(knex: Knex): Promise<void> {
         table.string('color').nullable();
         table.boolean('primary').defaultTo(true);
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.index('identifier');
         table.foreign('parentId').references('id').inTable('collections').onDelete('SET NULL').onUpdate('CASCADE');
     }).createTable('history', table => {
@@ -39,7 +39,7 @@ export async function up(knex: Knex): Promise<void> {
         table.boolean('watched').defaultTo(false);
         table.string('importedFrom').nullable();
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.foreign('playlistId').references('id').inTable('playlists').onDelete('SET NULL').onUpdate('CASCADE');
         table.foreign(['mediaId', 'mediaKind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
     }).createTable('jobQueue', table => {
@@ -47,11 +47,11 @@ export async function up(knex: Knex): Promise<void> {
         table.string('action');
         table.json('payload');
         table.integer('priority');
-        
+
         table.integer('pastAttempts').defaultTo(0);
         table.integer('maxAttempts');
         table.dateTime('nextAttempt').nullable();
-        
+
         table.dateTime('attemptedAt').nullable();
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
     }).createTable('mediaCast', table => {
@@ -67,17 +67,17 @@ export async function up(knex: Knex): Promise<void> {
         table.integer('appearences').nullable();
         table.string('scraper').nullable();
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.foreign(['mediaId', 'mediaKind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
         table.foreign('personId').references('id').inTable('people').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.index('personId');
         table.index(['mediaId', 'mediaKind']);
     }).createTable('media', table => {
         table.increments('id', { primaryKey: false });
         table.enum('kind', AllMediaKinds);
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.unique('id');
         table.primary(['id', 'kind']);
     }).createTable('mediaCustom', table => {
@@ -102,10 +102,10 @@ export async function up(knex: Knex): Promise<void> {
         table.boolean('transient').defaultTo(false);
         table.datetime('addedAt');
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.primary(['id', 'kind']);
         table.foreign(['id', 'kind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.unique('internalId');
         table.index('lastPlayedAt');
         table.index('addedAt');
@@ -120,7 +120,6 @@ export async function up(knex: Knex): Promise<void> {
         table.datetime('lastPlayedAt').nullable();
         table.json('lastPlayedAtLegacy');
         table.string('parentalRating').nullable();
-        table.integer('palyCount').defaultTo(0);
         table.text('plot');
         table.json('quality');
         table.float('rating').nullable();
@@ -137,10 +136,10 @@ export async function up(knex: Knex): Promise<void> {
         table.boolean('transient').defaultTo(false);
         table.datetime('addedAt');
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.primary(['id', 'kind']);
         table.foreign(['id', 'kind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.unique('internalId');
         table.index('title');
         table.index('addedAt');
@@ -172,11 +171,11 @@ export async function up(knex: Knex): Promise<void> {
         table.datetime('airedAt').nullable();
         table.datetime('addedAt');
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.primary(['id', 'kind']);
         table.foreign(['id', 'kind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
         table.foreign(['tvSeasonId', 'tvSeasonKind']).references(['id', 'kind']).inTable('mediaTvSeasons').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.unique('internalId');
         table.index('addedAt');
         table.index('lastPlayedAt');
@@ -201,11 +200,11 @@ export async function up(knex: Knex): Promise<void> {
         table.integer('watchedEpisodesCount');
         table.boolean('transient').defaultTo(false);
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.primary(['id', 'kind']);
         table.foreign(['id', 'kind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
         table.foreign(['tvShowId', 'tvShowKind']).references(['id', 'kind']).inTable('mediaTvShows').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.unique('internalId');
         table.index('lastPlayedAt');
     }).createTable('mediaTvShows', table => {
@@ -233,10 +232,10 @@ export async function up(knex: Knex): Promise<void> {
         table.datetime('addedAt');
         table.boolean('transient').defaultTo(false);
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.primary(['id', 'kind']);
         table.foreign(['id', 'kind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
-        
+
         table.unique('internalId');
         table.index('lastPlayedAt');
         table.index('addedAt');
@@ -261,7 +260,7 @@ export async function up(knex: Knex): Promise<void> {
         table.enum('mediaKind', AllMediaKinds);
         table.integer('order').notNullable();
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.foreign('playlistId').references('id').inTable('playlists').onDelete('CASCADE').onUpdate('CASCADE');
         table.foreign(['mediaId', 'mediaKind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
     }).createTable('storage', table => {
@@ -272,7 +271,7 @@ export async function up(knex: Knex): Promise<void> {
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
     }).createTable('subtitles', table => {
         table.increments('id');
-        
+
         // ...
     }).createTable('userRanks', table => {
         table.increments('id');
@@ -281,7 +280,7 @@ export async function up(knex: Knex): Promise<void> {
         table.integer('mediaId');
         table.enum('mediaKind', AllMediaKinds);
         table.timestamps(/* useTimestamps */ false, /* defaultToNow */ false, /* useCamelCase */ true);
-        
+
         table.foreign(['mediaId', 'mediaKind']).references(['id', 'kind']).inTable('media').onDelete('CASCADE').onUpdate('CASCADE');
         table.unique(['list', 'mediaId']);
     });

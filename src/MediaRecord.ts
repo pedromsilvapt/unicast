@@ -3,8 +3,8 @@ import { MediaSourceDetails } from "./MediaProviders/MediaSource";
 import { ExternalReferences } from './Database/Tables/BaseTable';
 export { ExternalReferences };
 
-import { MediaKind, AllMediaKinds, PlayableQualityRecord } from './Database/Tables/AbstractMediaTable';
-export { MediaKind, AllMediaKinds, PlayableQualityRecord };
+import { MediaKind, AllMediaKinds, MediaSource } from './Database/Tables/AbstractMediaTable';
+export { MediaKind, AllMediaKinds };
 
 export enum ArtRecordKind {
     Poster = "poster",
@@ -14,7 +14,7 @@ export enum ArtRecordKind {
 }
 
 // This object represents one single piece of art, that might not even be associated with any MediaRecord
-export interface ArtRecord { 
+export interface ArtRecord {
     id : string;
     kind: ArtRecordKind;
     width: number;
@@ -132,7 +132,7 @@ export class MediaSources {
         return 1 - ( Math.abs( ia - ib ) / this.list.length );
     }
 
-    static normalize ( source : string ) : string {
+    static normalize ( source : string ) : MediaSource | null {
         if ( !source ) {
             return null;
         }
@@ -140,7 +140,7 @@ export class MediaSources {
         const pool = MediaSources.list.find( pool => pool.some( each => each.localeCompare( source, undefined, { sensitivity: 'base' } ) == 0 ) );
 
         if ( pool ) {
-            return pool[ 0 ];
+            return pool[ 0 ] as MediaSource;
         }
 
         return null;
@@ -171,7 +171,7 @@ export class MediaSources {
     }
 }
 
-export class MediaExternalMap<T extends MediaRecord = MediaRecord> {    
+export class MediaExternalMap<T extends MediaRecord = MediaRecord> {
     /**
      * This variable will hold all media records stored in the database, indexed by their external keys.
      */
@@ -182,7 +182,7 @@ export class MediaExternalMap<T extends MediaRecord = MediaRecord> {
 
         if ( dictionary == null ) {
             dictionary = new Map();
-            
+
             this.externals.set( type, dictionary );
         }
 

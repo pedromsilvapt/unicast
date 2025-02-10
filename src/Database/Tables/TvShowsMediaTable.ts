@@ -2,8 +2,10 @@ import { Converters, FieldConverters } from '../Converters';
 import { DatabaseTables } from '../Database';
 import { ManyToManyRelation } from '../Relations/ManyToManyRelation';
 import { HasManyRelation } from '../Relations/OneToManyRelation';
+import { HasOneRelation } from '../Relations/OneToOneRelation';
 import { MediaKind, MediaRecord, MediaRecordSql, AbstractMediaTable } from './AbstractMediaTable';
 import type { CollectionRecord } from './CollectionsTable';
+import { MediaProbeRecord } from './MediaProbesTable';
 import type { PersonRecord } from './PeopleTable';
 import type { TvSeasonMediaRecord } from './TvSeasonsMediaTable';
 import * as itt from 'itt';
@@ -37,10 +39,11 @@ export class TvShowsMediaTable extends AbstractMediaTable<TvShowMediaRecord> {
         lastPlayedAt: Converters.date(),
         lastPlayedAtLegacy: Converters.json()
     };
-    
+
     declare relations : {
         collections: ManyToManyRelation<TvShowMediaRecord, CollectionRecord>,
         cast: ManyToManyRelation<TvShowMediaRecord, PersonRecord>,
+        probe: HasOneRelation<TvShowMediaRecord, MediaProbeRecord>,
         seasons: HasManyRelation<TvShowMediaRecord, TvSeasonMediaRecord>
     };
 
@@ -100,15 +103,15 @@ export class TvShowsMediaTable extends AbstractMediaTable<TvShowMediaRecord> {
         }
 
         await super.repair( shows );
-        
+
         const showRecords = await this.findAll( shows );
         let showSeasons = await this.relations.seasons.loadAll( showRecords );
 
         await this.database.tables.seasons.repair( showSeasons.flat().map( season => season.id ) );
-        
+
         // Reload the relation to get any updates made by the repair of the episodes
         showSeasons = await this.relations.seasons.loadAll( showRecords );
-        
+
         await Promise.all( showRecords.map( async ( show, index ) => {
             const seasons = showSeasons[ index ];
 

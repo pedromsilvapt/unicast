@@ -34,7 +34,7 @@ export class HttpSender {
         const stream = streams.find( stream => stream.id === id );
 
         if ( stream.isContainer ) {
-            return ( await stream.getInnerStream( options ) ) || stream;
+            return ( await stream.getInnerStream( this.receiver.server.mediaTools, options ) ) || stream;
         }
 
         return stream;

@@ -1,6 +1,6 @@
 import { AbstractMediaTable, Database, MediaTable } from './Database/Database';
 import { RepositoriesManager } from './MediaRepositories/RepositoriesManager';
-import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord, isTvSeasonRecord, isTvShowRecord, isCustomRecord } from './MediaRecord';
+import { MediaKind, AllMediaKinds, MediaRecord, PlayableMediaRecord, createRecordsSet, RecordsSet, createRecordsMap, RecordsMap, MediaCastRecord, PersonRecord, RoleRecord, isTvEpisodeRecord, isMovieRecord, isTvSeasonRecord, isTvShowRecord, isCustomRecord, isPlayableRecord } from './MediaRecord';
 import { BackgroundTask } from './BackgroundTask';
 import { MediaManager, UnicastServer } from './UnicastServer';
 import { Future } from '@pedromsilva/data-future';
@@ -12,7 +12,7 @@ import { ScrapersManager } from './MediaScrapers/ScrapersManager';
 import { collect, groupingBy, first, mapping, distinct, filtering } from 'data-collectors';
 import { AsyncStream } from 'data-async-iterators';
 import { SemaphorePool } from 'data-semaphore';
-import { Knex } from 'knex';
+import { MediaTools } from './MediaTools';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -39,16 +39,19 @@ export class MediaSync {
 
     scrapers : ScrapersManager;
 
+    mediaTools : MediaTools;
+
     logger : Logger;
 
     /** Prevents multiple movies/tv shows with the same person that might be updating their cast concurrently to change the same person at the same time */
     protected castPersonLock : SemaphorePool<string> = new SemaphorePool( 1, true );
 
-    constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, scrapers : ScrapersManager, logger : SharedLogger ) {
+    constructor ( media : MediaManager, db : Database, repositories : RepositoriesManager, scrapers : ScrapersManager, mediaTools : MediaTools, logger : SharedLogger ) {
         this.media = media;
         this.database = db;
         this.repositories = repositories;
         this.scrapers = scrapers;
+        this.mediaTools = mediaTools;
         this.logger = logger.service( 'media/sync' );
     }
 
@@ -169,6 +172,8 @@ export class MediaSync {
 
         await this.runCast( context, media );
 
+        await this.runMetadata( context, media );
+
         return media;
     }
 
@@ -206,6 +211,8 @@ export class MediaSync {
         }
 
         await this.runCast( context, newRecord );
+
+        await this.runMetadata( context, newRecord );
     }
 
     async moveRecord ( context: MediaSyncContext, oldRecord : MediaRecord, newRecord : MediaRecord ) {
@@ -282,8 +289,8 @@ export class MediaSync {
         const newPeopleRolesId = newRoles.map( role => role.internalId ).filter( id => id && !existingRoles.has( id ) );
 
         // And we will search OTHER media records for the same person and see what we find
-        const newPeopleRoles : MediaCastRecord[] = collect( 
-            await this.database.tables.mediaCast.find( q => q.whereIn( 'internalId', newPeopleRolesId ).where( 'scraper', media.scraper ) ), 
+        const newPeopleRoles : MediaCastRecord[] = collect(
+            await this.database.tables.mediaCast.find( q => q.whereIn( 'internalId', newPeopleRolesId ).where( 'scraper', media.scraper ) ),
             // TODO SQL personId != null needed?
             filtering( p => p.personId != null && p.scraper == media.scraper, distinct( p => p.internalId ) )
         );
@@ -404,6 +411,36 @@ export class MediaSync {
         return { createdPeopleCount, existingPeopleCount, deletedCastCount };
     }
 
+    async runMetadata<R extends MediaRecord> ( context: MediaSyncContext, media : R ) {
+        if ( !isPlayableRecord( media ) ) {
+            return;
+        }
+
+        const { task, cache } = context;
+
+        const dryRun = context.snapshot.options.dryRun;
+
+        const table = this.media.getTable( media.kind );
+
+        try {
+            // When we are creating records in dryRun mode, the media records do not have an id (as they are not saved on the database)
+            // That means cannot read/write the metadata to the cache (since in the cache, it needs to be associated to a valid media id)
+            const metadata = await this.mediaTools.getMetadata( media,
+                /* readCache: */ !dryRun && cache.readCache,
+                /* writeCache: */ !dryRun && cache.writeCache );
+
+            if ( table.isChanged( media.metadata, metadata ) ) {
+                media.metadata = metadata;
+
+                if ( !dryRun ) {
+                    await table.update( media.id, { metadata } );
+                }
+            }
+        } catch ( err ) {
+            task.reportError( media.kind, `Failed to get metadata for "${ media.sources[ 0 ].id }: ${ err.message }"`, media, media.sources[ 0 ].id );
+        }
+    }
+
     /**
      * Applies the settings given by the user regarding local artwork
      * preservation and incoming artwork acceptance for the new record.
@@ -512,7 +549,7 @@ export class MediaSync {
 
             if ( table ) {
                 const allRecords = table.findStream( query => query.where( { repository: repository.name } ) );
-                
+
                 for await ( let record of allRecords ) {
                     set.set( record.internalId, record );
                 }

@@ -17,6 +17,6 @@ export class YoutubeMediaProvider extends BaseMediaProvider {
     }
 
     make ( manager : ProvidersManager, source : MediaSourceDetails ) : YoutubeMediaSource {
-        return new YoutubeMediaSource( manager, this, source );
+        return new YoutubeMediaSource( manager, this.server.mediaTools, this, source );
     }
 }

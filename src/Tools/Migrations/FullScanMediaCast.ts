@@ -31,7 +31,7 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
             }
         }
 
-        const sync = new MediaSync( this.server.media, this.server.database, this.server.repositories, this.server.scrapers, this.logger.shared() );
+        const sync = new MediaSync( this.server.media, this.server.database, this.server.repositories, this.server.scrapers, this.server.mediaTools, this.logger.shared() );
 
         const task = new MediaSyncTask();
 

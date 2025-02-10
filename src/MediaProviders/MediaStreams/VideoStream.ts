@@ -1,5 +1,5 @@
 import { MediaStream, MediaStreamType } from "./MediaStream";
-import { MediaMetadata } from "../../MediaTools";
+import { MediaProbe } from "../../MediaTools";
 
 export abstract class VideoMediaStream extends MediaStream {
     static is ( stream : MediaStream ) : stream is VideoMediaStream {
@@ -7,10 +7,10 @@ export abstract class VideoMediaStream extends MediaStream {
     }
 
     type : MediaStreamType = MediaStreamType.Video;
-    
+
     duration : number;
 
-    metadata : MediaMetadata;
+    metadata : MediaProbe;
 
     toJSON () {
         return {

@@ -9,7 +9,7 @@ import { MediaRecord } from "../../../../MediaRecord";
 import { HistoryRecord } from "../../../../Database/Database";
 import { CancelToken } from 'data-cancel-token';
 import { MediaTrigger } from "../../../../TriggerDb";
-import { TrackMediaMetadata, FileMediaMetadata } from "../../../../MediaTools";
+import { TrackMediaProbe, FileMediaProbe } from "../../../../MediaTools";
 import * as chalk from 'chalk';
 import { evaluate } from "../../../../Config";
 import { DataAmount } from '../../../../ES2017/Units';
@@ -38,8 +38,8 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             defaultAudioEncoder: FFMpegAudioEncoder.AAC,
             forceVideoTranscoding: false,
             forceAudioTranscoding: false,
-            preset: options => options.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264 
-                ? FFmpegPreset.Slow 
+            preset: options => options.defaultVideoEncoder == FFMpegVideoEncoder.NvencH264
+                ? FFmpegPreset.Slow
                 : FFmpegPreset.Faster,
             threads: 7,
         }, options );
@@ -49,7 +49,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
         console.log( ...segments );
     }
 
-    printDiagnosticsTranscodingReport ( file : FileMediaMetadata, video : TrackMediaMetadata, audio : TrackMediaMetadata, conditionVideo : boolean, conditionAudio : boolean, options : ChromecastTranscoderOptions, triggers : any[] ) {
+    printDiagnosticsTranscodingReport ( file : FileMediaProbe, video : TrackMediaProbe, audio : TrackMediaProbe, conditionVideo : boolean, conditionAudio : boolean, options : ChromecastTranscoderOptions, triggers : any[] ) {
         const ltrue = chalk.green( 'true' );
         const lfalse = chalk.red( 'false' );
         const lbool = ( flag : boolean ) => flag ? ltrue : lfalse;
@@ -95,16 +95,16 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             driver.setVideoCodec( options.defaultVideoEncoder );
 
             if ( conditionResolution ) {
-                driver.setResolutionProportional( 
+                driver.setResolutionProportional(
                     options.maxResolution.width,
                     options.maxResolution.height,
                     video.width,
                     video.height
                 );
             }
-            
+
             driver.setConstantRateFactor( options.constantRateFactor );
-            
+
             driver.setSegmentDuration( options.segmentLength );
 
             driver.setMaxSegmentSize( DataAmount.parse( options.maxSegmentSize ) );
@@ -114,11 +114,11 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             driver.setCopyTimestamps( true );
 
             driver.setDisabledSubtitles( false );
-            
+
             driver.setHlsFlags( [ FFmpegHlsFlag.SplitByTime ] );
-            
+
             driver.setSegmentListSize( 0 );
-            
+
             driver.setHlsPlaylistType( FFmpegHlsPlaylistType.Event );
 
             if ( triggers.length > 0 ) {
@@ -126,7 +126,7 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
             } else {
                 driver.addMap( '0:v:0', '0:a:0' );
             }
-            
+
             driver.setThreads( options.threads );
 
             driver.setPreset( options.preset );
@@ -140,9 +140,9 @@ export class ChromecastHlsTranscoder extends Transcoder<ChromecastTranscoderOpti
 
         if ( conditionAudio || conditionVideo ) {
             const hls = new HlsVideoMediaStream( session, driver, stream, this.receiver.server.storage );
-            
+
             await hls.init();
-            
+
             this.receiver.server.tasks.register( hls.task );
 
             transcoding.addStreamsMapping( stream, hls, hls.task );

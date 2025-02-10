@@ -7,6 +7,8 @@ import { AbstractMediaTable } from "../../../Database/Database";
 import { ResourceNotFoundError, InvalidArgumentError } from 'restify-errors';
 import { MediaRecordQuerySemantics, QueryAst, QueryLang, QuerySemantics } from '../../../QueryLang';
 import { Knex } from 'knex';
+import { PlayableMediaQualities } from './MoviesController';
+import { DistinctMultipleJsonColumns } from '../../../Database/Tables/BaseTable';
 
 export abstract class MediaTableController<R extends MediaRecord, T extends AbstractMediaTable<R> = AbstractMediaTable<R>> extends BaseTableController<R, T> {
     createCustomQuerySemantics ( req: Request, ast : QueryAst ) : QuerySemantics<R> {
@@ -32,7 +34,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
     getQueryCustomOrder ( query: Knex.QueryBuilder, field: string, direction: 'asc' |  'desc', list: string ) : Knex.QueryBuilder {
         if ( field === '$userRank' ) {
             const userRanksTable = this.server.database.tables.userRanks;
-            
+
             // Direction is intentionally reversed because for user ranks, by convention, we
             // decided that the first is the one with the bigger $userRank
             if ( direction === 'desc' ) {
@@ -93,7 +95,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
             if ( included.length > 0 ) {
                 query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.repositoryPaths)` ).whereIn( 'value', included ) );
             }
-            
+
             if ( excluded.length > 0 ) {
                 query = query.whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.repositoryPaths)` ).whereIn( 'value', excluded ) );
             }
@@ -112,7 +114,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
             if ( included.length > 0 ) {
                 query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.genres)` ).whereIn( 'value', included ) );
             }
-            
+
             if ( excluded.length > 0 ) {
                 query = query.whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.genres)` ).whereIn( 'value', excluded ) );
             }
@@ -130,27 +132,60 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
 
             if ( included.length > 0 ) {
                 const collectionMedia = this.server.database.tables.collectionsMedia;
-                
+
                 const includedQuery = collectionMedia.query()
                     .select( 'mediaId' )
                     .whereIn( 'collectionId', included )
                     .whereRaw( `${ this.table.tableName }.id = ${ collectionMedia.tableName }.mediaId` );
-                
+
                 query = query.whereExists( includedQuery );
             }
-            
+
             if ( excluded.length > 0 ) {
                 const collectionMedia = this.server.database.tables.collectionsMedia;
-                
+
                 const excludedQuery = collectionMedia.query()
                     .select( 'mediaId' )
                     .whereIn( 'collectionId', excluded )
                     .whereRaw( `${ this.table.tableName }.id = ${ collectionMedia.tableName }.mediaId` );
-                
+
                 query = query.whereNotExists( excludedQuery );
             }
         }
-        
+
+        return query;
+    }
+
+    protected getMetadataFieldQuery ( query : Knex.QueryBuilder, tableName : string, field: string, filters?: Record<string, string> ) : Knex.QueryBuilder {
+        // DANGER!! `field` should be a safe variable, not user inputted, or it can lead to SQL Injections!
+        if ( typeof filters === 'object' ) {
+            const keys = Object.keys( filters );
+
+            const included = keys.filter( key => filters[ key ] === 'include' );
+            const excluded = keys.filter( key => filters[ key ] === 'exclude' );
+
+            if ( included.length > 0 ) {
+                query = query.clone().whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ tableName }.metadata, '$.${ field }')` ).whereIn( 'value', included ) );
+            }
+
+            if ( excluded.length > 0 ) {
+                query = query.clone().whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ tableName }.metadata, '$.${ field }')` ).whereIn( 'value', excluded ) );
+            }
+        }
+
+        return query;
+    }
+
+    public getMetadataQuery ( req : Request, query : Knex.QueryBuilder, tableName : string ) : Knex.QueryBuilder {
+        query = this.getMetadataFieldQuery( query, tableName, 'video.resolution', req.query.filterResolutions );
+        query = this.getMetadataFieldQuery( query, tableName, 'video.codec', req.query.filterVideoCodecs );
+        query = this.getMetadataFieldQuery( query, tableName, 'video.colorspace', req.query.filterColorspaces );
+        query = this.getMetadataFieldQuery( query, tableName, 'video.bitdepth', req.query.filterBitdepths );
+        query = this.getMetadataFieldQuery( query, tableName, 'audio.channels', req.query.filterChannels );
+        query = this.getMetadataFieldQuery( query, tableName, 'audio.codec', req.query.filterAudioCodecs );
+        query = this.getMetadataFieldQuery( query, tableName, 'audio.language', req.query.filterLanguages );
+        query = this.getMetadataFieldQuery( query, tableName, 'source', req.query.filterSources );
+
         return query;
     }
 
@@ -174,14 +209,14 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
 
     @Route( 'get', '/:id/artwork' )
     async listArtwork ( req : Request, res : Response ) : Promise<ArtRecord[]> {
-        const media : MediaRecord = await this.table.get( req.params.id );
+        const media : MediaRecord = await this.table.tryGet( req.params.id );
 
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
 
         const url = this.server.getMatchingUrl( req );
-        
+
         const images = await this.server.scrapers.getAllMediaArtork( media.kind, media.external, {}, { readCache: false } );
 
         return images.map( image => ( {
@@ -209,7 +244,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
             throw new InvalidArgumentError( `When setting a media artwork, the 'url' can't be empty.` );
         }
 
-        const media : MediaRecord = await this.table.get( req.params.id );
+        const media : MediaRecord = await this.table.tryGet( req.params.id );
 
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
@@ -222,12 +257,12 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
 
     @Route( 'get', '/:id/triggers' )
     async triggers ( req : Request, res : Response ) : Promise<MediaTrigger[]> {
-        const media : MediaRecord = await this.table.get( req.params.id );
-        
+        const media : MediaRecord = await this.table.tryGet( req.params.id );
+
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
-        
+
         const triggers = await this.server.triggerdb.queryMediaRecord( media );
 
         return triggers;
@@ -235,12 +270,12 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
 
     @Route('get', '/:id/streams')
     async streams ( req : Request, res : Response ) {
-        const media = await this.table.get( req.params.id );
+        const media = await this.table.tryGet( req.params.id );
 
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
-        
+
         if ( !isPlayableRecord( media ) ) {
             throw new InvalidArgumentError( 'Media is not playable.' );
         }
@@ -262,12 +297,12 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
 
     @Route( 'get', '/:id/cast' )
     async cast ( req : Request, res : Response ) : Promise<PersonRecord[]> {
-        const media : MediaRecord = await this.table.get( req.params.id );
+        const media : MediaRecord = await this.table.tryGet( req.params.id );
 
         if ( !media ) {
             throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
         }
-        
+
         const cast = await this.server.media.getCast( media );
 
         const url = this.server.getMatchingUrl( req );
@@ -279,14 +314,72 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
         return cast;
     }
 
+    @Route( 'get', '/:id/probe' )
+    async probe ( req : Request, res : Response ) {
+        const media = await this.table.tryGet( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        const probe = await this.table.relations.probe.load( media );
+
+        return probe;
+    }
+
     @Route( 'post', '/:id/watch/:status' )
     async watch ( req : Request, res : Response ) : Promise<R> {
-        const media = await this.table.get( req.params.id );
+        const media = await this.table.tryGet( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
 
         const watched : boolean = req.params.status === 'true';
-        
+
         await this.server.media.watchTracker.watch( media, watched );
 
         return this.table.get( req.params.id );
+    }
+
+    @Route( 'get', '/qualities' )
+    async qualities ( req : Request, res : Response ) {
+        const columns: DistinctMultipleJsonColumns[] = [];
+
+        const fields = req.query.fields as string[] | null;
+
+        if ( fields == null || fields.includes( 'resolutions' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.video.resolution', result: 'resolutions' } );
+        }
+
+        if ( fields == null || fields.includes( 'video-codecs' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.video.codec', result: 'videoCodecs' } );
+        }
+
+        if ( fields == null || fields.includes( 'colorspaces' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.video.colorspace', result: 'colorspaces' } );
+        }
+
+        if ( fields == null || fields.includes( 'bitdepths' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.video.bitdepth', result: 'bitdepths' } );
+        }
+
+        if ( fields == null || fields.includes( 'audio-codecs' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.audio.codec', result: 'audioCodecs' } );
+        }
+
+        if ( fields == null || fields.includes( 'channels' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.audio.channels', result: 'channels' } );
+        }
+
+        if ( fields == null || fields.includes( 'languages' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.audio.language', result: 'languages' } );
+        }
+
+        if ( fields == null || fields.includes( 'sources' ) ) {
+            columns.push( { column: 'metadata', jsonPath: '$.source', result: 'sources' } );
+        }
+
+        return await this.table.queryMultipleDistinctJsons<Partial<PlayableMediaQualities>>( columns );
     }
 }

@@ -6,7 +6,7 @@ import { MediaTableController } from "./MediaController";
 
 export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRecord> {
     sortingFields : string[] = [ 'title', 'number', 'lastPlayedAt', 'airedAt', 'addedAt', 'playCount' ];
-    
+
     defaultSortField : string = 'number';
 
     get table () : AbstractMediaTable<TvEpisodeMediaRecord> {
@@ -15,7 +15,7 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
 
     async transformQuery ( req : Request ) : Promise<void> {
         await super.transformQuery( req );
-        
+
         if ( req.query.show ) {
 
             if ( req.query.seasonNumber ) {
@@ -43,16 +43,17 @@ export class TvEpisodesController extends MediaTableController<TvEpisodeMediaRec
 
         query = this.getWatchedQuery( req, query );
         query = this.getRepositoryPathsQuery( req, query );
+        query = this.getMetadataQuery( req, query, this.table.tableName );
         query = this.getTransientQuery( req, query );
-        
+
         return query;
     }
 
     async transform ( req : Request, res : Response, episode : TvEpisodeMediaRecord ) : Promise<any> {
         const url = this.server.getMatchingUrl( req );
-        
+
         ( episode as any ).cachedArtwork = this.server.artwork.getCachedObject( url, episode.kind, episode.id, episode.art );
-        
+
         return episode;
     }
 }

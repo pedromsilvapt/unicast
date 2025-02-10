@@ -1,8 +1,7 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
-import { MediaKind, AllMediaKinds, PlayableQualityRecord, MediaRecordArt } from "../MediaRecord";
-import * as parseTorrentName from 'parse-torrent-name';
-import { MediaTools } from "../MediaTools";
+import { MediaKind, AllMediaKinds, MediaRecordArt } from "../MediaRecord";
 import * as path from 'path';
+import { MediaMetadata } from '../Database/Tables/AbstractMediaTable';
 
 export enum AddCustomTarget {
     History = 'history',
@@ -49,7 +48,7 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
             new ToolOption( 'banner' ),
         ];
     }
-    
+
     async getNewestPlaylist ( device : string ) : Promise<string> {
         const playlist = await this.server.database.tables.playlists.findOne( query => {
             return query.orderBy( 'createdAt', 'desc' ).where( { device: device } ).limit( 1 );
@@ -62,37 +61,20 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
         return playlist.id;
     }
 
-    async getVideoMetadata ( location : string ) : Promise<[number, PlayableQualityRecord]> {
+    async getVideoMetadata ( location : string ) : Promise<[number, MediaMetadata | null]> {
         let runtime = null;
 
-        let quality : PlayableQualityRecord = {
-            codec: null,
-            releaseGroup: null,
-            resolution: null,
-            source: null
-        };
+        let metadata : MediaMetadata | null = null;
 
-        const metadata = await MediaTools.probe( location ).catch( err => null );
+        const probe = await this.server.mediaTools.probe( location ).catch( err => null );
 
-        if ( metadata ) {
-            const video = metadata.tracks.find( stream => stream.type == 'video' );
-                
-            if ( video ) {
-                runtime = video.duration;
-        
-                quality.codec = video.codec;
-                quality.resolution = '' + video.height + 'p';
-            }
-        } else {
-            const parsed = parseTorrentName( path.basename( location, path.extname( location ) ) ) || {};
-    
-            quality.codec = parsed.codec || null;
-            quality.releaseGroup = parsed.group || null;
-            quality.resolution = parsed.resolution || null;
-            quality.source = parsed.quality || null;
+        if ( probe != null ) {
+            metadata = await this.server.mediaTools.convertToMetadata( probe );
+
+            runtime = metadata.duration;
         }
-        
-        return [ runtime, quality ];
+
+        return [ runtime, metadata ];
     }
 
     async run ( options : AddCustomOptions ) {
@@ -105,20 +87,20 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
 
         if ( options.mediaKind != null && options.mediaId != null ) {
             const parent = await this.server.media.get( options.mediaKind, options.mediaId );
-    
+
             if ( !parent ) {
                 this.logger.error( `Parent media item not found: [${ options.mediaKind }, ${ options.mediaId }]` );
             } else {
                 Object.assign( art, parent.art );
             }
-        } 
-        
+        }
+
         if ( options.background != null ) art.background = options.background;
         if ( options.thumbnail != null ) art.thumbnail = options.thumbnail;
         if ( options.poster != null ) art.poster = options.poster;
         if ( options.banner != null ) art.banner = options.banner;
 
-        const [ runtime, quality ] = await this.getVideoMetadata( options.video );
+        const [ runtime, metadata ] = await this.getVideoMetadata( options.video );
 
         let record = await this.server.database.tables.custom.create( {
             "art": art,
@@ -128,7 +110,7 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
             "scraper": null,
             "lastPlayedAt": null,
             "playCount": 0,
-            "quality": quality,
+            "metadata": metadata,
             "repository": null,
             "runtime": runtime,
             "sources": [ { "id": options.video } ],
@@ -156,7 +138,7 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
 
         if ( options.target == AddCustomTarget.History || options.target == AddCustomTarget.Play ) {
             const opts : any = {};
-    
+
             const session = await device.sessions.register( record, opts );
 
             this.log( 'Created session', session );
@@ -182,16 +164,16 @@ export class AddCustomTool extends Tool<AddCustomOptions> {
             }
 
             const items = await this.server.database.tables.playlistsMedia.find( q => q.where( 'playlistId', playlist.id ) );
-            
+
             let order = 0;
-            
+
             if ( items.length > 0 ) {
                 order = Math.max( ...items.map( i => i.order ) ) + 1;
             }
 
-            await this.server.database.tables.playlistsMedia.create( { 
+            await this.server.database.tables.playlistsMedia.create( {
                 playlistId: playlist.id,
-                mediaKind: MediaKind.Custom, 
+                mediaKind: MediaKind.Custom,
                 mediaId: record.id,
                 order: order,
             } );

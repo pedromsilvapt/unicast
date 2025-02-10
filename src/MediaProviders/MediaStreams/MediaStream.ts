@@ -2,6 +2,7 @@ import * as rangeStream from 'range-stream';
 import * as pump from 'pump';
 import * as sha1 from 'sha1';
 import { MediaSource } from "../MediaSource";
+import { MediaTools } from '../../MediaTools';
 
 export enum MediaStreamType {
     Video = 'video',
@@ -39,7 +40,7 @@ export abstract class MediaStream {
         return null;
     }
 
-    abstract init ? () : Promise<void>;
+    abstract init ? ( mediaTools : MediaTools ) : Promise<void>;
 
     abstract open ( range ?: MediaRange ) : NodeJS.ReadableStream;
 
@@ -47,14 +48,14 @@ export abstract class MediaStream {
         return null;
     }
 
-    async getInnerStream ( options : any ) : Promise<MediaStream> {
+    async getInnerStream ( mediaTools : MediaTools, options : any ) : Promise<MediaStream> {
         const stream = await this.resolveInnerStream( options );
 
         if ( stream ) {
-            await stream.init();
+            await stream.init( mediaTools );
 
             if ( stream.isContainer ) {
-                return ( await stream.getInnerStream( options ) ) || stream;
+                return ( await stream.getInnerStream( mediaTools, options ) ) || stream;
             }
 
             return stream;

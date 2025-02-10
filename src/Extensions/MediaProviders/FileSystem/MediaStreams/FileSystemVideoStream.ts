@@ -19,10 +19,10 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
         this.file = file;
     }
 
-    async init ? () : Promise<void> {
+    async init ? ( mediaTools : MediaTools ) : Promise<void> {
         const file = this.file;
-        
-        this.metadata = this.metadata || await MediaTools.probe( file );
+
+        this.metadata = this.metadata || await mediaTools.probe( file );
         this.size = +( await fs.stat( file ) ).size;
         this.mime = mime.getType( file );
         this.duration = +this.metadata.files[ 0 ].format.duration;
@@ -39,7 +39,7 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
 
     open ( range : MediaRange = {} ) : NodeJS.ReadableStream {
         const options : any = {};
-        
+
         if ( typeof range.start === 'number' ) {
             options.start = range.start;
         }

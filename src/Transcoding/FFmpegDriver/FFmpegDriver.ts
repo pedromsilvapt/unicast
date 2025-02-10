@@ -3,9 +3,9 @@ import { DriverFactory } from "../DriverFactory";
 import { UnicastServer } from "../../UnicastServer";
 import { MediaTrigger } from "../../TriggerDb";
 import { boxblur, Stream, blackout, mute, filters, concat } from 'composable';
-import { StaticStream } from "composable/lib/Stream";
+import { StaticStream, OutputStream } from "composable/lib/Stream";
 import { Compiler } from "composable/lib/Compiler/Compiler";
-import { TrackMediaMetadata, MediaTools } from "../../MediaTools";
+import { TrackMediaProbe } from "../../MediaTools";
 import * as sortBy from 'sort-by';
 import { MediaRecord } from "../../MediaRecord";
 import { VideoMediaStream } from '../../MediaProviders/MediaStreams/VideoStream';
@@ -21,7 +21,7 @@ export class FFmpegDriverFactory extends DriverFactory<FFmpegDriver> {
         const driver = new FFmpegDriver( server );
 
         driver.factory = this;
-        
+
         return driver;
     }
 }
@@ -45,11 +45,11 @@ export function normalizeScenes ( scenes : Scene[], duration : number ) : Scene[
     const normalized : Scene[] = [];
 
     let lastScene : Scene = null;
-    
+
     for ( let scene of scenes ) {
         if ( !lastScene || scene.start > lastScene.end ) {
             lastScene = { ...scene };
-            
+
             normalized.push( lastScene );
         } else {
             lastScene.end = scene.end;
@@ -63,7 +63,7 @@ export class FFmpegDriver implements TranscodingDriver {
     server : UnicastServer;
 
     factory: DriverFactory<this>;
-    
+
     codecs : FFmpegCodecConstants = new FFmpegCodecConstants;
 
     formats : FFmpegFormatConstants = new FFmpegFormatConstants;
@@ -79,7 +79,7 @@ export class FFmpegDriver implements TranscodingDriver {
     protected scenes : Scene[] = [];
 
     protected videoCodecs : Map<string, FFMpegVideoEncoder> = new Map;
-    
+
     protected audioCodecs : Map<string, FFMpegAudioEncoder> = new Map;
 
     protected constantRateFactor : number = null;
@@ -105,7 +105,7 @@ export class FFmpegDriver implements TranscodingDriver {
     protected disabledSubtitles : boolean = false;
 
     protected disabledAudio : boolean = false;
-    
+
     protected disabledVideo : boolean = false;
 
     protected framerate : number;
@@ -113,10 +113,10 @@ export class FFmpegDriver implements TranscodingDriver {
     constructor ( server : UnicastServer ) {
         this.server = server;
     }
-    
+
     setStartTime ( time : number ) : this {
         this.startTime = time;
-        
+
         return this;
     }
 
@@ -128,7 +128,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
     setFramerate ( framerate : number ) {
         this.framerate = framerate;
-        
+
         return this;
     }
 
@@ -141,7 +141,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
         return this;
     }
-    
+
     setConstantRateFactor ( value : number ) : this {
         this.constantRateFactor = value;
 
@@ -162,7 +162,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
     setAudioCodec ( codec : FFMpegAudioEncoder, stream : string = null ) : this {
         this.audioCodecs.set( stream, codec );
-        
+
         return this;
     }
 
@@ -204,13 +204,13 @@ export class FFmpegDriver implements TranscodingDriver {
 
     setPreset ( preset : FFmpegPreset | string ) : this {
         this.preset = preset;
-        
+
         return this;
     }
 
     setThreads ( threads : number ) : this {
         this.threads = threads;
-        
+
         return this;
     }
 
@@ -249,7 +249,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
     setResolution ( width : number, height : number ) : this {
         this.resolution = [ width, height ];
-        
+
         return this;
     }
 
@@ -286,7 +286,7 @@ export class FFmpegDriver implements TranscodingDriver {
 
     addMap ( ...stream : (string | Stream)[] ) : this {
         this.mappings.push( ...stream );
-        
+
         return this;
     }
 
@@ -307,13 +307,13 @@ export class FFmpegDriver implements TranscodingDriver {
 
         return this;
     }
-    
+
     /**
-     * 
-     * @param triggers 
+     *
+     * @param triggers
      * @param videoMetadata
      */
-    setTriggers ( triggers : MediaTrigger[], videoMetadata : TrackMediaMetadata ) : this {
+    setTriggers ( triggers : MediaTrigger[], videoMetadata : TrackMediaProbe ) : this {
         const [ inputVideo, inputAudio ] = this.getMap();
 
         const inputAudioStream = typeof inputAudio === 'string' ? new StaticStream( null, inputAudio ) : inputAudio;
@@ -338,7 +338,8 @@ export class FFmpegDriver implements TranscodingDriver {
                     video = blackout( video, videoMetadata.width, videoMetadata.height, tm.get( timestamp.start ), tm.get( timestamp.end ) );
                 }
 
-                if ( timestamp.mute ) {
+                // Mute is not available when skipping
+                if ( timestamp.mute && timestamp.type !== 'skip' ) {
                     audio = mute( audio, tm.get( timestamp.start ), tm.get( timestamp.end ) );
                 }
             }
@@ -361,33 +362,33 @@ export class FFmpegDriver implements TranscodingDriver {
         this.framerate = driver.framerate;
 
         this.videoCodecs = new Map( driver.videoCodecs );
-        
+
         this.audioCodecs = new Map( driver.audioCodecs );
-    
+
         this.constantRateFactor = driver.constantRateFactor;
-    
+
         this.maximumCompression = driver.maximumCompression;
 
         this.minimumCompression = driver.minimumCompression;
 
         this.videoBitrates = new Map( driver.videoBitrates );
-    
+
         this.audioBitrates = new Map( driver.audioBitrates );
-    
+
         this.audioRates = new Map( driver.audioRates );
-    
+
         this.format = driver.format;
-    
+
         this.preset = driver.preset;
-    
+
         this.resolution = driver.resolution ? [ driver.resolution[ 0 ], driver.resolution[ 1 ] ] : null;
-    
+
         this.mappings = Array.from( driver.mappings );
-    
+
         this.disabledSubtitles = driver.disabledSubtitles;
-    
+
         this.disabledAudio = driver.disabledAudio;
-        
+
         this.disabledVideo = driver.disabledVideo;
 
         return this;
@@ -406,14 +407,14 @@ export class FFmpegDriver implements TranscodingDriver {
             return input.duration;
         }
     }
-   
+
     async getCompiledArguments ( record : MediaRecord, stream : VideoMediaStream ) : Promise<string[]> {
         const args : string[] = [];
 
         if ( this.startTime !== null ) {
             args.push( '-ss', '' + this.startTime );
         }
-        
+
         const url = this.server.getUrl( '/api' + this.server.streams.getUrlFor( record.kind, record.id, stream.id ) );
 
         if ( this.scenes && this.scenes.length > 0 ) {
@@ -495,7 +496,7 @@ export class FFmpegDriver implements TranscodingDriver {
             // args.push( '-cq', '' + this.constantRateFactor );
             // args.push( '-b:v', '22M' );
             // args.push( '-q', '22' )
-            
+
             // args.push( '-maxrate', '220M' );
         }
 
@@ -533,14 +534,14 @@ export class FFmpegDriver implements TranscodingDriver {
                     maps.push( '-map', stream );
                 } else {
                     maps.push( '-map', '[' + stream.compile( compiler ) + ']' );
-                    
+
                     dynamicStreams.push( stream );
                 }
             }
 
             if ( dynamicStreams.length ) {
                 filtersComplex.push( filters( dynamicStreams ).compile( compiler ).slice( 1, -1 ) );
-                
+
                 if ( filtersComplex.length ) {
                     const filtergraph = filtersComplex.join( ';' );
 
@@ -568,7 +569,7 @@ export class FFmpegDriver implements TranscodingDriver {
     }
 
     getCommandPath () {
-        return MediaTools.getCommandPath( this.server );
+        return this.server.mediaTools.getCommandPath();
     }
 }
 

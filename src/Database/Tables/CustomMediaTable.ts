@@ -11,7 +11,7 @@ export class CustomMediaTable extends AbstractMediaTable<CustomMediaRecord> {
     fieldConverters: FieldConverters<CustomMediaRecord, CustomMediaRecordSql> = {
         id: Converters.id(),
         sources: Converters.json(),
-        quality: Converters.json(),
+        metadata: Converters.json(),
         external: Converters.json(),
         art: Converters.json(),
         repositoryPaths: Converters.json(),
@@ -32,5 +32,5 @@ export interface CustomMediaRecord extends PlayableMediaRecord {
 }
 
 export interface CustomMediaRecordSql extends PlayableMediaRecordSql {
-    
+
 }

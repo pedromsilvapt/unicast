@@ -1,7 +1,8 @@
 import { MediaStream, MediaStreamType } from "./MediaStreams/MediaStream";
 import { IMediaProvider } from "./BaseMediaProvider/IMediaProvider";
 import { ProvidersManager } from "./ProvidersManager";
-import { MediaRecord } from "../MediaRecord";
+import { PlayableMediaRecord } from "../MediaRecord";
+import { MediaTools } from '../MediaTools';
 
 export interface MediaSourceDetails {
     id : string;
@@ -26,14 +27,17 @@ export abstract class MediaSource {
 
     manager : ProvidersManager;
 
+    mediaTools : MediaTools;
+
     provider : IMediaProvider;
 
     details : MediaSourceDetails;
-    
+
     streams : Array<MediaStream> = [];
 
-    constructor ( manager : ProvidersManager, provider : IMediaProvider, details : MediaSourceDetails ) {
+    constructor ( manager : ProvidersManager, mediaTools : MediaTools, provider : IMediaProvider, details : MediaSourceDetails ) {
         this.manager = manager;
+        this.mediaTools = mediaTools;
         this.provider = provider;
         this.details = details;
     }
@@ -76,9 +80,9 @@ export abstract class MediaSource {
 
             for ( let stream of streams ) {
                 stream.enabled = this.isStreamEnabled( stream.type, stream.id, stream.enabled );
-                
+
                 if ( stream.init ) {
-                    await stream.init();
+                    await stream.init( this.mediaTools );
                 }
 
                 this.streams.push( stream );
@@ -96,5 +100,5 @@ export abstract class MediaSource {
         return this.loading;
     }
 
-    abstract info () : Promise<MediaRecord>;
+    abstract info () : Promise<PlayableMediaRecord>;
 }

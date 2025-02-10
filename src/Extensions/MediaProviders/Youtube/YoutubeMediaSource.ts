@@ -1,6 +1,6 @@
 import { MediaSource } from "../../../MediaProviders/MediaSource";
 import { MediaStream } from "../../../MediaProviders/MediaStreams/MediaStream";
-import { MediaRecord, CustomMediaRecord, MediaKind, PlayableQualityRecord, MediaRecordArt } from "../../../MediaRecord";
+import { MediaRecord, CustomMediaRecord, MediaKind, MediaRecordArt, PlayableMediaRecord } from "../../../MediaRecord";
 import * as ytdl from 'ytdl-core';
 import { YoutubeVideoMediaStream } from "./MediaStreams/YoutubeVideoStream";
 import { SubtitlesDownloader } from "./SubtitlesDownloader";
@@ -26,7 +26,7 @@ export class YoutubeMediaSource extends MediaSource {
     selectFormat ( formats : ytdl.videoFormat[] ) : ytdl.videoFormat {
         for ( let target of this.targets ) {
             const match = formats.find( format => this.match( format, target ) );
-            
+
             if ( match ) {
                 return match;
             }
@@ -37,9 +37,9 @@ export class YoutubeMediaSource extends MediaSource {
         const file : string = this.details.id;
 
         this.videoInfo = await ytdl.getInfo( file );
-        
+
         this.format = this.selectFormat( this.videoInfo.formats );
-        
+
         const streams : MediaStream[] = [];
 
         streams.push( new YoutubeVideoMediaStream( file, this ) );
@@ -79,19 +79,12 @@ export class YoutubeMediaSource extends MediaSource {
         return null;
     }
 
-    async info () : Promise<MediaRecord> {
+    async info () : Promise<PlayableMediaRecord> {
         if ( this.details.record ) {
             return this.details.record;
         }
 
         let runtime : number = Math.round( +this.videoInfo.player_response.videoDetails.lengthSeconds / 60 );
-
-        let quality : PlayableQualityRecord = {
-            codec: this.format.encoding,
-            releaseGroup: null,
-            resolution: this.format.resolution,
-            source: null
-        };
 
         let art : MediaRecordArt = {
             thumbnail: this.getVideoThumbnail( this.videoInfo.player_response.videoDetails.thumbnail.thumbnails ),
@@ -108,7 +101,7 @@ export class YoutubeMediaSource extends MediaSource {
             kind: MediaKind.Custom,
             lastPlayedAt: null,
             playCount: 0,
-            quality: quality,
+            metadata: null,
             repository: null,
             runtime: runtime,
             title: this.videoInfo.player_response.videoDetails.title,

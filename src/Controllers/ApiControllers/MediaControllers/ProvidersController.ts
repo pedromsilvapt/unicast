@@ -28,16 +28,16 @@ export class ProvidersController extends BaseController {
     @Route( ['get', 'post'], '/sync' )
     async sync ( req : Request, res : Response ) : Promise<BackgroundTask> {
         const kinds : MediaKind[] = req.query.kinds || null;
-        
+
         const database = this.server.database;
-        
-        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.scrapers, this.server.logger );
+
+        const sync = new MediaSync( this.server.media, database, this.server.repositories, this.server.scrapers, this.server.mediaTools, this.server.logger );
 
         const [ task, done ] = BackgroundTask.fromPromise( async task => {
-            const options : Partial<MediaSyncOptions> = { 
-                kinds, 
-                cleanMissing: req.query.cleanMissing == 'true', 
-                dryRun: req.query.dryRun === 'true', 
+            const options : Partial<MediaSyncOptions> = {
+                kinds,
+                cleanMissing: req.query.cleanMissing == 'true',
+                dryRun: req.query.dryRun === 'true',
                 refetchExisting: req.query.refetchExisting == 'true',
                 refetchIncomplete: req.query.refetchIncomplete == 'true',
                 updateMoved: req.query.updateMoved == 'true',

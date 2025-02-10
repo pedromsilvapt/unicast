@@ -45,6 +45,7 @@ import * as schema from '@gallant/schema';
 import { BaseUrl } from './ES2017/BaseUrl';
 import { QueryOptions } from './Database/Tables/BaseTable';
 import { queryParser } from './ES2017/QueryParser';
+import { MediaTools } from './MediaTools';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -62,6 +63,8 @@ export class UnicastServer {
     readonly accessControl : AccessControl;
 
     readonly database : Database;
+
+    readonly mediaTools : MediaTools;
 
     readonly scrapers : ScrapersManager;
 
@@ -128,6 +131,8 @@ export class UnicastServer {
         ] ) );
 
         this.database = new Database( this );
+
+        this.mediaTools = new MediaTools( this );
 
         this.dataStore = new DataStore( this );
 
@@ -632,8 +637,8 @@ export class MediaManager {
         }
     }
 
-    store ( record : MediaRecord ) : Promise<MediaRecord> {
-        let table : BaseTable<MediaRecord> = this.getTable( record.kind );
+    store<T extends MediaRecord> ( record : T ) : Promise<T> {
+        let table : BaseTable<T> = this.getTable( record.kind ) as BaseTable<any>;
 
         if ( record.id ) {
             return table.update( record.id, record );
@@ -659,7 +664,7 @@ export class MediaManager {
         return mediaSubTitle;
     }
 
-    async createFromSources ( sources : MediaSourceLike ) : Promise<MediaRecord> {
+    async createFromSources ( sources : MediaSourceLike ) : Promise<PlayableMediaRecord> {
         let normalized = this.server.providers.normalizeSources( sources );
 
         let media = await this.server.providers.getMediaRecordFor( normalized );
@@ -667,7 +672,7 @@ export class MediaManager {
         if ( media && media.id ) {
             let table = this.getTable( media.kind );
 
-            const existingMedia = await table.get( media.id );
+            const existingMedia = await table.get( media.id ) as PlayableMediaRecord;
 
             if ( existingMedia ) {
                 return existingMedia;

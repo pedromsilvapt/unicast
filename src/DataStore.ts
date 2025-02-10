@@ -31,7 +31,7 @@ export class DataStore {
             if ( options.tags && options.tags.length > 0 ) {
                 q = q.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.tags)` ).whereIn( 'value', options.tags ) );
             }
-            
+
             return q;
         } );
     }
@@ -42,9 +42,9 @@ export class DataStore {
 
     async store<T> ( key : string, value : T, autoTag : boolean = false, tags : string[] = void 0 ) : Promise<StorageRecord<T>> {
         const now = new Date();
-        
+
         const record = await this.getStorageRecord<T>( key );
-        
+
         if ( record == null ) {
             if ( !tags ) {
                 tags = [];
@@ -72,7 +72,7 @@ export class DataStore {
 
     async retag<T> ( key : string, tags : string[] = [] ) : Promise<StorageRecord<T>> {
         const now = new Date();
-        
+
         const record = await this.getStorageRecord( key );
 
         if ( record != null ) {
@@ -105,12 +105,26 @@ export class DataStore {
         return false;
     }
 
+    async getOrStore<T extends object>( key: string, factory: (key: string) => Promise<T> | T ) : Promise<T> {
+        const cacheRecord = await this.get( key );
+
+        if ( cacheRecord == null ) {
+            const value = await factory( key );
+
+            await this.store( key, value );
+
+            return value;
+        } else {
+            return cacheRecord.value as T;
+        }
+    }
+
     async addToSet<T extends object> ( key : string, indexBy: (keyof T)[], object: T ): Promise<boolean> {
         await this.semaphore.acquire( key );
 
         try {
             const now = new Date();
-    
+
             // Create a predicate function for the indexed keys
             const indexQuery : (obj : T) => boolean = obj => {
                 for ( const indexKey of indexBy ) {
@@ -118,29 +132,29 @@ export class DataStore {
                         return false;
                     }
                 }
-                
+
                 return true;
             };
-    
+
             // See if there is any record for this key on the datastore
             const record = await this.get<T[]>( key );
-    
+
             if ( record == null ) {
                 await this.store( key, [ object ] );
-    
+
                 return true;
             } else {
                 if ( record.value.length == 0 ) {
                     const elementIndex = record.value.findIndex( obj => indexQuery( obj ) );
-                    
+
                     if ( elementIndex <= 0 ) {
                         record.value.push( object );
-                        
+
                         await this.table.update( record.id, { value: record.value, updatedAt: now } );
-                        
+
                         return true;
                     }
-                    
+
                     return false;
                 } else {
                     return false;
@@ -164,10 +178,10 @@ export class DataStore {
                         return false;
                     }
                 }
-                
+
                 return true;
             };
-            
+
             // See if there is any record for this key on the datastore
             // const record = await this.get<StorageRecord<T[]>>( key )
             const record = await this.get<T[]>( key );
@@ -181,13 +195,13 @@ export class DataStore {
                     return false;
                 } else {
                     const newValue = record.value.filter( obj => !indexQuery( obj ) );
-                    
+
                     if ( newValue.length != record.value.length ) {
                         await this.table.update( record.id, { value: newValue, updatedAt: now } );
-                        
+
                         return true;
                     }
-                    
+
                     return false;
                 }
             }

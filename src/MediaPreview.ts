@@ -28,8 +28,8 @@ export class MediaPreview {
     generate () : Readable {
         const url = this.server.getUrl( this.server.streams.getUrlFor( this.media.kind, this.media.id, this.stream.id ) );
 
-        const args = [ 
-            '-ss', this.time.toString(), 
+        const args = [
+            '-ss', this.time.toString(),
             '-i', url, '-y',
             '-frames:v', '1',
             '-c:v', 'png',
@@ -38,7 +38,7 @@ export class MediaPreview {
             '-'
         ];
 
-        const command = spawn( MediaTools.getCommandPath( this.server ), args );
+        const command = spawn( this.server.mediaTools.getCommandPath(), args );
 
         command.on( "error", error => command.stdout.emit( "error", error ) );
 

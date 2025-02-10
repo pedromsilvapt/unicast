@@ -1,11 +1,11 @@
 import { FFmpegDriver } from '../../../Transcoding/FFmpegDriver/FFmpegDriver';
 import { MediaTrigger } from '../../../TriggerDb';
 import { UnicastServer } from '../../../UnicastServer';
-import { TrackMediaMetadata } from '../../../MediaTools';
+import { TrackMediaProbe } from '../../../MediaTools';
 import { Compiler } from 'composable';
 
 export class KodiFFmpegDriver extends FFmpegDriver {
-    public static getFilterGraph ( server : UnicastServer, triggers : MediaTrigger[], videoMetadata : TrackMediaMetadata ) {
+    public static getFilterGraph ( server : UnicastServer, triggers : MediaTrigger[], videoMetadata : TrackMediaProbe ) {
         const driver = new KodiFFmpegDriver( server );
 
         driver.setMap( 'vid1', 'aid1' );

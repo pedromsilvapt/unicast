@@ -48,7 +48,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
 
             if ( videoPath != null ) {
                 if ( await fs.exists( videoPath ) ) {
-                    const metadata = await MediaTools.probe( videoPath );
+                    const metadata = await this.server.mediaTools.probe( videoPath );
 
                     const subtitles = metadata.tracks.filter( track => track.type === 'subtitle' );
 
@@ -102,7 +102,7 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
 
         this.logger.info( 'Extracting: ' + subtitle.filePath );
 
-        const command = MediaTools.getCommandPath( this.server, "ffmpeg" );
+        const command = this.server.mediaTools.getCommandPath( "ffmpeg" );
 
         const cp = spawn( command, processArgs, {
             stdio: this.config.showExtractionOutput ? 'inherit' : 'ignore'

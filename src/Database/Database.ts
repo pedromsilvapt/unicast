@@ -67,6 +67,7 @@ import { MediaCastTable, MediaCastRecord } from './Tables/MediaCastTable';
 export { MediaCastTable, MediaCastRecord };
 
 import { SubtitlesTable, SubtitleRecord } from './Tables/SubtitlesTable';
+import { MediaProbesTable } from './Tables/MediaProbesTable';
 export { SubtitlesTable, SubtitleRecord };
 
 export class DatabaseKnexLogger {
@@ -246,6 +247,8 @@ export class DatabaseTables {
 
     custom : CustomMediaTable;
 
+    probes : MediaProbesTable;
+
     history : HistoryTable;
 
     playlists : PlaylistsTable;
@@ -281,6 +284,8 @@ export class DatabaseTables {
 
         this.custom = new CustomMediaTable( database );
 
+        this.probes = new MediaProbesTable( database );
+
         this.history = new HistoryTable( database );
 
         this.playlists = new PlaylistsTable( database );
@@ -315,6 +320,8 @@ export class DatabaseTables {
 
         await this.custom.install();
 
+        await this.probes.install();
+
         await this.history.install();
 
         await this.playlists.install();
@@ -345,6 +352,7 @@ export class DatabaseTables {
             this.seasons,
             this.episodes,
             this.custom,
+            this.probes,
             this.history,
             this.playlists,
             this.collections,

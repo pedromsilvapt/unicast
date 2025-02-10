@@ -22,37 +22,9 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
         query = this.getRepositoryPathsQuery( req, query );
         query = this.getGenresQuery( req, query );
         query = this.getCollectionsQuery( req, query );
-        query = this.getQualityQuery( req, query );
+        query = this.getMetadataQuery( req, query, this.table.tableName );
         query = this.getTransientQuery( req, query );
         query = this.getSampleQuery( req, query );
-
-        return query;
-    }
-
-    protected getQualityFieldQuery ( query : Knex.QueryBuilder, field: string, filters?: Record<string, string> ) : Knex.QueryBuilder {
-        // DANGER!! `field` should be a safe variable, not user inputted, or it can lead to SQL Injections!
-        if ( typeof filters === 'object' ) {
-            const keys = Object.keys( filters );
-
-            const included = keys.filter( key => filters[ key ] === 'include' );
-            const excluded = keys.filter( key => filters[ key ] === 'exclude' );
-
-            if ( included.length > 0 ) {
-                query = query.whereExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.quality.${ field })` ).whereIn( 'value', included ) );
-            }
-
-            if ( excluded.length > 0 ) {
-                query = query.whereNotExists( q => q.select( 'value' ).fromRaw( `json_each(${ this.table.tableName }.quality.${ field })` ).whereIn( 'value', excluded ) );
-            }
-        }
-
-        return query;
-    }
-
-    public getQualityQuery ( req : Request, query : Knex.QueryBuilder ) : Knex.QueryBuilder {
-        query = this.getQualityFieldQuery( query, 'resolution', req.query.filterResolutions );
-        query = this.getQualityFieldQuery( query, 'source', req.query.filterSources );
-        query = this.getQualityFieldQuery( query, 'colorGamut', req.query.filterColorGamuts );
 
         return query;
     }
@@ -77,17 +49,15 @@ export class MoviesController extends MediaTableController<MovieMediaRecord> {
     async genres ( req : Request, res : Response ) {
         return await this.table.queryDistinctJsonArray('genres', '$', { orderBy: 'asc' });
     }
+}
 
-    @Route( 'get', '/quality/:field' )
-    async qualities ( req : Request, res : Response ) {
-        if ( req.params.field === 'resolutions' ) {
-            return await this.table.queryDistinctJson( 'quality', '$.resolution', { orderBy: 'asc' } );
-        } else if ( req.params.field === 'sources' ) {
-            return await this.table.queryDistinctJson( 'quality', '$.source', { orderBy: 'asc' } );
-        } else if ( req.params.field === 'color-gamuts' ) {
-            return await this.table.queryDistinctJson( 'quality', '$.colorGamut', { orderBy: 'asc' } );
-        } else {
-            throw new InvalidArgumentError( `The quality field ${ req.params.field } is invalid, expected one of: resolutions, sources, color-gamuts.` );
-        }
-    }
+export interface PlayableMediaQualities {
+    resolutions: string[];
+    videoCodecs: string[];
+    colorspaces: string[];
+    bitdepths: string[];
+    audioCodecs: string[];
+    channels: string[];
+    languages: string[];
+    sources: string[];
 }

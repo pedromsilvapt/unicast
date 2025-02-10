@@ -10,7 +10,7 @@ import { InvalidArgumentError } from 'restify-errors';
 import { isTvEpisodeRecord, isMovieRecord, MediaKind, MediaRecord, isPlayableRecord } from '../../../MediaRecord';
 import { LoadOptions } from 'unicast-mpv/lib/Player';
 import { KodiHttpSender } from './KodiHttpSender';
-import { NoMediaFound } from '../../../Controllers/ApiControllers/PlayerController';
+import { InvalidPlayableMedia, NoMediaFound } from '../../../Controllers/ApiControllers/PlayerController';
 
 // create a client
 export interface KodiConfig {
@@ -252,6 +252,10 @@ export class KodiReceiver extends BaseReceiver {
 
         if ( record == null ) {
             throw new NoMediaFound();
+        }
+
+        if ( !isPlayableRecord( record ) ) {
+            throw new InvalidPlayableMedia( record.kind );
         }
 
         const session = await this.sessions.register( record );

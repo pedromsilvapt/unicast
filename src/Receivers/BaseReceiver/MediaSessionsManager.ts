@@ -200,7 +200,7 @@ export class MediaSessionsManager {
         return this.zapping.get( strategy ).next( session, this );
     }
 
-    async getPrevious ( id : string, strategy : string = 'auto' ) : Promise<Optional<[ MediaRecord, MediaPlayOptions ]>> {
+    async getPrevious ( id : string, strategy : string = 'auto' ) : Promise<Optional<[ PlayableMediaRecord, MediaPlayOptions ]>> {
         if ( !id ) {
             return Optional.empty();
         }
