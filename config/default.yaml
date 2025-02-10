@@ -26,16 +26,6 @@ server:
         passphrase: server
         port: 3033
 
-databaseRethink:
-    db: unicast
-    host: "127.0.0.1"
-    port: 28015
-
-    autostart:
-        enable: true
-        cwd: storage
-        args: []
-
 database:
     client: better-sqlite3
     useNullAsDefault: true

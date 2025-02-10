@@ -1,7 +1,7 @@
 # WARNING
 Unicast is in the process of migrating the database from rethinkdb. The latest version of code using rethinkdb only, is being kept in the branch `archive/rethinkdb`.
 
-This branch currently still has the dependencies and most of the code to interface with both RethinkDB and SQLite, but SQLite is the DB used by default. The goal of this version of the code is to be used only during migration.
+This branch no longer has the dependencies and most of the code to interface with both RethinkDB.
 
 If you are using this application and are facing issues with it, feel free to open a ticket, to make sure no data is lost during the migration.
 

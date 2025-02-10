@@ -1,6 +1,2 @@
-database:
-    autostart:
-        command: rethinkdb
-
 mpv:
   command: mpv
