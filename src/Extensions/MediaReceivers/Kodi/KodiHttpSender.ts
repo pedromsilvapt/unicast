@@ -48,7 +48,7 @@ export class KodiHttpSender extends HttpSender {
 
         if ( match.type === MediaStreamType.Subtitles ) {
             const subtitles = match as SubtitlesMediaStream;
-            
+
             if ( subtitles.format === 'srt' ) {
                 const converted = new SubtitlesPipelineMediaStream( subtitles, this.getSubtitlesPipeline( +options.offset ) );
 
@@ -56,7 +56,7 @@ export class KodiHttpSender extends HttpSender {
 
                 converted.mime = 'text/vtt';
 
-                await converted.init();
+                await converted.init( this.receiver.server.mediaTools );
 
                 return converted;
             }

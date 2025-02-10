@@ -48,7 +48,7 @@ export class ChromecastHttpSender extends HttpSender {
 
         if ( match.type === MediaStreamType.Subtitles ) {
             const subtitles = match as SubtitlesMediaStream;
-            
+
             if ( subtitles.format === 'srt' ) {
                 // TODO Remove this line and SubtitlesConvertMediaStream
                 // const converted = new SubtitlesConvertMediaStream( subtitles );
@@ -59,7 +59,7 @@ export class ChromecastHttpSender extends HttpSender {
 
                 converted.mime = 'text/vtt';
 
-                await converted.init();
+                await converted.init( this.receiver.server.mediaTools );
 
                 return converted;
             }
