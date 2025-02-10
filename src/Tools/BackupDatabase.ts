@@ -4,6 +4,7 @@ import { Tool, ToolOption, ToolValueType } from "./Tool";
 import { format } from 'date-fns';
 import { Stopwatch } from '../BackgroundTask';
 import * as filesize from 'filesize';
+import { pp } from 'clui-logger';
 
 interface BackupDatabaseOptions {
     folder : string;
@@ -33,12 +34,14 @@ export class BackupDatabaseTool extends Tool<BackupDatabaseOptions> {
             folder = path.join( path.dirname( folder ), `${ format( Date.now(), 'YYYYMMDD_HHmmss' ) }_${ path.basename( folder ) }` );
         }
 
+        const backupFile = path.join( folder + '.db' );
+
         const stopwatch = new Stopwatch().resume();
 
-        let size = await this.backupDatabase( path.join( folder + '.db' ) );
+        let size = await this.backupDatabase( backupFile );
 
         stopwatch.pause();
 
-        this.log( 'Backup generated', `(in ${ stopwatch.readHumanized() }, ${ filesize( size ) })` );
+        this.log( pp`Backup ${backupFile} generated (in ${ stopwatch.readHumanized() }, ${ filesize( size ) })` );
     }
 }
