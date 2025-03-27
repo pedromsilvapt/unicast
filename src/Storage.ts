@@ -50,19 +50,25 @@ export class Storage {
         return path.resolve( path.join( storagePath, ...file ) );
     }
 
+    getRelativePath ( absolutePath : string ) : string {
+        const storagePath = this.server.config.get( 'storage', 'storage' );
+
+        return path.relative( storagePath, absolutePath );
+    }
+
     async getRandomFolder ( prefix : string = null, container : string = 'temp/folders' ) : Promise<string> {
         const release = await this.cleaningSemaphore.acquire();
 
         try {
             const random = uid( this.randomNameLength );
-    
-            const folder = this.getPath( 
-                container, 
+
+            const folder = this.getPath(
+                container,
                 ( prefix ? ( prefix + '' ) : '' ) + random
             );
-            
+
             await this.ensureDir( folder );
-    
+
             return folder;
         } finally {
             release();
@@ -74,12 +80,12 @@ export class Storage {
 
         try {
             const random = uid( this.randomNameLength );
-    
+
             const file = this.getPath(
                 container,
-                ( prefix ? ( prefix + '' ) : '' ) + random + ( extension ? ( '.' + extension ) : '' )            
+                ( prefix ? ( prefix + '' ) : '' ) + random + ( extension ? ( '.' + extension ) : '' )
             );
-    
+
             await this.ensureDir( path.dirname( file ) );
 
             return file;
@@ -91,8 +97,8 @@ export class Storage {
     async clean () {
         const release = await this.cleaningSemaphore.acquire();
 
-        await this.cleaner.clean( 'temp', 
-            this.cleaner.or( 
+        await this.cleaner.clean( 'temp',
+            this.cleaner.or(
                 stats => stats.isDirectory(),
                 this.cleaner.olderThan( subDays( new Date(), 1 )
             ) )
@@ -110,7 +116,7 @@ export type StoragePredicate = ( stats : fs.Stats, file : string ) => boolean | 
 
 export class StorageCleaner {
     storage : Storage;
-    
+
     semaphore : Semaphore = new Semaphore( 1 );
 
     constructor ( storage : Storage ) {
@@ -157,7 +163,7 @@ export class StorageCleaner {
         try {
             if ( await fs.exists( target ) ) {
                 const stats = await fs.stat( target );
-    
+
                 if ( stats.isFile() ) {
                     await this.cleanFile( stats, target, condition );
                 } else {
@@ -174,14 +180,14 @@ export class StorageCleaner {
     protected async cleanFile ( stats : fs.Stats, target : string, condition : StoragePredicate ) : Promise<boolean> {
         if ( await condition( stats, target ) ) {
             await fs.unlink( target );
-            
+
             return true;
         }
 
         return false;
     }
 
-    protected async cleanFolder ( stats : fs.Stats, target : string, condition : StoragePredicate, cleanSelf : boolean = true ) {        
+    protected async cleanFolder ( stats : fs.Stats, target : string, condition : StoragePredicate, cleanSelf : boolean = true ) {
         if ( await condition( stats, target ) ) {
             const files = await fs.readdir( target );
 
@@ -211,7 +217,7 @@ export class StorageCleaner {
 
             if ( files.length === count ) {
                 await fs.rmdir( target );
-                
+
                 return true;
             }
         }
@@ -222,18 +228,18 @@ export class StorageCleaner {
 
 export class StorageCacheContainer {
     storage : Storage;
-    
+
     folder : string;
 
     predicate : StoragePredicate;
-    
+
     constructor ( storage, folder : string, predicate : StoragePredicate ) {
         this.storage = storage;
         this.folder = folder;
         this.predicate = predicate || ( () => false );
     }
 
-    
+
     getPath ( ...file : string[] ) : string {
         return this.storage.getPath( this.folder, ...file );
     }

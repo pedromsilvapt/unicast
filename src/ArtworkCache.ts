@@ -17,7 +17,7 @@ export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.Wr
         if ( typeof output === 'string' ) {
             output = fs.createWriteStream( output );
         }
-    
+
         input.pipe( output );
 
         input.on( 'error', reject );
@@ -30,7 +30,7 @@ export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.Wr
 
 export class ArtworkCache {
     server : UnicastServer;
-    
+
     cache : MapCachePersistence<string, string>;
 
     index : Map<string, [ ArtworkCacheOptions, string ][]> = new Map;
@@ -80,7 +80,7 @@ export class ArtworkCache {
 
         return cached;
     }
-    
+
     getCachedScraperObject ( url : string, scraper : string, kind : MediaKind, id : string, art : any, prefix ?: string[] ) {
         const cached : any = {};
 
@@ -114,11 +114,19 @@ export class ArtworkCache {
     }
 
     getCached ( url : string, options : ArtworkCacheOptions = {} ) : string {
-        return this.cache.get( this.getCacheKey( url, options ) );
+        const filepath = this.cache.get( this.getCacheKey( url, options ) );
+
+        if ( filepath != null && !path.isAbsolute( filepath ) ) {
+            return this.server.storage.getPath( filepath );
+        }
+
+        return filepath;
     }
 
     setCached ( url : string, file : string, options : ArtworkCacheOptions = {} ) : void {
-        this.cache.set( this.getCacheKey( url, options ), file );
+        const relativeFile = this.server.storage.getRelativePath( file );
+
+        this.cache.set( this.getCacheKey( url, options ), relativeFile );
     }
 
     getReadableStream ( url : string ) : NodeJS.ReadableStream {
@@ -132,7 +140,7 @@ export class ArtworkCache {
     @Singleton( ( url : string ) => url )
     async readOriginal ( url : string, readCache : boolean = true ) : Promise<string> {
         let cached;
-        
+
         if ( ( cached = this.getCached( url ) ) && await fs.exists( cached ) ) {
             if ( readCache ) {
                 return cached;
@@ -140,7 +148,7 @@ export class ArtworkCache {
                 await fs.unlink( cached );
             }
         }
-        
+
         const cachePath = await this.server.storage.getRandomFile( '', 'jpg', 'cache/artwork/original' );
 
         const release = await this.httpSemaphore.acquire();
@@ -151,7 +159,7 @@ export class ArtworkCache {
             this.server.logger.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );
 
             await saveStreamTo( this.getReadableStream( url ), cachePath );
-    
+
             this.setCached( url, cachePath );
         } catch ( err ) {
             await this.server.onError.notify( err );
@@ -172,16 +180,16 @@ export class ArtworkCache {
 
             image = image.resize( width, height, { kernel: 'lanczos3' } );
         }
-        
+
         return image;
     }
 
     @Singleton( function ( url : string, options : ArtworkCacheOptions ) { return this.getCacheKey( url, options ) } )
     async readTransformed ( url : string, options : ArtworkCacheOptions ) : Promise<string> {
         let cached;
-        
+
         const readCache = options.readCache === void 0 || options.readCache;
-        
+
         if ( ( cached = this.getCached( url, options ) ) && await fs.exists( cached ) ) {
             if ( readCache ) {
                 return cached;
@@ -200,7 +208,7 @@ export class ArtworkCache {
 
         try {
             const cachePathResized = await this.server.storage.getRandomFile( '', 'jpg', 'cache/artwork/transformed' );
-            
+
             const relativeCachePath = path.relative( this.server.storage.getPath( 'cache/artwork' ), cachePathResized );
 
             this.server.logger.debug( 'artwork', `Transforming ${url}, saving to ${ relativeCachePath }.`, { type: 'transform', options } );
@@ -208,7 +216,7 @@ export class ArtworkCache {
             let image = await sharp( cachePath );
 
             const metadata = await image.metadata();
-            
+
             const buffer = await this.transform( image, metadata, options ).toFormat( 'jpeg', { quality: 100 } ).toBuffer();
 
             await fs.writeFile( cachePathResized, buffer );
@@ -358,7 +366,7 @@ export class MapCachePersistence<K, V> extends CachePersistence<Map<K, V>> {
     has ( key : K ) : boolean {
         return this.data.has( key );
     }
-    
+
     async hasAsync ( key : K ) : Promise<boolean> {
         await this.load();
 
@@ -372,7 +380,7 @@ export class MapCachePersistence<K, V> extends CachePersistence<Map<K, V>> {
 
         return this;
     }
-    
+
     async setAsync ( key : K, value : V ) : Promise<this> {
         await this.load();
 
