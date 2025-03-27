@@ -56,7 +56,7 @@ export class PersistSubtitlesTool extends Tool<PersistSubtitlesOptions> {
     }
 
     async shiftChange ( options : PersistSubtitlesOptions, change : ChangeCommand, video : string, lastChange : number ) {
-        const metadata = await MediaTools.probe( video );
+        const metadata = await this.server.mediaTools.probe( video );
 
         const track = metadata.tracks.find( tr => tr.type === 'video' );
 

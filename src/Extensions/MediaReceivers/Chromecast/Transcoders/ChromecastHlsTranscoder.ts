@@ -10,7 +10,7 @@ import { HistoryRecord } from "../../../../Database/Database";
 import { CancelToken } from 'data-cancel-token';
 import { MediaTrigger } from "../../../../TriggerDb";
 import { TrackMediaProbe, FileMediaProbe } from "../../../../MediaTools";
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 import { evaluate } from "../../../../Config";
 import { DataAmount } from '../../../../ES2017/Units';
 

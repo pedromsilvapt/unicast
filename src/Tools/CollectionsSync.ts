@@ -3,7 +3,7 @@ import { groupingByMany, collect, first, groupingBy } from 'data-collectors';
 import { AbstractMediaTable, Database, MediaTable } from '../Database/Database';
 import { AsyncStream } from 'data-async-iterators';
 import { ExternalReferences, MediaRecord, MediaKind } from '../MediaRecord';
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 
 export interface CollectionsSyncOptions {
     target : string;

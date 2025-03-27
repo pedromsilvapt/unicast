@@ -70,7 +70,7 @@ export interface MediaTrigger {
 export interface TriggerTimeWindow {
     start : number;
     end : number;
-    type ?: 'none' | 'blur' | 'mediumblur' | 'lightblur' | 'heavyblur' | 'black';
+    type ?: 'none' | 'blur' | 'mediumblur' | 'lightblur' | 'heavyblur' | 'black' | 'skip';
     mute ?: boolean;
     level ?: number;
 }

@@ -1,7 +1,7 @@
 import { Tool, ToolOption, ToolValueType } from "../Tool";
 import { MediaKind } from '../../MediaRecord';
 import { MediaSync, MediaSyncContext, MediaSyncSnapshot, MediaSyncTask } from '../../MediaSync';
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 
 export interface FullScanMediaCastOptions {
     truncate : boolean;
@@ -57,7 +57,7 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
 
             let doneCount = 0;
 
-            statsLogger.info( `${ chalk.cyan( createdPeople ) } created, ${ chalk.cyan( updatedPeople ) } updated, ${ chalk.cyan( deletedCast ) } deleted` );
+            statsLogger.info( `${ chalk.cyan( '' + createdPeople ) } created, ${ chalk.cyan( '' + updatedPeople ) } updated, ${ chalk.cyan( '' + deletedCast ) } deleted` );
 
             await table.findStream().parallel( async record => {
                 try {
@@ -70,7 +70,7 @@ export class FullScanMediaCastTool extends Tool<FullScanMediaCastOptions> {
                         createdPeople += stats.createdPeopleCount;
                         deletedCast += stats.deletedCastCount;
 
-                        statsLogger.info( `${ chalk.cyan( createdPeople ) } created, ${ chalk.cyan( updatedPeople ) } updated, ${ chalk.cyan( deletedCast ) } deleted` );
+                        statsLogger.info( `${ chalk.cyan( '' + createdPeople ) } created, ${ chalk.cyan( '' + updatedPeople ) } updated, ${ chalk.cyan( '' + deletedCast ) } deleted` );
                     }
                 } catch ( error ) {
                     logger.static().error( `[${ kind } ${ task.recordToString( record ) }] ${ JSON.stringify( record.external ) } ${ error.message } ${ error.stack }` );

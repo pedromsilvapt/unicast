@@ -3,7 +3,7 @@ import * as path from 'path';
 import { Tool, ToolOption, ToolValueType } from "./Tool";
 import * as filesize from 'filesize';
 import { AllMediaKinds, MediaRecordArt } from '../MediaRecord';
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 
 interface PruneCachedArtworkOptions {
     dryRun : boolean;
@@ -119,8 +119,8 @@ export class PruneCachedArtworkTool extends Tool<PruneCachedArtworkOptions> {
     }
 
     protected printStats( stats: PruneStats ) {
-        this.log( `Kept ${chalk.green( stats.filesKept )} files (${chalk.green( filesize( stats.bytesKept ) )})` );
-        this.log( `Deleted ${chalk.red( stats.filesDeleted )} files (${chalk.red( filesize( stats.bytesDeleted ) )})` );
+        this.log( `Kept ${chalk.green( '' + stats.filesKept )} files (${chalk.green( filesize( stats.bytesKept ) )})` );
+        this.log( `Deleted ${chalk.red( '' + stats.filesDeleted )} files (${chalk.red( filesize( stats.bytesDeleted ) )})` );
 
         const percentage = stats.bytesDeleted * 100 / ( stats.bytesKept + stats.bytesDeleted );
         const percentageRounded = Math.round( percentage * 100 ) / 100;

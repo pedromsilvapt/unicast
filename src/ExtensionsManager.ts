@@ -5,7 +5,7 @@ import * as fs from 'mz/fs';
 import { FileWalker } from "./ES2017/FileWalker";
 import { EntityManager } from "./EntityManager";
 import { IEntity } from "./EntityFactory";
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 import { Synchronized } from 'data-semaphore';
 import { Logger } from 'clui-logger';
 
@@ -168,7 +168,7 @@ export class ExtensionsManager extends EntityManager<Extension> {
                 }
             }
 
-            this.logger.info( `All (${ chalk.yellow( loadedCount ) }) extensions loaded.` );
+            this.logger.info( `All (${ chalk.yellow( '' + loadedCount ) }) extensions loaded.` );
         }
     }
 }

@@ -1,5 +1,5 @@
 import { Tool, ToolOption, ToolValueType } from "./Tool";
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 
 enum ConsistencyLevel {
     Valid = 0,
@@ -9,7 +9,7 @@ enum ConsistencyLevel {
 
 const ConsistencyLevelData: Record<ConsistencyLevel, { label: string, visual: (str: string) => string }> = {
     [ConsistencyLevel.Valid]: { label: 'Valid', visual: chalk.green },
-    [ConsistencyLevel.Fragmented]: { label: 'Fragmented', visual: chalk.orange },
+    [ConsistencyLevel.Fragmented]: { label: 'Fragmented', visual: chalk.yellow },
     [ConsistencyLevel.Corrupted]: { label: 'Corrupted', visual: chalk.red },
 }
 

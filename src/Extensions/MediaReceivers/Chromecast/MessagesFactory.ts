@@ -1,7 +1,7 @@
 import { MediaPlayOptions } from "../../../Receivers/BaseReceiver/IMediaReceiver";
 import { MediaStream, MediaStreamType } from "../../../MediaProviders/MediaStreams/MediaStream";
 import { MediaRecord, MovieMediaRecord, MediaKind, TvEpisodeMediaRecord, CustomMediaRecord } from "../../../MediaRecord";
-import * as truncate from 'truncate';
+import truncate from 'truncate';
 import { SubtitlesMediaStream } from "../../../MediaProviders/MediaStreams/SubtitlesStream";
 import { VideoMediaStream } from "../../../MediaProviders/MediaStreams/VideoStream";
 import { ChromecastHttpSender } from "./ChromecastHttpSender";

@@ -3,7 +3,7 @@ import { Tool, ExecutionContext, LocalExecutionContext, ToolFactory, Class } fro
 import * as minimist from 'minimist';
 import { FileWalker } from '../ES2017/FileWalker';
 import { basename, dirname, extname, join, relative, resolve } from 'path';
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 
 function splitArray<T> ( array : T[], separator : T ) : T[][] {
     let split : T[][] = [];
