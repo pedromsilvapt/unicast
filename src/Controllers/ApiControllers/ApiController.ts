@@ -78,8 +78,8 @@ export class ApiController extends BaseController {
     customActionsController : CustomActionsController;
 
     @Route( 'get', '/ping' )
-    ping () {
-        return { alive: true, now: Date.now() };
+    ping ( req: Request ) {
+        return { alive: true, now: Date.now(), identity: req.identity };
     }
 
     @Route( 'get', '/speedtest', BinaryResponse )
@@ -125,7 +125,7 @@ export class ApiController extends BaseController {
             } )
             .sort( sortBy( 'path' ) );
     }
-    
+
     @Route( 'get', '/close' )
     async close () {
         await this.server.quit( 1000 );
