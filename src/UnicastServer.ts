@@ -309,10 +309,11 @@ export class UnicastServer {
         new ApiController( this, '/api' ).install();
 
         // Start the static server
-        routes( this.getUrl(), this.getUrl( '/api' ) ).applyRoutes( this.http.servers[ 0 ] );
-
-        if ( this.http.servers.length > 1 ) {
-            routes( this.getSecureUrl(), this.getSecureUrl( '/api' ) ).applyRoutes( this.http.servers[ 1 ] );
+        for ( const http of this.http.servers ) {
+            routes(
+                req => this.getMatchingUrl( req ),
+                req => this.getMatchingUrl( req, '/api' )
+            ).applyRoutes( http );
         }
 
         await this.database.install();
