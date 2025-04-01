@@ -107,7 +107,14 @@ export abstract class BaseController implements Annotated {
 
 export function AuthenticationMiddleware ( controller : { server : UnicastServer, logger : Logger }, authScope : string ) {
     return async function ( req : Request, res : Response, next : Next ) {
-        const ip = req.connection.remoteAddress;
+        // If Unicast is being served through a proxy, get the IP from it
+        let ip = req.header( 'x-forwarded-for' );
+
+        if ( ip != null ) {
+            ip = ip.split( ',' )[ 0 ].trim();
+        } else {
+            ip = req.connection.remoteAddress;
+        }
 
         req.identity =  new AccessCard( [ new IpIdentity( ip ) ] );
 
