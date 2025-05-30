@@ -39,10 +39,19 @@ export class Config {
 
     static singleton () : Config {
         if ( !this.instance ) {
-            this.instance = Config.merge( [
+            const configs = [
                 Config.load( path.join( process.cwd(), 'config' ) ),
-                Config.loadEnvConfigs(),
-            ] );
+            ];
+
+            // Check if there is any environment variable containing a custom folder to load the configs from
+            const customConfigFolder = process.env[ 'UNICAST_CONFIG_FOLDER' ];
+            if ( customConfigFolder != null && customConfigFolder != '' ) {
+                configs.push( Config.load( customConfigFolder ) );
+            }
+
+            configs.push( Config.loadEnvConfigs() );
+
+            this.instance = Config.merge( configs );
         }
 
         return this.instance;
@@ -131,7 +140,7 @@ export class Config {
                 files.push( name );
             }
         }
-        
+
         return files;
     }
 
@@ -149,7 +158,7 @@ export class Config {
                 files.push( name );
             }
         }
-        
+
         return files;
     }
 
@@ -170,15 +179,15 @@ export class Config {
     /**
      * Reads the contents of `process.env` and finds any environments
      * variables with names that start with 'CONFIG_'. Then it strips their prefix
-     * and stores their values. The values should also be prefixed with their
+     * and stores their values. The keys should also be prefixed with their
      * types ('STR_', 'BOOL_' and 'NUMBER_' are currently supported).
-     * 
-     * CONFIG_name=STR_unicast
-     * CONFIG_server.port=NUMBER_3030
-     * CONFIG_database.autostart=BOOL_false
-     * 
+     *
+     * CONFIG_STR_name=unicast
+     * CONFIG_NUMBER_server.port=3030
+     * CONFIG_BOOL_database.autostart=false
+     *
      * The environment variables above would result in a Config object with the following structure:
-     * 
+     *
      * {
      *   name: 'unicast',
      *   server: {
@@ -188,11 +197,8 @@ export class Config {
      *     autostart: false,
      *   },
      * }
-     * 
+     *
      * @returns A Config object with the given keys and corresponding values
-     * 
-     * 
-     * 
      */
     static loadEnvConfigs () : Config {
         const data = {};
@@ -201,18 +207,18 @@ export class Config {
             .filter( key => key.startsWith( 'CONFIG_' ) );
 
         for ( const envKey of configKeys ) {
-            let configKey = envKey.substr( 'CONFIG_'.length );
+            let configKey = envKey.substring( 'CONFIG_'.length );
             let configValue: unknown = process.env[envKey];
 
             if ( configKey.startsWith( 'BOOL_' ) ) {
-                configKey = configKey.substr( 'BOOL_'.length );
+                configKey = configKey.substring( 'BOOL_'.length );
 
-                configValue = configValue === 'true' ? true : false;
+                configValue = configValue === 'true';
             } else if ( configKey.startsWith( 'STR_' ) ) {
-                configKey = configKey.substr( 'STR_'.length );
+                configKey = configKey.substring( 'STR_'.length );
                 // If config value is already string by default, nothing to do
             } else if ( configKey.startsWith( 'NUMBER_' ) ) {
-                configKey = configKey.substr( 'NUMBER_'.length );
+                configKey = configKey.substring( 'NUMBER_'.length );
                 configValue = parseFloat( configValue as string );
             } else {
                 throw new Error( `Invalid environment config type: ${ configKeys }` );
@@ -252,7 +258,7 @@ export class Config {
         for ( let config of configs ) {
             data = extend( true, data, config.data );
         }
-        
+
         return new Config( data );
     }
 
@@ -269,7 +275,7 @@ export class Config {
     get<T = any> ( path : string, defaultValue ?: T ) : T {
         return ObjectPath.get( this.data, path, defaultValue );
     }
-    
+
     slice ( path : string ) : Config {
         return Config.create( this.get( path, {} ) );
     }
@@ -346,7 +352,7 @@ export function createLazyProperties<T extends object> ( dynamic : DynamicConfig
     const lazy = {} as T;
 
     for ( let key of Object.keys( dynamic ) ) {
-        
+
         if ( dynamic[ key ] instanceof Function ) {
             let state = {
                 called: false,
