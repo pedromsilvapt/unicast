@@ -23,7 +23,7 @@ export interface IdentityRuleConfig {
     name: string;
 }
 
-export interface ResourceRuleConfig { 
+export interface ResourceRuleConfig {
     name: string;
     kind: string;
 };
@@ -44,7 +44,7 @@ export class AccessControl {
         resources.push( new ScopeResourceRule( 'Control', 'control' ) );
         resources.push( new ScopeResourceRule( 'Read', 'read' ) );
 
-        const symbols = [ 
+        const symbols = [
             ...identities.map( id => id.name ),
             ...resources.map( id => id.name ),
             ...Object.keys( config.rules ?? {} ),
@@ -54,7 +54,7 @@ export class AccessControl {
 
         return new AccessControl( identities, resources, rules );
     }
-    
+
     public identities : Map<string, IdentityRule>;
 
     public resources : Map<string, ResourceRule>;
@@ -67,17 +67,23 @@ export class AccessControl {
         this.rules = rules;
     }
 
-    public authenticateRule ( 
+    public authenticateRule (
         ruleName : string,
-        identity : AccessCard, 
-        resource : Resource 
+        identity : AccessCard,
+        resource : Resource
     ) : boolean {
-        return this.rules[ ruleName ].authenticate( this, identity, resource );
+        const rule = this.rules[ ruleName ];
+
+        if ( rule == null ) {
+            throw new Error( `ACL Rule "${ruleName}" not found.` );
+        }
+
+        return rule.authenticate( this, identity, resource );
     }
 
-    public authenticate ( 
-        identity : AccessCard, 
-        resource : Resource 
+    public authenticate (
+        identity : AccessCard,
+        resource : Resource
     ) : boolean {
         return this.authenticateRule( 'main', identity, resource );
     }
@@ -100,10 +106,10 @@ export class RuleSemantics extends QuerySemantics<RuleContext> {
             }
 
             ctx.symbolsCache[ symbol ] = void 0;
-            
+
             if ( ctx.acl.identities.has( symbol ) ) {
                 const identity = ctx.acl.identities.get( symbol );
-                
+
                 return ctx.symbolsCache[ symbol ] = identity.identify( ctx.identity, defaultResult );
             } else if ( ctx.acl.resources.has( symbol ) ) {
                 const resource = ctx.acl.resources.get( symbol );
@@ -129,7 +135,7 @@ export class RuleSemantics extends QuerySemantics<RuleContext> {
             properties[ 'is' + symbol ] = QuerySemantics.computed( this.propertySemantic( symbol, true ) );
             properties[ 'isnot' + symbol ] = QuerySemantics.computed( this.propertySemantic( symbol, false ) );
         }
-        
+
         return properties;
     }
 
@@ -145,7 +151,7 @@ export class Rule {
         for ( let ruleName of Object.keys( rules ) ) {
             rulesObject[ ruleName ] = Rule.fromConfig( rules[ ruleName ], semantics );
         }
-        
+
         return rulesObject;
     }
 
@@ -161,13 +167,13 @@ export class Rule {
         this.expression = expression;
     }
 
-    public authenticate ( 
+    public authenticate (
         acl : AccessControl,
-        identity : AccessCard, 
-        resource : Resource 
+        identity : AccessCard,
+        resource : Resource
     ) : boolean {
         return !!this.expression( {
-            acl, identity, resource, 
+            acl, identity, resource,
             symbolsCache: {}
         } );
     }
@@ -217,7 +223,7 @@ export abstract class Resource { }
 
 export abstract class ResourceRule {
     public name : string;
-    
+
     public kind : string;
 
     public constructor ( name : string, kind : string ) {
@@ -263,7 +269,7 @@ export class ScopeResourceRule extends ResourceRule {
     }
 
     scope : string;
-    
+
     public constructor ( name: string, scope : string ) {
         super( name, 'scope' );
 
@@ -318,7 +324,7 @@ export class EntityResourceRule extends ResourceRule {
 
     entityTypes: string[];
     expression: CompiledQuery<any>;
-    
+
     public constructor ( name: string, entityTypes : string[], expression : CompiledQuery<any> ) {
         super( name, 'tableQuery' );
 
