@@ -10,14 +10,10 @@ server:
     port: 3030
 
     acl:
-        - kind: ip
-          patterns:
-            - 192.168.*.*
-            - ::ffff:192.168.*.*
-          allow: all
-
-        - kind: any
-          allow: read
+        identities: []
+        resources: []
+        rules:
+            main: true
 
     ssl:
         enabled: true
