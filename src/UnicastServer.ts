@@ -13,7 +13,6 @@ import * as sortBy from 'sort-by';
 import { BackgroundTasksManager } from "./BackgroundTask";
 import { Storage } from "./Storage";
 import { TranscodingManager } from "./Transcoding/TranscodingManager";
-import * as fs from 'mz/fs';
 import { EventEmitter } from "events";
 import { ArtworkCache } from "./ArtworkCache";
 import { TriggerDb } from "./TriggerDb";
@@ -116,8 +115,6 @@ export class UnicastServer {
 
     protected cachedIpV4 : string;
 
-    isHttpsEnabled : boolean = false;
-
     constructor () {
         this.config = Config.singleton();
 
@@ -180,27 +177,6 @@ export class UnicastServer {
 
         this.extensions = new ExtensionsManager( this );
 
-        if ( Config.get<boolean>( 'server.ssl.enabled' ) && fs.existsSync( './server.key' ) ) {
-            const keyFile = Config.get<string>( 'server.ssl.key' );
-            const certFile = Config.get<string>( 'server.ssl.certificate' );
-            const passphrase = Config.get<string>( 'server.ssl.passphrase' );
-
-            if ( !fs.existsSync( keyFile ) || !fs.existsSync( certFile ) ) {
-                throw new Error( `SSL enabled, but no key or certificate file found.` );
-            }
-
-            this.http.servers.push( restify.createServer( {
-                ignoreTrailingSlash: true,
-                maxParamLength: 200,
-
-                key: fs.readFileSync( keyFile ),
-                certificate: fs.readFileSync( certFile ),
-                passphrase: passphrase
-            } as restify.ServerOptions ) );
-
-            this.isHttpsEnabled = true;
-        }
-
         this.http.name = Config.get<string>( 'name', 'unicast' );
 
         const cors = corsMiddleware( { origins: [ '*' ] } );
@@ -262,17 +238,16 @@ export class UnicastServer {
     }
 
     getUrl ( path ?: string ) : string {
-        return `http://${ this.getIpV4() }:${ this.getPort() }` + ( path || '' );
+        return this.getBaseUrl().get( path );
     }
 
-    getSecureUrl ( path ?: string ) : string {
-        return `https://${ this.getIpV4() }:${ this.getSecurePort() }` + ( path || '' );
-    }
+    getBaseUrl ( req : restify.Request | null = null ) : BaseUrl {
+        const publicUrl = this.config.get( 'server.publicUrl' );
 
-    getBaseUrl ( req : restify.Request ) : BaseUrl {
         return BaseUrl.fromRequest( req, {
-            fallbackUrl: BaseUrl.fromString( this.getUrl() ),
-            fallbackSecureUrl: BaseUrl.fromString( this.getSecureUrl() ),
+            fallbackUrl: publicUrl != null
+                 ? BaseUrl.fromString( publicUrl )
+                 : BaseUrl.fromString( `http://${ this.getIpV4() }:${ this.getPort() }` ),
         } );
     }
 
@@ -325,10 +300,6 @@ export class UnicastServer {
         await this.storage.clean();
 
         this.logger.info( this.name, this.name + ' listening on ' + this.getUrl() );
-
-        if ( this.isHttpsEnabled ) {
-            this.logger.info( this.name, this.name + ' listening on ' + this.getSecureUrl() );
-        }
     }
 
     public hash ( value : string ) {
