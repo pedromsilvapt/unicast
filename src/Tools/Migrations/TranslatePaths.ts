@@ -5,6 +5,7 @@ import { FileSystemRepository } from '../../Extensions/MediaRepositories/FileSys
 import { AsyncBreaker } from '../../ES2017/AsyncBreaker';
 import * as path from 'path';
 import { pp } from 'clui-logger';
+import { MediaSourceDetails } from '../../MediaProviders/MediaSource';
 
 export enum PathStyle {
     Win32 = 'win32',
@@ -63,90 +64,117 @@ export class TranslatePathsTool extends Tool<TranslatePathsOptions> {
             .map( pair => ( { original: pair[ 0 ], destination: pair[ 1 ] } ) );
 
         const breaker = new AsyncBreaker();
-        
+        breaker.breakMs = 10;
+
         if (options.sourcePlatform != PathStyle.Win32 && options.sourcePlatform != PathStyle.Posix) {
             this.logger.error(pp`Invalid value ${options.sourcePlatform} for arg ${"sourcePlatform"}, valid options are: ${PathStyle.Win32} and ${PathStyle.Posix}`);
         }
-        
+
         if (options.targetPlatform != PathStyle.Win32 && options.targetPlatform != PathStyle.Posix) {
             this.logger.error(pp`Invalid value ${options.targetPlatform} for arg ${"targetPlatform"}, valid options are: ${PathStyle.Win32} and ${PathStyle.Posix}`);
         }
-        
+
         const sourceSep = path[options.sourcePlatform].sep;
         const targetSep = path[options.targetPlatform].sep;
-        
-        for ( let table of tables ) { 
-            await table.connection.transaction(async trx => {
-                for ( let record of await table.findStream( null, { transaction: trx } ).toArray() ) {
-                    await breaker.tryBreak();
-                    
-                    if ( record.repository == null ) {
-                        // this.log( 'repo null', table.constructor.name, record.kind, record.title );
-                        continue;
-                    }
-    
-                    const repository = this.server.repositories.get( record.repository );
-    
-                    if ( repository == null ) {
-                        continue;
-                    }
-    
-                    if ( !( repository instanceof FileSystemRepository ) ) {
-                        continue;
-                    }
-    
-                    if ( isPlayableRecord( record ) ) {
-                        let changed = false;
-                        
-                        if ( record.sources != null ) {
-                            for ( const source of record.sources ) {
-                                const oldPath = source.id;
-                                
-                                if ( oldPath == null ) {
-                                    continue;
-                                }
-                                
-                                let newPath = oldPath;
-                                
-                                const transform = transformPrefixes
-                                    .find( rule => newPath.toLowerCase().startsWith( rule.original.toLowerCase() ) );
-                                    
-                                if ( transform == null ) {
-                                    continue;
-                                }
-                                
-                                newPath = path.join( transform.destination, newPath.slice( transform.original.length ) );
-                                
-                                if ( sourceSep != targetSep ) {
-                                    newPath = newPath
-                                        .split( sourceSep )
-                                        .join( targetSep );
-                                }
-                                
-                                if ( newPath != oldPath ) {
-                                    source.id = newPath;
-                                    
-                                    changed = true;
-                                }
-                            }
-                            
+
+        for ( let table of tables ) {
+            const chunks = await table.findStream( null ).chunkEvery( 2000 ).toArray();
+
+            for ( const records of chunks ) {
+                await table.connection.transaction(async trx => {
+                    for ( let record of records ) {
+                        await breaker.tryBreak();
+
+                        if ( record.repository == null ) {
+                            // this.log( 'repo null', table.constructor.name, record.kind, record.title );
+                            continue;
+                        }
+
+                        const repository = this.server.repositories.get( record.repository );
+
+                        if ( repository == null ) {
+                            continue;
+                        }
+
+                        if ( !( repository instanceof FileSystemRepository ) ) {
+                            continue;
+                        }
+
+                        if ( isPlayableRecord( record ) ) {
+                            let [ changed, sources ] = this.transformSources( transformPrefixes, sourceSep, targetSep, record.sources );
+
                             if ( changed ) {
+                                record.sources = sources;
+                            }
+
+                            if ( isTvEpisodeRecord( record ) || isMovieRecord( record ) ) {
                                 const newPath = record.sources[ 0 ].id;
 
-                                if ( isTvEpisodeRecord( record ) || isMovieRecord( record ) ) {
-                                    record.internalId = this.server.hash( newPath );
-                                }
+                                const newInternalId = this.server.hash( newPath );
+
+                                changed = changed || ( record.internalId != newInternalId ) || record.id == '12610';
+
+                                record.internalId = newInternalId;
                             }
-                            
+
                             if ( changed ) {
                                 recordsChanged += 1;
-            
-                                this.log( record.kind, record.title, JSON.stringify( record.sources ) );
-            
+
+                                this.log( record.kind, record.title, record.internalId, JSON.stringify( record.sources ) );
+
                                 if ( !options.dryRun ) {
                                     await table.update( record.id, { sources: record.sources, internalId: record.internalId }, { transaction: trx } );
                                 }
                             }
+                        }
+                    }
+                });
+            }
+        }
+
+        const probeChunks = await allTables.probes.findStream( null ).chunkEvery( 2000 ).toArray();
+
+        for ( const probes of probeChunks ) {
+            await allTables.probes.connection.transaction(async trx => {
+                for ( let probe of probes ) {
+                    await breaker.tryBreak();
+
+                    let [ changed, filename ] = this.transformPath( transformPrefixes, sourceSep, targetSep, probe.raw.format.filename );
+
+                    if ( changed ) {
+                        probe.raw.format.filename = filename;
+                        probe.metadata.files[ 0 ].id = filename;
+
+                        recordsChanged += 1;
+
+                        this.log( 'probe', probe.mediaKind, probe.mediaId, JSON.stringify( probe.raw.format.filename ) );
+
+                        if ( !options.dryRun ) {
+                            await allTables.probes.update( probe.id, { raw: probe.raw, metadata: probe.metadata }, { transaction: trx } );
+                        }
+                    }
+                }
+            });
+        }
+
+        const historyChunks = await allTables.history.findStream( null ).chunkEvery( 2000 ).toArray();
+
+        for ( const historyRecords of historyChunks ) {
+            await allTables.history.connection.transaction(async trx => {
+                for ( let history of historyRecords ) {
+                    await breaker.tryBreak();
+
+                    let [ changed, sources ] = this.transformSources( transformPrefixes, sourceSep, targetSep, history.mediaSources );
+
+                    if ( changed ) {
+                        history.mediaSources = sources;
+
+                        recordsChanged += 1;
+
+                        this.log( 'history', history.mediaKind, history.mediaId, JSON.stringify( history.mediaSources ) );
+
+                        if ( !options.dryRun ) {
+                            await allTables.history.update( history.id, { mediaSources: history.mediaSources }, { transaction: trx } );
                         }
                     }
                 }
@@ -157,4 +185,62 @@ export class TranslatePathsTool extends Tool<TranslatePathsOptions> {
 
         statsLogger.close();
     }
+
+    protected transformSources( transformPrefixes: TransformPrefix[], sourceSep: string, targetSep: string, sources: MediaSourceDetails[] ): [ boolean, MediaSourceDetails[] ] {
+        let changed = false;
+
+        if ( sources != null && sources instanceof Array ) {
+            sources = sources.map( source => {
+                const oldPath = source.id;
+
+                if ( oldPath == null ) {
+                    return source;
+                }
+
+                let [ sourceChanged, newPath ] = this.transformPath( transformPrefixes, sourceSep, targetSep, oldPath );
+
+                if ( sourceChanged ) {
+                    changed = true;
+
+                    return { ...source, id: newPath };
+                } else {
+                    return source;
+                }
+            } );
+        }
+
+        return [ changed, sources ]
+    }
+
+    protected transformPath( transformPrefixes: TransformPrefix[], sourceSep: string, targetSep: string, oldPath: string ): [ boolean, string ] {
+        let changed = false;
+
+        let newPath = oldPath;
+
+        const transform = transformPrefixes
+            .find( rule => newPath.toLowerCase().startsWith( rule.original.toLowerCase() ) );
+
+        if ( transform == null ) {
+            return [ false, null ];
+        }
+
+        newPath = path.join( transform.destination, newPath.slice( transform.original.length ) );
+
+        if ( sourceSep != targetSep ) {
+            newPath = newPath
+                .split( sourceSep )
+                .join( targetSep );
+        }
+
+        if ( newPath != oldPath ) {
+            changed = true;
+        }
+
+        return [changed, newPath]
+    }
 }
+
+type TransformPrefix = {
+    original: string;
+    destination: string;
+};
