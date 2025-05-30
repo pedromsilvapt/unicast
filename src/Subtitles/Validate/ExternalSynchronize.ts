@@ -19,7 +19,7 @@ export class ExternalSynchronize {
             if ( typeof context[ key ] == 'string' ) {
                 uri = uri.replace( '{' + key + '}', context[ key ] );
             } else if ( context[ key ] instanceof Array ) {
-                for ( let i = 0; i < context[ key ]; i++ ) {
+                for ( let i = 0; i < context[ key ].length; i++ ) {
                     uri = uri.replace( '{' + key + '[' + i + ']}', context[ key ][ i ] );
                 }
             }

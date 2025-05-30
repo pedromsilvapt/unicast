@@ -19,7 +19,7 @@ export abstract class SubtitlesMediaStream extends MediaStream {
         const content = await new Promise<Buffer>((resolve, reject) => {
             const buffers: Buffer[] = [];
             reader.on('data', bf => buffers.push(bf));
-            reader.on('end', () => resolve(Buffer.concat(buffers)));
+            reader.on('end', () => resolve(Buffer.concat(buffers as any)));
             reader.on('error', err => reject(err));
         });
 

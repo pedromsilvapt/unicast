@@ -68,7 +68,7 @@ export class SubtitleEditSubtitlesProvider implements ISubtitlesProvider<ISubtit
                             id: this.server.hash( videoPath + subtitle.index.toString() ),
                             releaseName : subtitle.title || `Track ${subtitle.typeIndex + 1}`,
                             encoding : null,
-                            format : 'srt' || subtitle.codec,
+                            format : 'srt', // subtitle.codec,
                             language : subtitle.language,
                             publishedAt : stat.atime,
                             downloads : 0,
