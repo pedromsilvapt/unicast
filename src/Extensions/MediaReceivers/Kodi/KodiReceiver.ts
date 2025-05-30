@@ -369,7 +369,7 @@ export class KodiReceiver extends BaseReceiver {
 
     async status () : Promise<ReceiverStatus> {
         const status = await this.connection.status().catch( err => {
-            const codes = [ 'ETIMEDOUT', 'ECONNREFUSED' ];
+            const codes = [ 'ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH' ];
 
             for ( let code of codes ) {
                 if ( err && ( err.errno == code || ( err.message && err.message.includes( code ) ) ) ) {

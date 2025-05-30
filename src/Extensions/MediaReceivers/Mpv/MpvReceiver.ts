@@ -122,7 +122,7 @@ export class MpvReceiver extends BaseReceiver {
 
     @Synchronized()
     async connect () : Promise<boolean> {
-        if ( this.connection.connected ) {
+        if ( !this.connection.connected ) {
             await this.connection.open();
         }
 
@@ -277,7 +277,7 @@ export class MpvReceiver extends BaseReceiver {
 
     async status () : Promise<ReceiverStatus> {
         const status = await this.connection.status().catch( err => {
-            if ( err && ( err.code == 'ETIMEDOUT' || err.code == 'ECONNREFUSED' ) ) {
+            if ( err && ( err.code == 'ETIMEDOUT' || err.code == 'ECONNREFUSED' || err.code == 'ECONNRESET' || err.code == 'EHOSTUNREACH' ) ) {
                 return null;
             }
 

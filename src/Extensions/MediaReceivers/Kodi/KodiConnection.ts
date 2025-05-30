@@ -19,8 +19,8 @@ export interface PlayOptions {
 function timeToSeconds ( time : { hours: number, minutes: number, seconds: number, milliseconds: number } ) : number {
     if ( time == null ) return 0;
 
-    return ( time.hours * 60 * 60 ) 
-         + ( time.minutes * 60 ) 
+    return ( time.hours * 60 * 60 )
+         + ( time.minutes * 60 )
          + time.seconds
          + ( time.milliseconds / 1000 )
 }
@@ -73,7 +73,7 @@ export class KodiConnection {
     @Synchronized()
     async open () {
         const address = this.usingFallback ? this.fallback : this.address;
-        
+
         this.client = jayson.Client.http( {
             hostname: address,
             port: this.port,
@@ -85,15 +85,15 @@ export class KodiConnection {
     }
 
     protected useFallback ( err : any ) : boolean {
-        if ( err && ( err.code == 'ECONNREFUSED' || err.code == 'ETIMEDOUT' ) ) {
+        if ( err && ( err.code == 'ECONNREFUSED' || err.code == 'ETIMEDOUT' || err.code == 'EHOSTUNREACH' ) ) {
             this.failedAttemptsAtConnecting += 1;
-            
+
             if ( this.failedAttemptsAtConnecting > 1 || this.fallback == null ) {
                 return false;
             }
-    
+
             this.usingFallback = !this.usingFallback;
-    
+
             return true;
         }
 
@@ -104,7 +104,7 @@ export class KodiConnection {
         if ( this.client != null && this.clientLifetime != null ) {
             this.clientLifetime.close();
         }
-        
+
         this.clientLifetime = null;
 
         this.client = null;
@@ -114,7 +114,7 @@ export class KodiConnection {
         while ( !this.connected ) {
             try {
                 await this.open();
-                
+
                 this.failedAttemptsAtConnecting = 0;
             } catch ( err ) {
                 if ( this.useFallback( err ) ) {
@@ -142,7 +142,7 @@ export class KodiConnection {
 
             if ( err && err.message && err.message.includes( 'socket not ready' ) ) {
                 this.close();
-                
+
                 return this.call( command, args );
             }
 
@@ -170,7 +170,7 @@ export class KodiConnection {
 
     play ( record : PlayableMediaRecord, options : PlayOptions = {} ) : Promise<void> {
         const file = `plugin://plugin.video.unicast/play/${ record.kind }/${ record.id }`;
-        
+
         return this.call( 'Player.Open', { item: { file } } );
     }
 
@@ -202,15 +202,15 @@ export class KodiConnection {
         const player = await this.getActiveVideoPlayer();
 
         if ( player == null ) return null;
-        
+
         const properties = await this.call<any>( 'Player.GetProperties', { playerid: player.playerid, properties: [ 'speed', 'time', 'totaltime', 'percentage' ] } );
-        
+
         if ( !properties ) return null;
-        
+
         const totalTime = timeToSeconds( properties.totaltime );
-        
+
         if ( totalTime == 0 ) return null;
-        
+
         const appProperties = await this.call<any>( 'Application.GetProperties', { properties: [ 'muted', 'volume' ] } );
 
         return {
@@ -233,10 +233,10 @@ export class KodiConnection {
 
     async seek ( time : number ) : Promise<void> {
         const player = await this.getActiveVideoPlayer();
-        
+
         if ( player != null ) {
             const properties = await this.call<any>( 'Player.GetProperties', { playerid: player.playerid, properties: [ 'time' ] } );
-            
+
             await this.call( 'Player.Seek', { playerid: player.playerid, value: { seconds: Math.round( time - timeToSeconds( properties.time ) ) } } );
         }
     }
@@ -260,7 +260,7 @@ export class KodiConnection {
     subtitleDelayMinus () : Promise<void> {
         return this.call( 'Input.ExecuteAction', { action: 'subtitledelayminus' } );
     }
-    
+
     audioDelayPlus () : Promise<void> {
         return this.call( 'Input.ExecuteAction', { action: 'audiodelayplus' } );
     }
@@ -292,13 +292,13 @@ export class KodiConnection {
     }
 
     public async sendSetServerAddress ( address : string, port : number ) : Promise<void> {
-        this.call( 'JSONRPC.NotifyAll', { 
-            sender: 'unicast', 
-            'message': `PluginVideoUnicast.SetServerAddress`, 
-            data: { 
-                address: address, 
+        this.call( 'JSONRPC.NotifyAll', {
+            sender: 'unicast',
+            'message': `PluginVideoUnicast.SetServerAddress`,
+            data: {
+                address: address,
                 port: port
-            } 
+            }
         } );
     }
 
@@ -343,18 +343,18 @@ export class KodiDefaultPages {
     constructor ( connection : KodiConnection ) {
         this.connection = connection;
     }
-    
-    // Unnecessary now since the unicast kodi plugin is able to better handle 
+
+    // Unnecessary now since the unicast kodi plugin is able to better handle
     // auto-selection more elegantly
-    protected async selectItem ( 
+    protected async selectItem (
         pageId : number,
-        listOrientation : KodiListOrientation, 
-        itemLabel: string, 
-        allItems: string[] = null 
+        listOrientation : KodiListOrientation,
+        itemLabel: string,
+        allItems: string[] = null
     ) {
         const itemIndex = allItems?.findIndex( label => itemLabel === label ) + 1;
 
-        // If the page already has some item selected, we need to know if we 
+        // If the page already has some item selected, we need to know if we
         // want to go backwards or forwards
         let hasOptimalDirection = false;
         // Forward is Right/Down, Backwards is Left/Up
@@ -374,7 +374,7 @@ export class KodiDefaultPages {
                 }
 
                 let currentControl = await this.connection.getGuiProperty( "currentcontrol" );
-                
+
                 if ( currentControl.label === itemLabel ) {
                     return;
                 }
@@ -406,15 +406,15 @@ export class KodiDefaultPages {
                 let inputDirection = optimalDirectionForward
                     ? ( listOrientation == KodiListOrientation.Horizontal ? 'Right' : 'Down' )
                     : ( listOrientation == KodiListOrientation.Horizontal ? 'Left' : 'Up' );
-                
+
                 for ( let i = 0; i < times; i++ ) {
                     await this.connection.call( 'Input.' + inputDirection, {} );
-                    
+
                     if ( allItems == null ) {
                         await new Promise( resolve => setTimeout( resolve, 200 ) );
-        
+
                         currentControl = await this.connection.getGuiProperty( "currentcontrol" );
-        
+
                         if ( currentControl.label === itemLabel ) {
                             break;
                         }
@@ -423,9 +423,9 @@ export class KodiDefaultPages {
 
                 if ( allItems != null ) {
                     await new Promise( resolve => setTimeout( resolve, 200 ) );
-    
+
                     currentControl = await this.connection.getGuiProperty( "currentcontrol" );
-    
+
                     if ( currentControl.label !== itemLabel ) {
                         throw new Error( `Incorrect control` );
                     }
@@ -443,24 +443,24 @@ export class KodiDefaultPages {
 
         return 'plugin://plugin.video.unicast' + path;
     }
-    
+
     public async sendAutoSelect ( page_path: string, item: string ) : Promise<void> {
-        this.connection.call( 'JSONRPC.NotifyAll', { 
-            sender: 'unicast', 
-            'message': `PluginVideoUnicast.AutoSelect`, 
-            data: { 
-                page: page_path, 
+        this.connection.call( 'JSONRPC.NotifyAll', {
+            sender: 'unicast',
+            'message': `PluginVideoUnicast.AutoSelect`,
+            data: {
+                page: page_path,
                 selectedItem: item
-            } 
+            }
         } );
     }
 
     public async openSingleMovieList ( record : MovieMediaRecord ) {
         const path = await this.openAddon( `/movies/single/${ record.id }` );
-        
+
         await this.sendAutoSelect( path, record.title );
     }
-    
+
     public async openSingleTvShowList ( record : TvShowMediaRecord ) {
         const path = await this.openAddon( `/tvshows/single/${ record.id }` );
 
@@ -477,7 +477,7 @@ export class KodiDefaultPages {
 
     public async openTvSeason ( record : TvSeasonMediaRecord, options : TvSeasonPageOptions = {} ) {
         const path = await this.openAddon( `/tvseasons/${ record.id }/episodes` );
-        
+
         if ( options.selectedEpisode ) {
             await this.sendAutoSelect( path, options.selectedEpisode.title );
         }

@@ -23,6 +23,10 @@ export class MpvConnection {
 
     @Synchronized()
     async open () {
+        if ( this.client != null ) {
+            return;
+        }
+
         const client = new WebSocket( `ws://${ this.address }:${ this.port }` );
         this.clientLifetime = new Lifetime();
 
