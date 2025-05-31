@@ -16,6 +16,9 @@
   },
   "scripts": {
     "start": "node lib/cli.js --env-NODE_ENV=release",
+    "debug": "node lib/cli.js",
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -w -p tsconfig.json",
     "test": "tape \"lib/**/*.test.js\" | \"node_modules/.bin/tap-spec\""
   },
   "author": "Pedro M. Silva <pemiolsi@hotmail.com>",
