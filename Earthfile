@@ -60,7 +60,7 @@ artifacts:
     COPY +install/package-lock.json server/package-lock.json
     COPY +build/lib server/lib
     COPY config/default*.yaml server/config/
-    COPY server.cert server.key knexfile.js server/
+    COPY knexfile.js server/
     COPY package.json server/
 
     SAVE ARTIFACT . publish
