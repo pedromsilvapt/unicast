@@ -1,5 +1,6 @@
 import { Request, Response } from "restify";
 import * as rangeParser      from 'range-parser';
+import * as pump from 'pump';
 
 export function serveMedia ( req : Request, res : Response, mime : string, size : number, openStream : ( range : any ) => NodeJS.ReadableStream ) : NodeJS.ReadableStream {
     res.set( 'Content-Type', mime );
@@ -19,8 +20,8 @@ export function serveMedia ( req : Request, res : Response, mime : string, size 
             res.end();
         } else {
             reader = openStream( range )
-            
-            reader.pipe( res );
+
+            pump( reader, res );
         }
     } else {
         if ( size ) {
@@ -33,8 +34,8 @@ export function serveMedia ( req : Request, res : Response, mime : string, size 
             res.end();
         } else {
             reader = openStream( {} );
-        
-            reader.pipe( res );
+
+            pump( reader, res );
         }
     }
 
