@@ -4,7 +4,12 @@ import { BaseTable, DatabaseTables, PersonRecord, createMediaRecordPolyMap } fro
 import { BelongsToOnePolyRelation } from '../Relations/OneToOnePolyRelation';
 import { BelongsToOneRelation } from '../Relations/OneToOneRelation';
 import { PolyRelationMap } from '../Relations/PolyRelation';
-import { EntityRecord, EntityRecordSql } from './BaseTable';
+import {
+    BaseRecord,
+    BaseRecordSql,
+    TimestampedRecord,
+    TimestampedRecordSql
+} from './BaseTable';
 
 export class MediaCastTable extends BaseTable<MediaCastRecord> {
     tableName : string = 'mediaCast';
@@ -18,7 +23,6 @@ export class MediaCastTable extends BaseTable<MediaCastRecord> {
     
     fieldConverters: FieldConverters<MediaCastRecord, MediaCastRecordSql> = {
         id: Converters.id(),
-        external: Converters.json(),
         mediaId: Converters.id(),
         personId: Converters.id(),
         createdAt: Converters.date(),
@@ -36,19 +40,19 @@ export class MediaCastTable extends BaseTable<MediaCastRecord> {
     }
 }
 
-export interface MediaCastRecord extends EntityRecord {
+export interface MediaCastRecord extends BaseRecord, TimestampedRecord {
     mediaId : string;
     mediaKind : MediaKind;
     personId : string;
     role : string;
     order : number;
-    appearences ?: number;
+    appearances ?: number;
 
     person ?: PersonRecord;
     record ?: MediaRecord;
 }
 
-export interface MediaCastRecordSql extends EntityRecordSql {
+export interface MediaCastRecordSql extends BaseRecordSql, TimestampedRecordSql {
     mediaId : number;
     personId : number;
 }

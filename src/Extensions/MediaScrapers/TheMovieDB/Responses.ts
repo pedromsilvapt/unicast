@@ -260,3 +260,50 @@ export interface MovieDBEpisodeExternals {
     tvrage_id?: number;
     id: number;
 }
+
+export interface MovieDBCredits {
+    id: number;
+    cast: MovieDBCastMovie[];
+}
+
+export interface MovieShowCredits {
+    id: number;
+    cast: MovieDBCast[];
+}
+
+export interface MovieShowAggregateCredits {
+    id: number;
+    cast: MovieDBCastShowAggregate[];
+}
+
+export interface MovieDBCast {
+    adult: true
+    gender: number;
+    id: number;
+    known_for_department: string;
+    name: string;
+    original_name: string;
+    popularity: number;
+    profile_path: string;
+    order: number;
+}
+
+export interface MovieDBCastMovie extends MovieDBCast {
+    cast_id: number;
+    character: string;
+    credit_id: string;
+}
+
+export interface MovieDBCastShow extends MovieDBCast {
+    character: string;
+    credit_id: string;
+}
+
+export interface MovieDBCastShowAggregate extends MovieDBCast {
+    roles: {
+        credit_id: string;
+        character: string;
+        episode_count: number;
+    }[];
+    total_episode_count: number;
+}

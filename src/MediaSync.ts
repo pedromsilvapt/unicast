@@ -6,7 +6,7 @@ import { MediaManager, UnicastServer } from './UnicastServer';
 import { Future } from '@pedromsilva/data-future';
 import { IMediaRepository } from './MediaRepositories/MediaRepository';
 import { CacheOptions } from './MediaScrapers/ScraperCache';
-import { SharedLogger, Logger } from 'clui-logger';
+import { SharedLogger, Logger, pp } from 'clui-logger';
 import { MediaRecordFilter, TvMediaFilter, MediaSetFilter } from './MediaRepositories/ScanConditions';
 import { ScrapersManager } from './MediaScrapers/ScrapersManager';
 import { collect, groupingBy, first, mapping, distinct, filtering } from 'data-collectors';
@@ -276,34 +276,28 @@ export class MediaSync {
 
         // A map associating the internal id (meaning, the id from the scraper)
         // and the existing person record in the local database
-        // The role that associates the person and the media is accessible
+        // The role that associates the person and the media, is accessible
         // via the `.cast` property on each PersonRecord
-        const existingRoles : Map<string, PersonRecord> = collect(
+        const existingPeople : Map<string, PersonRecord> = collect(
             await table.relations.cast.load( media ),
-            filtering( role => role.cast.scraper == media.scraper,
-                groupingBy( role => role.cast.internalId, first() ) )
+            filtering( role => role.scraper == media.scraper,
+                groupingBy( role => role.internalId, first() ) )
         );
 
         // This will contain the internalIds of the new roles that don't
         // have anyone on the database associated with them for this media record
-        const newPeopleRolesId = newRoles.map( role => role.internalId ).filter( id => id && !existingRoles.has( id ) );
+        const newPeopleRolesId = newRoles.map( role => role.internalId ).filter( id => id && !existingPeople.has( id ) );
 
         // And we will search OTHER media records for the same person and see what we find
-        const newPeopleRoles : MediaCastRecord[] = collect(
-            await this.database.tables.mediaCast.find( q => q.whereIn( 'internalId', newPeopleRolesId ).where( 'scraper', media.scraper ) ),
-            // TODO SQL personId != null needed?
-            filtering( p => p.personId != null && p.scraper == media.scraper, distinct( p => p.internalId ) )
-        );
+        const newPeopleList : PersonRecord[] =
+            await this.database.tables.people.find( q => q.whereIn( 'internalId', newPeopleRolesId ).where( 'scraper', media.scraper ) );
 
         // Load the people related to those records
-        await this.database.tables.mediaCast.relations.person.applyAll( newPeopleRoles );
+        await this.database.tables.people.relations.credits.applyAll( newPeopleList );
 
-        const newPeople = collect(
-            newPeopleRoles,
-            filtering( role => role.person != null, groupingBy( role => role.internalId, mapping( person => ( {
-                ...person.person,
-                cast: person
-            } ), first<PersonRecord>() ) ) )
+        const newPeople : Map<string, PersonRecord> = collect(
+            newPeopleList,
+            groupingBy( role => role.internalId, first() ),
         );
 
         // We will iterate over the new roles we found to check if they are already present
@@ -316,10 +310,10 @@ export class MediaSync {
             try {
                 let person : PersonRecord = null;
 
-                const matchRole = existingRoles.get( role.internalId );
+                const matchRole = existingPeople.get( role.internalId );
 
                 if ( matchRole != null ) {
-                    existingRoles.delete( role.internalId );
+                    existingPeople.delete( role.internalId );
 
                     person = matchRole;
                 }
@@ -332,6 +326,8 @@ export class MediaSync {
                 }
 
                 if ( person != null ) {
+                    this.logger.debug(pp`Updating person #${person.id} ${person.name}.`);
+
                     if ( !dryRun ) {
                         person = await peopleTable.updateIfChanged( person, {
                             name: role.name,
@@ -346,6 +342,10 @@ export class MediaSync {
                     existingPeopleCount++;
                 } else {
                     person = {
+                        scraper: media.scraper,
+                        internalId: role.internalId,
+                        external: {},
+                        identifier: null, // will be auto-calculated when saving
                         art: role.art,
                         biography: role.biography,
                         birthday: role.birthday,
@@ -353,6 +353,8 @@ export class MediaSync {
                         name: role.name,
                         naturalFrom: role.naturalFrom
                     };
+
+                    this.logger.debug(pp`Creating person ${person.name}.`);
 
                     if ( !dryRun ) {
                         person = await peopleTable.create( person );
@@ -362,28 +364,31 @@ export class MediaSync {
                 }
 
                 const cast : Partial<MediaCastRecord> = {
-                    internalId: role.internalId,
-                    external: {},
                     mediaId: media.id,
                     mediaKind: media.kind,
                     order: role.order,
-                    appearences: role.appearances,
+                    appearances: role.appearances,
                     role: role.role,
-                    scraper: media.scraper,
                     personId: person.id,
                 };
 
-                if ( !dryRun ) {
-                    if ( matchRole != null ) {
-                        await this.database.tables.mediaCast.updateIfChanged( matchRole.cast, cast, {
+                if ( matchRole != null ) {
+                    this.logger.debug(pp`Updating role #${matchRole.cast.id} ${cast.role} (actor ${matchRole.name}).`);
+
+                    if ( !dryRun ) {
+                        await this.database.tables.mediaCast.updateIfChanged(matchRole.cast, cast, {
                             updatedAt: new Date()
-                        } );
-                    } else {
-                        await this.database.tables.mediaCast.create( {
+                        });
+                    }
+                } else {
+                    this.logger.debug(pp`Creating role ${cast.role} (actor ${person.name}).`);
+
+                    if ( !dryRun ) {
+                        await this.database.tables.mediaCast.create({
                             ...cast as any,
                             updatedAt: new Date(),
                             createdAt: new Date(),
-                        } );
+                        });
                     }
                 }
             } finally {
@@ -395,7 +400,7 @@ export class MediaSync {
         // all roles that already exist in the database. As such, whatever is left is stale data that
         // has been removed from the remote database and as such we should sync that up
         // by removing them in our database as well
-        const toBeRemovedIds = Array.from( existingRoles.values() ).map( person => person.cast.id );
+        const toBeRemovedIds = Array.from( existingPeople.values() ).map( person => person.cast.id );
 
         // NOTE: There may also exist some roles associated with this media record, but from a different scraper
         // (might happen after an existing repository changes scrapers, for example). In such cases, these casts
@@ -403,7 +408,7 @@ export class MediaSync {
         // toBeRemovedIds.
         toBeRemovedIds.push( ...collect(
             await table.relations.cast.load( media ),
-            filtering( person => person.cast.scraper != media.scraper, mapping( person => person.cast.id ) )
+            filtering( person => person.scraper != media.scraper, mapping( person => person.cast.id ) )
         ) );
 
         const deletedCastCount = await this.database.tables.mediaCast.deleteKeys( toBeRemovedIds );

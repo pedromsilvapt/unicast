@@ -3,7 +3,7 @@ import { Converters, FieldConverters } from '../Converters';
 import { BaseTable, DatabaseTables, createMediaRecordPolyMap } from '../Database';
 import { ManyToManyPolyRelation } from '../Relations/ManyToManyPolyRelation';
 import { PolyRelationMap } from '../Relations/PolyRelation';
-import { BaseRecord, BaseRecordSql, TimestampedRecord, TimestampedRecordSql } from './BaseTable';
+import { EntityRecord, EntityRecordSql } from './BaseTable';
 
 export class PeopleTable extends BaseTable<PersonRecord> {
     tableName : string = 'people';
@@ -17,6 +17,7 @@ export class PeopleTable extends BaseTable<PersonRecord> {
     fieldConverters: FieldConverters<PersonRecord, PersonRecordSql> = {
         id: Converters.id(),
         art: Converters.json(),
+        external: Converters.json(),
         birthday: Converters.date(),
         deathday: Converters.date(),
         createdAt: Converters.date(),
@@ -34,8 +35,9 @@ export class PeopleTable extends BaseTable<PersonRecord> {
     }
 }
 
-export interface PersonRecord extends BaseRecord, TimestampedRecord {
+export interface PersonRecord extends EntityRecord {
     name : string;
+    identifier: string;
     art : MediaRecordArt;
     biography ?: string;
     birthday ?: Date;
@@ -43,10 +45,11 @@ export interface PersonRecord extends BaseRecord, TimestampedRecord {
     naturalFrom ?: string;
 
     // Foreign Relation
-    cast ?: MediaCastRecord;
+    credits ?: MediaCastRecord[]; // Set when the "credits" relation is loaded from the Person records
+    cast ?: MediaCastRecord; // Set when the "person" relation is loaded from the MediaCast records
 }
 
-export interface PersonRecordSql extends BaseRecordSql, TimestampedRecordSql {
+export interface PersonRecordSql extends EntityRecordSql {
     art : string;
     birthday ?: number;
     deathday ?: number;

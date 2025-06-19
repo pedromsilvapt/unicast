@@ -239,11 +239,14 @@ export class MediaRecordFactory {
                 background: null,
                 banner: null
             },
+            external: {},
+            scraper: this.scraper.name,
             biography: null,
             birthday: null,
             deathday: null,
             internalId: actor.id,
             name: actor.name.trim(),
+            identifier: null,
             naturalFrom: null,
             role: actor.role.trim(),
             order: actor.sortOrder
