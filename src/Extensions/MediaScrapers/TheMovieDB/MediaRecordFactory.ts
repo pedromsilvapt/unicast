@@ -1,5 +1,16 @@
 import { MovieMediaRecord, MediaKind, RoleRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord } from "../../../MediaRecord";
-import { MovieDBEpisodeExternals, MovieDBMovie, MovieDBMovieReleaseDate, MovieDBSeason, MovieDBSeasonEpisode, MovieDBShow, MovieDBShowExternals, MovieDBShowRatings, MovieDBShowSeason } from './Responses';
+import {
+    MovieDBCast, MovieDBCastMovie, MovieDBCastShowAggregate,
+    MovieDBEpisodeExternals,
+    MovieDBMovie,
+    MovieDBMovieReleaseDate,
+    MovieDBSeason,
+    MovieDBSeasonEpisode,
+    MovieDBShow,
+    MovieDBShowExternals,
+    MovieDBShowRatings,
+    MovieDBShowSeason
+} from './Responses';
 import { TheMovieDB } from './TheMovieDB';
 import * as sortBy from 'sort-by';
 
@@ -123,13 +134,20 @@ export class MediaRecordFactory {
         } as any;
     }
 
-    createActorRoleRecord ( actor : any, customOrder: number = null ) : RoleRecord {
-        let character = actor.character;
+    createActorRoleRecord ( actor : MovieDBCastMovie | MovieDBCastShowAggregate, customOrder: number = null ) : RoleRecord {
+        let character: string | null = null;
+        let appearances = 0;
 
-        if ( actor.roles != null ) {
+        if ( 'character' in actor ) {
+            // Movie Cast
+            character = actor.character;
+        } else if ( 'roles' in actor && actor.roles != null ) {
+            // TV Show Cast
             actor.roles.sort( sortBy( 'episode_count' ) );
 
             character = actor.roles.map( role => role.character ).join( ' / ' );
+
+            appearances = actor.total_episode_count;
         }
 
         return {
@@ -139,11 +157,14 @@ export class MediaRecordFactory {
                 background: null,
                 banner: null,
             },
-            internalId: actor.id,
+            external: {},
+            scraper: this.scraper.name,
+            internalId: '' + actor.id,
             name: actor.name,
             role: character,
             order: customOrder ?? actor.order,
-            appearances: actor.total_episode_count,
+            appearances: appearances,
+            identifier: null,
             biography: null,
             birthday: null,
             deathday: null,

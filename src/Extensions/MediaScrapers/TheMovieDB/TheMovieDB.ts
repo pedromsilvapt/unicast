@@ -3,7 +3,15 @@ import { AsyncCache, CacheOptions, CacheStorage } from "../../../MediaScrapers/S
 import { MovieMediaRecord, TvShowMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, ArtRecord, ArtRecordKind, MediaKind, ExternalReferences, AllMediaKinds, RoleRecord, MediaRecord } from "../../../MediaRecord";
 import { UnicastServer } from "../../../UnicastServer";
 import { MediaRecordFactory } from "./MediaRecordFactory";
-import { MovieDBEpisodeExternals, MovieDBSeason, MovieDBShow, MovieDBShowExternals, MovieDBShowRatings, MovieDBShowSeason } from "./Responses";
+import {
+    MovieDBCredits,
+    MovieDBEpisodeExternals,
+    MovieDBSeason,
+    MovieDBShow,
+    MovieDBShowExternals,
+    MovieDBShowRatings,
+    MovieDBShowSeason, MovieShowAggregateCredits
+} from "./Responses";
 import { Client as MovieDB } from './Client';
 import { Logger } from 'clui-logger';
 import * as sortBy from 'sort-by';
@@ -415,7 +423,7 @@ export class TheMovieDB implements IScraper {
     /* Get Media Cast */
     getMovieCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return this.runCachedTask<RoleRecord[]>( 'getMovieCast', id, query, async () => {
-            const actors : any = await this.moviedbCall( 'movieCredits', { id }, cache );
+            const actors : MovieDBCredits = await this.moviedbCall( 'movieCredits', { id }, cache );
 
             return actors.cast.map( actor => this.factory.createActorRoleRecord( actor ) );
         }, cache );
@@ -423,7 +431,7 @@ export class TheMovieDB implements IScraper {
 
     getTvShowCast ( id : string, query: IScraperQuery = {}, cache ?: CacheOptions ) : Promise<RoleRecord[]> {
         return this.runCachedTask<RoleRecord[]>( 'getTvShowCast', id, query, async () => {
-            const actors : any = await this.moviedbRequest( '/tv/{id}/aggregate_credits', { id }, cache );
+            const actors : MovieShowAggregateCredits = await this.moviedbRequest( '/tv/{id}/aggregate_credits', { id }, cache );
 
             actors.cast.sort( sortBy( '-total_episode_count', '-popularity', 'order' ) );
 

@@ -1,6 +1,5 @@
 import type { Knex } from 'knex';
 import { AllMediaKinds, MediaKind } from '../../MediaRecord';
-import { collect, distinct, first, groupingBy, mapping } from 'data-collectors';
 import { chunk } from '../Tables/BaseTable';
 
 export async function migrateTable<T, T2>(knex: Knex, oldTableName: string, newTableName: string, transformer: (row: T) => T2) {
