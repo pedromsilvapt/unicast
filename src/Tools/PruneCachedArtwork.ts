@@ -75,7 +75,7 @@ export class PruneCachedArtworkTool extends Tool<PruneCachedArtworkOptions> {
             const cachedUrlKey = cachedUrl.split( '?' )[ 0 ];
 
             if ( artworkToKeep.has( cachedUrlKey ) ) {
-                this.addToSet( artworkFilesToKeep, cachedFile, caseSensitive );
+                this.addToSet( artworkFilesToKeep, this.server.artwork.getAbsoluteCachedPath( cachedFile ), caseSensitive );
             }
         }
 

@@ -113,20 +113,28 @@ export class ArtworkCache {
         return `${ url }??${ this.optionsToString( options ) }`;
     }
 
-    getCached ( url : string, options : ArtworkCacheOptions = {} ) : string {
-        const filepath = this.cache.get( this.getCacheKey( url, options ) );
-
-        if ( filepath != null && !path.isAbsolute( filepath ) ) {
-            return this.server.storage.getPath( filepath );
+    getAbsoluteCachedPath( relativeOrAbsolutePath : string ) : string {
+        if ( relativeOrAbsolutePath != null && !path.isAbsolute( relativeOrAbsolutePath ) ) {
+            return this.server.storage.getPath( relativeOrAbsolutePath );
         }
 
-        return filepath;
+        return relativeOrAbsolutePath;
+    }
+
+    getRelativeCachedPath( relativeOrAbsolutePath : string ) : string {
+        if ( relativeOrAbsolutePath != null && path.isAbsolute( relativeOrAbsolutePath ) ) {
+            return this.server.storage.getRelativePath( relativeOrAbsolutePath );
+        }
+
+        return relativeOrAbsolutePath;
+    }
+
+    getCached ( url : string, options : ArtworkCacheOptions = {} ) : string {
+        return this.getAbsoluteCachedPath( this.cache.get( this.getCacheKey( url, options ) ) );
     }
 
     setCached ( url : string, file : string, options : ArtworkCacheOptions = {} ) : void {
-        const relativeFile = this.server.storage.getRelativePath( file );
-
-        this.cache.set( this.getCacheKey( url, options ), relativeFile );
+        this.cache.set( this.getCacheKey( url, options ), this.getRelativeCachedPath( file ) );
     }
 
     getReadableStream ( url : string ) : NodeJS.ReadableStream {
