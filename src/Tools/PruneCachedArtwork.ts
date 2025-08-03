@@ -108,8 +108,7 @@ export class PruneCachedArtworkTool extends Tool<PruneCachedArtworkOptions> {
                     stats.bytesDeleted += fileStat.size;
 
                     if ( !options.dryRun ) {
-                        // TODO ONLY ENABLE AFTER FINISHING AND VALIDATING THE LOGIC TO GET ALL ARTWORK TO KEEP
-                        // await fs.unlink( filePath );
+                        await fs.unlink( filePath );
                     }
                 }
             }
