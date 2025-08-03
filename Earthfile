@@ -41,6 +41,13 @@ install:
     COPY +install-interface/unicast-interface.tgz .
     RUN npm install unicast-interface.tgz
 
+    # HACK ALERT
+    # Make a small modification to one of the files inside parse-torrent-name
+    # Transformed the first line into the second:
+    # year: /([\[\(]?((?:19[0-9]|20[01])[0-9])[\]\)]?)/,
+    # year: /([\[\(]?((?:19[0-9]|20[0123])[0-9])[\]\)]?)/,
+    RUN sed -i -e 's/01/0123/' ./node_modules/parse-torrent-name/parts/common.js
+
     SAVE ARTIFACT node_modules /node_modules AS LOCAL node_modules
     SAVE ARTIFACT package-lock.json /package-lock.json AS LOCAL package-lock.json
 
