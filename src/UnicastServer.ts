@@ -1038,8 +1038,8 @@ export class MediaUserRanksList {
         // 1. If we are creating new positions into the list, we must update all
         // user ranks >= anchorRank to be += zerosCount
         if ( zerosCount > 0 ) {
-            const filter = row => row( 'list' ).eq( this.id )
-                .and( row( 'position' ).ge( anchorRank ) );
+            const filter = (row : Knex.QueryBuilder) => row.where( 'list', this.id )
+                .andWhere( 'position', '>=', anchorRank );
 
             const change = q => q.increment( 'position', zerosCount );
 
