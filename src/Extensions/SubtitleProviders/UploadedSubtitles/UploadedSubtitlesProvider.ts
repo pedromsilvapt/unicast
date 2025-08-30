@@ -1,5 +1,5 @@
-import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../ISubtitlesProvider';
-import { MediaKind, TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, PlayableMediaRecord, isTvEpisodeRecord, isMovieRecord, MediaSources } from '../../../MediaRecord';
+import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../../../Subtitles/Providers/ISubtitlesProvider';
+import { TvShowMediaRecord, CustomMediaRecord, MovieMediaRecord, TvSeasonMediaRecord, TvEpisodeMediaRecord, PlayableMediaRecord, isTvEpisodeRecord, isMovieRecord, MediaSources } from '../../../MediaRecord';
 import * as iconv from 'iconv-lite';
 import { UnicastServer } from '../../../UnicastServer';
 import { Readable } from 'stream';
