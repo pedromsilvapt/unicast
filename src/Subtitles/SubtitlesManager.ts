@@ -1,7 +1,5 @@
 import { SubtitlesProvidersManager } from "./ProvidersManager";
 import { UnicastServer } from "../UnicastServer";
-import { EmbeddedSubtitlesProvider } from "../Extensions/SubtitleProviders/EmbeddedSubtitles/EmbeddedSubtitlesProvider";
-import { UploadedSubtitlesProvider } from './Providers/UploadedSubtitles/UploadedSubtitlesProvider';
 import { ISubtitle } from "./Providers/ISubtitlesProvider";
 import { MediaRecord } from "../MediaRecord";
 import { FallbackSubtitlesRepository, IDatabaseLocalSubtitle } from "./SubtitlesRepository";
