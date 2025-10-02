@@ -45,6 +45,7 @@ import { BaseUrl } from './ES2017/BaseUrl';
 import { QueryOptions } from './Database/Tables/BaseTable';
 import { queryParser } from './ES2017/QueryParser';
 import { MediaTools } from './MediaTools';
+import {MediaSourceDetails} from "./MediaProviders/MediaSource";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -797,6 +798,46 @@ export class MediaManager {
 
             return table.updateIfChanged( record, changed[ index ], { updatedAt: new Date() }, options );
         } ) );
+    }
+
+    protected getOriginalSourcesKey ( record : PlayableMediaRecord ) : string {
+        return `originalStores.${ record.kind }.${ record.id }`;
+    }
+
+    async getOriginalSources ( record : PlayableMediaRecord ) : Promise<MediaSourceDetails[] | null> {
+        const key = this.getOriginalSourcesKey( record );
+
+        const originalSources = await this.server.dataStore.get<MediaSourceDetails[]>( key );
+
+        return originalSources?.value ?? null;
+    }
+
+    async setAlternativeSources ( record : PlayableMediaRecord, alternativeSources : MediaSourceDetails[] ) {
+        const originalSources = await this.getOriginalSources( record );
+
+        if ( originalSources == null ) {
+            const key = this.getOriginalSourcesKey( record );
+
+            await this.server.dataStore.store( key, record.sources );
+        }
+
+        const table = this.server.media.getTable( record.kind );
+
+        await table.updateIfChanged( record, { sources: alternativeSources } );
+    }
+
+    async restoreOriginalSources ( record : PlayableMediaRecord ) {
+        const originalSources = await this.getOriginalSources( record );
+
+        if ( originalSources != null ) {
+            const table = this.server.media.getTable( record.kind );
+
+            await table.updateIfChanged( record, { sources: originalSources } );
+        }
+
+        const key = this.getOriginalSourcesKey( record );
+
+        await this.server.dataStore.delete( key );
     }
 
     async humanize ( record: MediaRecord ): Promise<string> {
