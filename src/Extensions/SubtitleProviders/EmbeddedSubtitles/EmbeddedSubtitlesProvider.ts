@@ -1,7 +1,7 @@
 import { LoggerInterface } from 'clui-logger';
 import { FileSystemRepository } from '../../MediaRepositories/FileSystem/FileSystemRepository';
 import { PlayableMediaRecord } from '../../../MediaRecord';
-import { MediaTools } from '../../../MediaTools';
+import {MediaTools, TrackMediaProbe} from '../../../MediaTools';
 import { UnicastServer } from '../../../UnicastServer';
 import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../../../Subtitles/Providers/ISubtitlesProvider';
 import { fs } from 'mz';
@@ -54,11 +54,32 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
 
                     const stat = await fs.stat( videoPath );
 
+                    const buildTrackTitle = (subtitle : TrackMediaProbe) => {
+                        let title = subtitle.title || `Track ${subtitle.typeIndex + 1}`;
+
+                        const properties = {
+                            forced: subtitle.forced ? 'yes' : 'no',
+                            default: subtitle.default ? 'yes' : 'no',
+                            sdh: subtitle.hearingImpaired ? 'yes' : 'no'
+                        }
+
+                        const propertiesDefined = Object
+                            .keys(properties)
+                            .filter(key => properties[key] != null)
+                            .map(key => `${key}: ${properties[key]}`);
+
+                        if (propertiesDefined.length > 0) {
+                            title +=  ` (${propertiesDefined.join(', ')})`;
+                        }
+
+                        return title;
+                    };
+
                     return subtitles
                         .filter( subtitle => !subtitle.language || subtitle.language == searchOptions.lang )
                         .map( subtitle => ( {
                             id: this.server.hash( videoPath + subtitle.index.toString() ),
-                            releaseName : subtitle.title || `Track ${subtitle.typeIndex + 1}`,
+                            releaseName : buildTrackTitle(subtitle),
                             encoding : null,
                             format : 'srt', // subtitle.codec,
                             language : subtitle.language,

@@ -130,7 +130,7 @@ export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesR
     }
 
     async download ( subtitle : IOpenSubtitlesResult ) : Promise<NodeJS.ReadableStream> {
-        await this.ensureToken;
+        await this.ensureToken();
 
         const fileId = subtitle.files[0].file_id;
 
