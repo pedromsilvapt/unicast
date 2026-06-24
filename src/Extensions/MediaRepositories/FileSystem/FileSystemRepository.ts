@@ -11,7 +11,7 @@ import { MediaRecordFilter } from '../../../MediaRepositories/ScanConditions';
 import { MediaSyncSnapshot, MediaSyncTask } from '../../../MediaSync';
 import { LoggerInterface } from 'clui-logger';
 import { DeepPartial } from '../../../UnicastServer';
-import * as yaml from 'js-yaml' 
+import * as yaml from 'js-yaml'
 import { LocalSettings } from './LocalSettings';
 
 export class FileSystemRepository extends MediaRepository {
@@ -78,7 +78,7 @@ export class FileSystemRepository extends MediaRepository {
             return null;
         }
     }
-    
+
     protected cacheVirtualRepositoryPrefixes () : string[] | null {
         if ( this.config.mounts != null ) {
             return this.config.mounts.map( mount => mount.path );
@@ -144,7 +144,7 @@ export class FileSystemRepository extends MediaRepository {
             if ( file.startsWith( file[ 0 ] + ':\\' ) ) {
                 const letter = file[0].toUpperCase();
 
-                return { 
+                return {
                     name: 'drive-' + letter,
                     path: file.substr( 0, 3 ),
                     displayName: 'Drive ' + letter,
@@ -165,7 +165,7 @@ export class FileSystemRepository extends MediaRepository {
         }
 
         const file = media.sources[ 0 ].id;
-        
+
         const mount = this.getFilePathMount( this.config.mounts, file );
 
         if ( mount ) {
@@ -247,22 +247,27 @@ export class FileSystemRepository extends MediaRepository {
 
     placeRepositoryPaths ( record : MediaRecord ) : MediaRecord {
         if ( isMovieRecord( record ) || isTvEpisodeRecord( record ) ) {
-            record = { ...record };
+            record = {
+                ...record,
+                repositoryPaths: this.getRepositoryPaths( record )
+            };
         }
 
+        return record;
+    }
+
+    getRepositoryPaths(record: MediaRecord) {
         if ( isMovieRecord( record ) || isTvEpisodeRecord( record ) ) {
             const file = record.sources[ 0 ].id;
 
             const repository = this.findVirtualRepositoryForPath( file );
 
             if ( repository != null ) {
-                record.repositoryPaths = [ repository.name ];
-            } else {
-                record.repositoryPaths = [];
+                return [ repository.name ];
             }
         }
 
-        return record;
+        return [];
     }
 
     setPreferredMediaArt ( kind : MediaKind, id : string, key : string, url : string ) {
@@ -276,7 +281,7 @@ export class FileSystemRepository extends MediaRepository {
     setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string ) {
         this.settings.set( [ 'associations', kind, matchedId ], preferredId );
     }
-    
+
     getPreferredMedia ( kind : MediaKind, matchedId : string ) : string {
         return this.settings.get<string>( [ 'associations', kind, matchedId ] );
     }
@@ -284,7 +289,7 @@ export class FileSystemRepository extends MediaRepository {
     protected async getEpisodesShowFolders ( episodes : TvEpisodeMediaRecord[] ): Promise<string[]> {
         var folders = new Set<string>();
 
-        const episodePathsList = await Promise.all( 
+        const episodePathsList = await Promise.all(
             episodes.map( episode => this.getRealFilePath( episode ) )
         );
 
@@ -310,13 +315,13 @@ export class FileSystemRepository extends MediaRepository {
             const episodes = await this.server.media.getEpisodes( record.id );
 
             const showFolders = await this.getEpisodesShowFolders( episodes )
-            
+
             return showFolders.map( showPath => path.join( showPath, 'media.yaml' ) );
         } else if ( isTvSeasonRecord( record ) ) {
             const episodes = await this.server.media.getSeasonEpisodes( record.id );
 
             const showFolders = await this.getEpisodesShowFolders( episodes )
-            
+
             return showFolders.map( showPath => path.join( showPath, 'media.yaml' ) );
         } else if ( isTvEpisodeRecord( record ) ) {
             const episodePath = await this.getRealFilePath( record );
@@ -346,7 +351,7 @@ export class FileSystemRepository extends MediaRepository {
 
     public async getCustomization<R extends MediaRecord> ( record : R ) : Promise<DeepPartial<R>> {
         const paths = await this.getExistingCustomizationPaths( record );
-        
+
         const fileContents = await Promise.all( paths.map( filePath => fs.readFile( filePath, { encoding: 'utf-8' } ) ) );
 
         const settingsObjects = fileContents.map( string => yaml.load( string ) );
@@ -357,32 +362,32 @@ export class FileSystemRepository extends MediaRepository {
     public async saveCustomization<R extends MediaRecord> ( record : R, customization : DeepPartial<R> ) : Promise<void> {
         const pathsList = await this.getCustomizationPaths( record );
 
-        const existingSettingsList = await Promise.all( pathsList.map( 
+        const existingSettingsList = await Promise.all( pathsList.map(
             filePath => LocalSettings.read( filePath ),
         ) );
-        
+
         for ( const [ index, settings ] of existingSettingsList.entries() ) {
-            existingSettingsList[index] = LocalSettings.setLocalSettingsCustomization( 
-                record, 
-                settings || {}, 
-                customization, 
-                pathsList[ index ], 
-                false 
+            existingSettingsList[index] = LocalSettings.setLocalSettingsCustomization(
+                record,
+                settings || {},
+                customization,
+                pathsList[ index ],
+                false
             );
         }
 
-        await Promise.all( pathsList.map( 
+        await Promise.all( pathsList.map(
             ( filePath, index ) => LocalSettings.write( filePath, existingSettingsList[ index ] )
         ) );
     }
 
     public static normalizeConfig ( config : FileSystemScannerConfig ) : FileSystemScannerConfigNormalized {
-        const normalized : FileSystemScannerConfigNormalized = { 
-            ...config, 
+        const normalized : FileSystemScannerConfigNormalized = {
+            ...config,
             ignoreUnreachableMedia: Boolean( config.ignoreUnreachableMedia ?? false ),
             folders: config.folders?.slice(),
             exclude: config.exclude?.slice(),
-            mounts: [] 
+            mounts: []
         };
 
         if ( config.mounts instanceof Array ) {

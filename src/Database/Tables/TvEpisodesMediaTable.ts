@@ -83,6 +83,22 @@ export class TvEpisodesMediaTable extends AbstractMediaTable<TvEpisodeMediaRecor
         };
     }
 
+    async repairRepositoryPaths ( episode : string | TvEpisodeMediaRecord ) : Promise<Partial<TvSeasonMediaRecord>> {
+        if ( typeof episode === 'string' ) {
+            episode = await this.get( episode );
+        }
+
+        if ( episode.repository != null && this.database.server.repositories.hasKeyed( episode.repository ) ) {
+            const repository = this.database.server.repositories.get( episode.repository );
+
+            return {
+                repositoryPaths: repository.getRepositoryPaths( episode ),
+            };
+        }
+
+        return {};
+    }
+
     async repair ( episodes : string[] = null ) {
         if ( !episodes ) {
             episodes = ( await this.find() ).map( episode => episode.id );
@@ -95,6 +111,7 @@ export class TvEpisodesMediaTable extends AbstractMediaTable<TvEpisodeMediaRecor
         await Promise.all( episodeRecords.map( async episode => {
             const changes = {
                 ...await this.repairTvShowArt( episode ),
+                ...await this.repairRepositoryPaths( episode ),
                 // TODO Extract from server into here
                 ...await this.database.server.media.watchTracker.onPlayRepairChanges( episode ),
             }
