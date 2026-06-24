@@ -1,6 +1,6 @@
 import { DataUnit, DataAmount, Duration, DurationUnit } from '../../ES2017/Units';
 
-export const FFmpegProgressPattern = /frame=\s*(?<nframe>[0-9]+)\s+fps=\s*(?<nfps>[0-9\.]+)\s+q=(?<nq>[0-9\.-]+)\s+(L?)\s*size=\s*(?<nsize>[0-9]+)(?<ssize>kB|mB|b)?\s*time=\s*(?<sduration>[0-9\:\.]+)\s*bitrate=\s*(?<nbitrate>[0-9\.]+)(?<sbitrate>bits\/s|mbits\/s|kbits\/s)?.*(dup=(?<ndup>\d+)\s*)?(drop=(?<ndrop>\d+)\s*)?speed=\s*(?<nspeed>[0-9\.]+)x/;
+export const FFmpegProgressPattern = /frame=\s*(?<nframe>[0-9]+)\s+fps=\s*(?<nfps>[0-9.]+)\s+q=(?<nq>[0-9.-]+)\s+(L?)\s*size=\s*(?<nsize>[0-9]+)(?<ssize>kib|mb|b)?\s*time=\s*((?<sduration>[0-9:.]+)|N\/A)\s*bitrate=\s*((?<nbitrate>[0-9.]+)(?<sbitrate>bits\/s|mbits\/s|kbits\/s)|N\/A)?.*(dup=(?<ndup>\d+)\s*)?(drop=(?<ndrop>\d+)\s*)?speed=\s*((?<nspeed>[0-9.+e]+)x|N\/A)/i;
 
 export const FFmpegDurationPattern = /(\d+):(\d+):(\d+)\.(\d+)/;
 
@@ -54,10 +54,10 @@ export class FFmpegProgress {
 
         this.time = this.parseDuration( match.groups.sduration );
         this.fps = +match.groups.nfps;
-        this.size = this.parseSize( +match.groups.nsize, match.groups.ssize );
+        this.size = this.parseSize( +match.groups.nsize, 'kb' );
         this.bitrate = this.parseBitrate( +match.groups.nbitrate, match.groups.sbitrate );
         this.frame = +match.groups.nframe;
-        this.speed = +match.groups.nspeed;
+        this.speed = parseFloat(match.groups.nspeed);
         this.quantitizer = +match.groups.nq;
         this.dup = +match.groups.ndup;
         this.drop = +match.groups.ndrop;
@@ -74,6 +74,10 @@ export class FFmpegProgress {
     }
 
     protected parseBitrate ( size : number, unitStr : string ) : DataAmount {
+        if ( size == null ) {
+            return new DataAmount( 0, DataUnit.KILOBITS );
+        }
+
         let unit : DataUnit;
 
         switch ( unitStr ) {
@@ -94,6 +98,10 @@ export class FFmpegProgress {
     }
 
     protected parseDuration ( duration : string ) : Duration {
+        if ( duration == null ) {
+            return new Duration( 0, DurationUnit.SECONDS );
+        }
+
         const matcher = duration.match( FFmpegDurationPattern );
 
         if ( !matcher ) {
@@ -104,7 +112,7 @@ export class FFmpegProgress {
         const mins = +matcher[ 2 ] * 60;
         const seconds = +matcher[ 3 ];
         let ms = +matcher[ 4 ];
-        
+
         if ( ms < 10 ) {
             ms = ms / 10;
         } else if ( ms < 100 ) {

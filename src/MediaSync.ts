@@ -212,7 +212,7 @@ export class MediaSync {
 
         await this.runCast( context, newRecord );
 
-        await this.runMetadata( context, newRecord );
+        await this.runMetadata( context, newRecord, /* forceProbe: */ true );
     }
 
     async moveRecord ( context: MediaSyncContext, oldRecord : MediaRecord, newRecord : MediaRecord ) {
@@ -416,7 +416,7 @@ export class MediaSync {
         return { createdPeopleCount, existingPeopleCount, deletedCastCount };
     }
 
-    async runMetadata<R extends MediaRecord> ( context: MediaSyncContext, media : R ) {
+    async runMetadata<R extends MediaRecord> ( context: MediaSyncContext, media : R, forceProbe : boolean = false ) {
         if ( !isPlayableRecord( media ) ) {
             return;
         }
@@ -431,7 +431,7 @@ export class MediaSync {
             // When we are creating records in dryRun mode, the media records do not have an id (as they are not saved on the database)
             // That means cannot read/write the metadata to the cache (since in the cache, it needs to be associated to a valid media id)
             const metadata = await this.mediaTools.getMetadata( media,
-                /* readCache: */ !dryRun && cache.readCache,
+                /* readCache: */ !dryRun && cache.readCache && !forceProbe,
                 /* writeCache: */ !dryRun && cache.writeCache );
 
             if ( table.isChanged( media.metadata, metadata ) ) {
