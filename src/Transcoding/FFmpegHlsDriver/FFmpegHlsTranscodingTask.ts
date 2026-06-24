@@ -23,7 +23,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     input : VideoMediaStream;
 
     driver : FFmpegHlsDriver;
-    
+
     destination : string;
 
     encoders : Map<string, FFmpegHlsTranscodingProcessTask> = new Map();
@@ -31,7 +31,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     segments : SegmentsMap<{ id: string }>;
 
     scheduler : SegmentsScheduler<{ id: string }>;
-    
+
     protected averageMetric : AverageBackgroundMetric<number>;
 
     constructor ( record : MediaRecord, input : VideoMediaStream, driver : FFmpegHlsDriver, destination : string ) {
@@ -40,7 +40,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
         this.input = input;
 
         this.driver = driver;
-        
+
         this.destination = destination;
 
         this.segments = new SegmentsMap( this.input.duration, this.getSegmentTime( 1 ) );
@@ -56,7 +56,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
     getVideoSegmentDuration () {
         const video = this.input.metadata.tracks.find( track => track.type === 'video' );
-                
+
         const videoFrame = ( 1 / video.framerate );
 
         return Math.ceil( this.driver.getSegmentDuration() / videoFrame ) * videoFrame;
@@ -64,7 +64,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
     getAudioSegmentDuration () {
         const audio = this.input.metadata.tracks.find( track => track.type === 'audio' );
-                
+
         const audioFrame = ( 1024 / audio.sampleRate );
 
         return Math.ceil( 3 / audioFrame ) * audioFrame;
@@ -104,7 +104,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
 
         if ( segment ) {
             const encoder = new FFmpegHlsTranscodingProcessTask( this, this.driver, segment );
-            
+
             this.encoders.set( id, encoder );
 
             encoder.setStateStart();
@@ -116,7 +116,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
             } );
 
             if ( cancel ) {
-                cancel.cancellationPromise.then( () => {
+                cancel.cancellationPromise.catch( () => {
                     encoder.setStateCancel();
 
                     this.encoders.delete( id );
@@ -152,7 +152,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     getNextEncoderForTime ( time : number ) : FFmpegHlsTranscodingProcessTask {
         return this.getNextEncoderFor( this.getTimeSegment( time ) );
     }
-    
+
     getNextEncoderFor ( index : number ) : FFmpegHlsTranscodingProcessTask {
         let nextEncoder : FFmpegHlsTranscodingProcessTask = null;
 
@@ -165,7 +165,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
                 nextEncoder = encoder;
             }
         }
-        
+
         return nextEncoder;
     }
 
@@ -212,7 +212,7 @@ export class FFmpegHlsTranscodingTask extends TranscodingBackgroundTask {
     protected onCancel () {
         for ( let [ id, encoder ] of Array.from( this.encoders ) ) {
             encoder.setStateCancel();
-            
+
             this.encoders.delete( id );
         }
     }
@@ -235,7 +235,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
     driver : FFmpegHlsDriver;
 
     segment : Segment;
-    
+
     doneSegment : Segment;
 
     process : ChildProcess;
@@ -252,7 +252,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
 
     static cloneDriver ( mainTask : FFmpegHlsTranscodingTask, driver : FFmpegHlsDriver, segment : Segment ) : FFmpegHlsDriver {
         driver = new FFmpegHlsDriver( driver.server ).import( driver );
-        
+
         if ( segment.start > 0 ) {
             driver.setStartTime( mainTask.getSegmentTime( segment.start ) );
 
@@ -294,7 +294,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
         }
 
         const lastValues = this.speedMetrics.getNewerPointValues( windowSize );
-        
+
         const diffs = windowed( lastValues, 2 ).map( ( [ a, b ] ) => Math.abs( a - b ) ).reduce( ( a, b ) => a + b, 0 );
 
         return diffs <= 0.004 * windowSize;
@@ -311,7 +311,7 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
             this.metrics.push( this.speedMetrics );
 
             const id = uid();
-            
+
             await this.driver.server.storage.ensureDir( path.join( this.mainTask.destination, id ) );
 
             const args = [ ...await this.driver.getCompiledArguments( this.mainTask.record, this.mainTask.input ), path.join( this.mainTask.destination, id, 'index.m3u8' ) ];
@@ -321,31 +321,31 @@ export class FFmpegHlsTranscodingProcessTask extends BackgroundTask {
             if ( this.state != BackgroundTaskState.Running ) {
                 return;
             }
-            
+
             let child = spawn( this.driver.getCommandPath(), args );
 
             this.process = child;
 
             child.on( 'error', error => this.driver.server.onError.notify( error ) );
-            
+
             let lastSegment : number = this.segment.start;
 
             child.stderr.on( 'data', d => {
                 const lines = d.toString().split( '\n' ).map( l => l.trim() ).filter( l => l );
-                
+
                 for ( let line of lines ) {
                     if ( line.startsWith( '[hls @' ) && line.endsWith( 'for writing' ) ) {
                         const matches = line.match( /index([0-9]*)\.ts/i );
-                        
+
                         if ( matches && matches.length ) {
                             while ( lastSegment <= +matches[ 1 ] ) {
                                 this.addDone( 1 );
-    
+
                                 this.mainTask.scheduler.insert( lastSegment, { id } );
-                                
+
                                 lastSegment++;
                             }
-    
+
                             this.doneSegment.start = this.segment.start;
                             this.doneSegment.end = lastSegment - 1;
                         }

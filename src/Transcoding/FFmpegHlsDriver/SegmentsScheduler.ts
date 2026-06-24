@@ -6,7 +6,7 @@ import * as sortBy from 'sort-by';
 
 export class SegmentsScheduler<T> extends EventEmitter {
     map : SegmentsMap<T>;
-    
+
     protected fullJobsCounter : number = 0;
 
     concurrentJobs : number = 1;
@@ -30,7 +30,7 @@ export class SegmentsScheduler<T> extends EventEmitter {
     insert ( index : number, value : T ) {
         if ( !this.map.has( index ) ) {
             this.map.insert( index, value );
-        
+
             const job = this.findJobFor( index );
 
             if ( job ) {
@@ -67,7 +67,7 @@ export class SegmentsScheduler<T> extends EventEmitter {
         this.jobs = this.jobs.filter( ( job, index ) => {
             if ( index + 1 > this.concurrentJobs ) {
                 removed.push( job );
-                
+
                 return false;
             } else if ( index + 1 > this.concurrentGreedyJobs && job.requests.size > 0 ) {
                 removed.push( job );
@@ -132,7 +132,7 @@ export class SegmentsSchedulerJob extends EventEmitter {
     constructor ( segment : Segment ) {
         super();
 
-        this.segment = segment;    
+        this.segment = segment;
 
         this.missing = segment.end - segment.start + 1;
     }
@@ -153,9 +153,9 @@ export class SegmentsSchedulerJob extends EventEmitter {
                 if ( this.lastSegmentRequested === index ) {
                     this.flushRequests();
                 } else {
-                    this.emit( 'request-changed' );                    
+                    this.emit( 'request-changed' );
                 }
-                
+
                 break;
             }
         }
@@ -170,7 +170,7 @@ export class SegmentsSchedulerJob extends EventEmitter {
         this.requests.set( this.lastSegmentRequested, this.lastSegmentRequestedDate );
 
         if ( cancel ) {
-            cancel.cancellationPromise.then( () => {
+            cancel.cancellationPromise.catch( () => {
                 this.requests.delete( index );
 
                 if ( index === this.lastSegmentRequested ) {

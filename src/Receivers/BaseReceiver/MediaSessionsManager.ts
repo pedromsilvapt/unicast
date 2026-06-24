@@ -167,7 +167,7 @@ export class MediaSessionsManager {
 
             const streams = transcoding ? transcoding.outputs : originalStreams;
 
-            cancel.cancellationPromise.then( () => {
+            cancel.cancellationPromise.catch( () => {
                 for ( let stream of streams ) {
                     stream.close();
                 }

@@ -22,7 +22,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
         const task = new FFmpegTranscodingTask( record, input, driver, destination );
 
         task.setStateStart();
-        
+
         driver.server.tasks.register( task );
 
         return task;
@@ -31,7 +31,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
     input : VideoMediaStream;
 
     driver : FFmpegDriver;
-    
+
     destination : string;
 
     encoder : FFmpegTranscodingProcessTask = null;
@@ -44,7 +44,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
         this.input = input;
 
         this.driver = driver;
-        
+
         this.destination = destination;
 
         this.metrics.push( this.averageMetric = new AverageBackgroundMetric( 'Speed', this ) );
@@ -64,7 +64,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
         }
 
         const encoder = new FFmpegTranscodingProcessTask( this, this.driver );
-        
+
         this.encoder = encoder;
 
         encoder.setStateStart();
@@ -74,7 +74,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
         encoder.wait().then( () => this.destroyProcess() );
 
         if ( cancel ) {
-            cancel.cancellationPromise.then( () => {
+            cancel.cancellationPromise.catch( () => {
                 encoder.setStateCancel();
 
                 this.encoder = null;
@@ -85,7 +85,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
     destroyProcess () {
         if ( this.encoder != null ) {
             this.encoder.setStateCancel();
-    
+
             this.encoder = null;
         }
     }
@@ -129,7 +129,7 @@ export class FFmpegTranscodingTask extends TranscodingBackgroundTask {
     protected onCancel () {
         if ( this.encoder != null ) {
             this.encoder.setStateCancel();
-                
+
             this.encoder = null;
         }
     }
@@ -165,12 +165,12 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
 
     static cloneDriver ( mainTask : FFmpegTranscodingTask, driver : FFmpegDriver, segment : Segment ) : FFmpegDriver {
         driver = new FFmpegDriver( driver.server ).import( driver );
-        
+
         if ( segment ) {
             if ( segment.start > 0 ) {
                 driver.setStartTime( mainTask.getSegmentTime( segment.start ) );
             }
-    
+
             if ( ( segment.end && !mainTask.input.duration ) || mainTask.getSegmentTime( segment.end ) != mainTask.input.duration ) {
                 driver.setOutputDuration( mainTask.getSegmentTime( segment.end + 2 ) - mainTask.getSegmentTime( segment.start ) );
             }
@@ -212,7 +212,7 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
         }
 
         const lastValues = this.speedMetrics.getNewerPointValues( windowSize );
-        
+
         const diffs = windowed( lastValues, 2 ).map( ( [ a, b ] ) => Math.abs( a - b ) ).reduce( ( a, b ) => a + b, 0 );
 
         return diffs <= 0.004 * windowSize;
@@ -229,11 +229,11 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
 
         this.process.onProgress.subscribe( progress => {
             this.doneSegment.start = this.segment.start;
-                    
+
             this.doneSegment.end = progress.time.as( DurationUnit.SECONDS );
-            
+
             this.addDone( this.doneSegment.end - this.done );
-            
+
             this.emit( 'encoding-progress', progress );
 
             speedMetrics.register( +progress.speed );
@@ -241,13 +241,13 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
 
         this.process.wait().then( () => {
             this.completed.resolve();
-                
+
             this.setStateFinish();
         }, error => {
             // this.driver.server.onError.notify( error );
 
             this.completed.reject( error );
-                
+
             this.setStateCancel();
         } );
 
@@ -277,7 +277,7 @@ export class FFmpegTranscodingProcessTask extends BackgroundTask {
     onCancel () {
         this.process.kill();
     }
-    
+
     wait () : Promise<void> {
         return this.completed.promise;
     }

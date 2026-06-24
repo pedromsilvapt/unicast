@@ -1,5 +1,6 @@
-import { fromPromises, CancelToken } from 'data-async-iterators';
+import { fromPromises } from 'data-async-iterators';
 import { UnicastServer } from "./UnicastServer";
+import {CancelToken} from "data-cancel-token";
 
 export class IEntity {
     server : UnicastServer;
@@ -25,7 +26,7 @@ export abstract class ConfigurableEntityFactory<E extends IEntity> extends Entit
 
         for await ( let device of this.entitiesFromConfig( cancel ) ) {
             devices.push( device );
-            
+
             yield device;
         }
 
