@@ -851,6 +851,26 @@ export class MediaManager {
             return record.title;
         }
     }
+
+    async probe( media : PlayableMediaRecord, readCache: boolean = false, writeCache: boolean = true, updateMetadata: boolean = true ) {
+        const probe = await this.server.mediaTools.probeMedia( media,
+            /* readCache: */ readCache,
+            /* writeCache: */ writeCache );
+
+        if ( updateMetadata ) {
+            const metadata = await this.server.mediaTools.convertToMetadata( probe );
+
+            const table = this.getTable( media.kind );
+
+            if ( table.isChanged( media, { metadata } ) ) {
+                media.metadata = metadata;
+
+                await table.update( media.id, { metadata } );
+            }
+        }
+
+        return probe;
+    }
 }
 
 export class MediaCustomization {

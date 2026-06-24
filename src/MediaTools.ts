@@ -1,3 +1,4 @@
+import * as fs from 'mz/fs';
 import * as path from 'path';
 import { spawn } from 'child_process'
 import { Config } from "./Config";
@@ -6,8 +7,12 @@ import { UnicastServer } from './UnicastServer';
 import * as parseTorrentName from 'parse-torrent-name';
 import { MediaSources, PlayableMediaRecord } from './MediaRecord';
 import { Readable } from 'stream';
-import { SemaphorePool, Synchronized, SynchronizedBy } from 'data-semaphore';
-import { MediaBitDepth, MediaColorSpace, MediaMetadata, MediaMetadataAudio, MediaMetadataSubtitles, MediaMetadataVideo, MediaResolution, MediaSource } from './Database/Tables/AbstractMediaTable';
+import { SemaphorePool, Synchronized } from 'data-semaphore';
+import { MediaBitDepth, MediaColorSpace, MediaKind, MediaMetadata, MediaMetadataAudio, MediaMetadataSubtitles, MediaMetadataVideo, MediaResolution, MediaSource } from './Database/Tables/AbstractMediaTable';
+import * as equals from 'fast-deep-equal';
+import { Logger, pp } from 'clui-logger';
+import { FFmpegProcess } from './Transcoding/FFmpegDriver/FFmpegProcess';
+import * as uid from 'uid';
 
 export class MediaTools {
     public server : UnicastServer;
@@ -35,6 +40,11 @@ export class MediaTools {
     }
 
     protected probeNormalizeTracks ( tracks : any[] ) : TrackMediaProbe[] {
+        const noNan = <T>( value : T ) => {
+            return typeof value === 'number' && isNaN( value )
+                ? null
+                : value;
+        }
         const fps = ( str : string ) => {
             const [ a, b ] = str.split( '/' );
 
@@ -65,18 +75,18 @@ export class MediaTools {
             file: 0,
             type: track.codec_type,
             codec: track.codec_name,
-            bitrate: +track.tags.BPS,
-            size: +track.tags.NUMBER_OF_BYTES,
-            frames: +track.tags.NUMBER_OF_FRAMES,
-            width: +track.width,
-            height: +track.height,
+            bitrate: noNan( +track.tags.BPS ),
+            size: noNan( +track.tags.NUMBER_OF_BYTES ),
+            frames: noNan( +track.tags.NUMBER_OF_FRAMES ),
+            width: noNan( +track.width ),
+            height: noNan( +track.height ),
             aspectRatio: track.display_aspect_ratio,
-            framerate: fps( track.r_frame_rate ),
-            sampleRate: +track.sample_rate,
+            framerate: noNan( fps( track.r_frame_rate ) ),
+            sampleRate: noNan( +track.sample_rate ),
             colorSpace: track.color_space,
             colorTransfer: track.color_transfer,
             colorPrimaries: track.color_primaries,
-            channels: +track.channels,
+            channels: noNan( +track.channels ),
             channelLayout: track.channel_layout,
             // Track each stream's duration as well
             duration: null,
@@ -601,6 +611,18 @@ export class MediaTools {
             () => this.getPixelFormats()
         );
     }
+
+    async getRemuxJob ( media : PlayableMediaRecord ) : Promise<RemuxJob> {
+        const jobRecord = await this.server.dataStore.get( `mediaTools.remuxes.${media.kind}.${media.id}`);
+
+        return jobRecord?.value;
+    }
+
+    async remux( media : PlayableMediaRecord, streams : TrackMediaProbe[], dryRun : boolean = false ) : Promise<void> {
+        const remux = new Remuxer( this.server, media, streams, dryRun );
+
+        await remux.run();
+    }
 }
 
 export enum PixelFormatFlag {
@@ -638,7 +660,7 @@ export interface ParsedName {
 
 export interface TrackMediaProbe {
     index: number;
-    typeIndex: string;
+    typeIndex: number;
     file: number;
     type: 'video' | 'audio' | 'subtitle' | string;
     codec: string;
@@ -780,4 +802,430 @@ export class FFProbe {
             }
         } );
     }
+}
+
+export class Remuxer {
+    public readonly server : UnicastServer;
+
+    public readonly media : PlayableMediaRecord;
+
+    public readonly streams : TrackMediaProbe[];
+
+    public readonly dryRun : boolean;
+
+    public readonly logger : Logger;
+
+    /** == HEARTBEAT SYSTEM ==
+     * While a remux job is running, a timer is running in the background every
+     * `HEARTBEAT_INTERVAL` updating the last heartbeat timestamp.
+     *
+     * If the last heartbeat has been more than `HEARTBEAT_MAX_INTERVAL` ago,
+     * the job will be considered to be dead.
+     *
+     * Of note, every update of the job also counts as an implicit heartbeat,
+     * meaning, if the Job was updated less than `HEARTBEAT_MIN_INTERVAL` ago,
+     * there is no need for the explicit heartbeat to update it again. Instead,
+     * this heartbeat is skipped and the next one is scheduled as usual.
+     */
+
+    /* Interval in milliseconds, where the job is touched */
+    protected readonly HEARTBEAT_INTERVAL = 15 * 1000;
+
+    /* Minimum span of time, in milliseconds, between heartbeats. */
+    protected readonly HEARTBEAT_MIN_INTERVAL = 10 * 1000;
+
+    /* Maximum span of time, in milliseconds, to consider a job dead. */
+    protected readonly HEARTBEAT_MAX_INTERVAL = 60 * 1000;
+
+    /* Minimum interval, in milliseconds, between progress updates. */
+    protected readonly PROGRESS_MIN_INTERVAL = 500;
+
+    protected heartbeatTimer : NodeJS.Timeout | null = null;
+
+    protected status : RemuxJob | null = null;
+
+    protected sourceFilePath : string | null = null;
+
+    protected temporaryFilePath : string | null = null;
+
+    protected folder : string | null = null;
+
+    protected basename : string | null = null;
+
+    protected ext : string | null = null;
+
+    public constructor ( server : UnicastServer, media : PlayableMediaRecord, streams : TrackMediaProbe[], dryRun : boolean ) {
+        this.server = server;
+        this.media = media;
+        this.streams = streams;
+        this.dryRun = dryRun;
+        this.logger = this.server.logger.service( 'remuxer' );
+    }
+
+    protected startHeartbeat() {
+        // If there is already a heartbeat running, do nothing
+        if (this.heartbeatTimer != null) {
+            return;
+        }
+
+        const tick = () => {
+            this.heartbeatTimer = setTimeout(async () => {
+                // Only start heart-beating when the job status has been initially
+                // registered on the DB
+                if ( this.status != null ) {
+                    await this.updateJob({});
+                }
+
+                // Make sure the heartbeat was not cancelled while we were updating the database
+                if (this.heartbeatTimer != null) {
+                    tick();
+                }
+            }, this.HEARTBEAT_INTERVAL);
+        };
+
+        tick();
+    }
+
+    protected stopHeartbeat() {
+        if (this.heartbeatTimer == null) {
+            clearTimeout(this.heartbeatTimer);
+
+            this.heartbeatTimer = null;
+        }
+    }
+
+    @Synchronized()
+    protected async updateJob(update : Partial<RemuxJob>) {
+        if (this.status == null) {
+            throw new Error(`Could not update remux job status, because status was not initialized for the first time.`);
+        }
+
+        const now = Date.now();
+
+        this.status = {
+            ...this.status!,
+            ...update,
+            lastHeartbeat: now,
+            nextHeartbeat: now + this.HEARTBEAT_MAX_INTERVAL,
+        };
+
+        await this.server.dataStore.store(`mediaTools.remuxes.${this.media.kind}.${this.media.id}`, this.status);
+    }
+
+    protected async failJob(err : Error) {
+        const errorMessage = err?.message ?? err?.toString() ?? '<undefined>';
+
+        await this.updateJob({ errorMessage });
+    }
+
+    protected async stageQueue() {
+        this.status = {
+            mediaId: this.media.id,
+            mediaKind: this.media.kind,
+            streams: this.streams,
+            stage: RemuxJobStage.Queued,
+            stageProgress: 0,
+            nextHeartbeat: Date.now() + this.HEARTBEAT_MAX_INTERVAL,
+            lastHeartbeat: null,
+        };
+
+        await this.updateJob({});
+    }
+
+    protected async stagePreChecks() {
+        await this.updateJob({
+            stage: RemuxJobStage.PreChecks,
+            stageProgress: 0,
+        });
+
+        const filePath = this.media.sources?.[ 0 ]?.id;
+
+        if ( filePath == null ) {
+            throw new Error(`Could not find a file path in the sources object.`);
+        }
+
+        if ( !await fs.access( filePath ).then( () => true, () => false ) ) {
+            throw new Error( `File path ${filePath} is not accessible.` );
+        }
+
+        const latestProbe = await this.server.mediaTools.probe( filePath );
+
+        const cachedProbe = await this.server.media.getTable( this.media.kind ).relations.probe.load( this.media );
+
+        const removeUndefineds = <T>( obj : T ) => {
+            if ( typeof obj !== 'object' || obj == null ) {
+                return obj;
+            }
+
+            obj = {...obj};
+
+            for ( const key of Object.keys( obj ) ) {
+                if ( obj[ key ] === void 0 ) {
+                    delete obj[ key ];
+                }
+            }
+
+            return obj;
+        }
+
+        if ( cachedProbe == null || !equals( latestProbe.tracks.map( removeUndefineds ), cachedProbe.metadata.tracks ) ) {
+            console.log(latestProbe.tracks.map( removeUndefineds ), cachedProbe.metadata.tracks);
+            throw new Error( `Cached probe does not match actual probe. The file might have changed in the meantime. Please refresh the cached probe and try again, to avoid errors.` );
+        }
+
+        this.sourceFilePath = filePath;
+
+        this.folder = path.dirname( this.sourceFilePath );
+
+        if ( !await fs.access( this.folder ).then( () => true, () => false ) ) {
+            throw new Error( `Folder ${this.folder} is not accessible.` );
+        }
+
+        this.ext = path.extname( this.sourceFilePath );
+        this.basename = path.basename( this.sourceFilePath, this.ext );
+
+        const temporaryFilePath = path.join( this.folder, this.basename + ".REMUX." + uid() + this.ext );
+
+        // This one is the opposite, fails if the file already exists instead of if it doesn't
+        if ( await fs.access( temporaryFilePath ).then( () => true, () => false ) ) {
+            throw new Error( `Temporary file ${temporaryFilePath} already exists.` );
+        }
+
+        this.temporaryFilePath = temporaryFilePath;
+
+        await this.updateJob({
+            stageProgress: 100,
+        });
+    }
+
+    protected async stageRunning() {
+        await this.updateJob( {
+            stage: RemuxJobStage.Running,
+            stageProgress: 0,
+        } );
+
+        const args: string[] = [
+            '-i', this.sourceFilePath
+        ];
+
+        if ( this.streams.some( stream => stream.type === 'video' ) ) {
+            args.push( '-c:v', 'copy' );
+        }
+
+        if ( this.streams.some( stream => stream.type === 'audio' ) ) {
+            args.push( '-c:a', 'copy' );
+        }
+
+        let index = 0;
+        for ( const stream of this.streams ) {
+            // Map the stream, where the '0' on the left is the index of the file
+            // (when remuxing, we are dealing only with one file), and on the right
+            // is the index of the stream to map
+            args.push( '-map', '0:' + stream.index );
+
+            const dispositions = [
+                (stream.original ? '+' : '-' ) + 'original',
+                (stream.default ? '+' : '-' ) + 'default',
+                (stream.forced ? '+' : '-' ) + 'forced',
+                (stream.hearingImpaired ? '+' : '-' ) + 'hearing_impaired',
+            ].join( '' );
+
+            args.push( '-disposition:' + index, dispositions );
+            index += 1;
+        }
+
+        // Enable progress information to be parsed by the FFmpegProcess class below
+        args.push( '-loglevel', 'error' );
+        args.push( '-stats' );
+
+        // Finally, push the output file name
+        args.push( this.temporaryFilePath );
+
+        if ( this.dryRun ) {
+            this.logger.info(pp!`Dry running command "ffmpeg ${ args.join( ' ' ) }"`);
+            return;
+        }
+
+        this.logger.info(pp!`Running command "ffmpeg ${ args.join( ' ' ) }"`);
+
+        const process = new FFmpegProcess( this.server.mediaTools.getCommandPath(), args );
+
+        let lastProgressTime : number | null = null;
+
+        process.onProgress.subscribe( async progress => {
+            const now = Date.now();
+
+            if ( lastProgressTime == null || lastProgressTime + this.PROGRESS_MIN_INTERVAL <= now ) {
+                lastProgressTime = now;
+
+                this.logger.info("time " + progress.time.toHumanString());
+                this.logger.info("duration " + progress.duration.toHumanString());
+                this.logger.info("progress " + progress.percentage);
+                await this.updateJob( {
+                    stageProgress: progress.percentage
+                } );
+            }
+        } );
+
+        const duration = Math.max(0, ...this.streams.map(s => s.duration).filter( d => d != null && d > 0 ) );
+
+        process.run( duration );
+
+        await process.wait();
+
+        await this.updateJob( {
+            stage: RemuxJobStage.Running,
+            stageProgress: 100,
+        } );
+    }
+
+    protected async stagePostChecks() {
+        await this.updateJob( {
+            stage: RemuxJobStage.PostChecks,
+            stageProgress: 0,
+        } );
+
+        const outputProbe = await this.server.mediaTools.probe( this.temporaryFilePath );
+
+        if ( outputProbe.tracks.length != this.streams.length ) {
+            throw new Error(`Wrong number of streams on output file: got ${outputProbe.tracks.length}, expected ${this.streams.length}`);
+        }
+
+        for ( let i = 0; i < this.streams.length; i++ ) {
+            const outputStream = outputProbe.tracks[i];
+            const expectedStream = this.streams[i];
+
+            if ( outputStream.type != expectedStream.type ) {
+                throw new Error(`Wrong stream index ${i + 1} property "type": got ${outputStream.type}, expected ${expectedStream.type}`);
+            }
+
+            if ( outputStream.language != expectedStream.language ) {
+                throw new Error(`Wrong stream index ${i + 1} property "language": got ${outputStream.language}, expected ${expectedStream.language}`);
+            }
+
+            if ( outputStream.title != expectedStream.title ) {
+                throw new Error(`Wrong stream index ${i + 1} property "title": got ${outputStream.title}, expected ${expectedStream.title}`);
+            }
+
+            if ( outputStream.original != expectedStream.original ) {
+                throw new Error(`Wrong stream index ${i + 1} property "original": got ${outputStream.original}, expected ${expectedStream.original}`);
+            }
+
+            if ( outputStream.default != expectedStream.default ) {
+                throw new Error(`Wrong stream index ${i + 1} property "default": got ${outputStream.default}, expected ${expectedStream.default}`);
+            }
+
+            if ( outputStream.forced != expectedStream.forced ) {
+                throw new Error(`Wrong stream index ${i + 1} property "forced": got ${outputStream.forced}, expected ${expectedStream.forced}`);
+            }
+
+            if ( outputStream.hearingImpaired != expectedStream.hearingImpaired ) {
+                throw new Error(`Wrong stream index ${i + 1} property "hearingImpaired": got ${outputStream.hearingImpaired}, expected ${expectedStream.hearingImpaired}`);
+            }
+        }
+
+        await this.updateJob( {
+            stage: RemuxJobStage.PostChecks,
+            stageProgress: 100,
+        } );
+
+        return outputProbe;
+    }
+
+    protected async stageRenaming() {
+        await this.updateJob( {
+            stage: RemuxJobStage.Renaming,
+            stageProgress: 0,
+        } );
+
+        const newSourceFileName = path.join( this.folder, this.basename + ".ORIGINAL." + uid() + this.ext );
+
+        await fs.rename( this.sourceFilePath, newSourceFileName );
+
+        await fs.rename( this.temporaryFilePath, this.sourceFilePath );
+
+        await this.updateJob( {
+            stage: RemuxJobStage.Renaming,
+            stageProgress: 100,
+        } );
+    }
+
+    protected async stageUpdateMetadata() {
+        await this.updateJob( {
+            stage: RemuxJobStage.UpdateMetadata,
+            stageProgress: 0,
+        } );
+
+        await this.server.media.probe( this.media,
+            /* readCache: */ false,
+            /* writeCache: */ true,
+            /* updateMetadata: */ true );
+
+        await this.updateJob( {
+            stage: RemuxJobStage.UpdateMetadata,
+            stageProgress: 100,
+        } );
+    }
+
+    protected async stageFinished() {
+        await this.updateJob({
+            stage: RemuxJobStage.Finished,
+            stageProgress: 100
+        });
+    }
+
+    public async run() : Promise<void> {
+        this.startHeartbeat();
+
+        try {
+            await this.stageQueue();
+
+            await this.stagePreChecks();
+
+            if ( !this.dryRun ) {
+                await this.stageRunning();
+
+                await this.stagePostChecks();
+
+                await this.stageRenaming();
+
+                await this.stageUpdateMetadata();
+            }
+
+            await this.stageFinished();
+        } catch (err) {
+            // Do not await on purpose, register the failed job synchronously
+            // with rethrowing the exception
+            // noinspection ES6MissingAwait
+            this.failJob(err);
+
+            throw err;
+        } finally {
+            this.stopHeartbeat();
+        }
+    }
+}
+
+export interface RemuxJob {
+    // Parameters
+    mediaKind : MediaKind;
+    mediaId : string;
+    streams : TrackMediaProbe[];
+
+    // Progress Info
+    stage : RemuxJobStage;
+    stageProgress : number;
+    errorMessage ?: string;
+    lastHeartbeat ?: number;
+    nextHeartbeat : number;
+}
+
+export enum RemuxJobStage {
+    Queued = 'queued',
+    PreChecks = 'pre-checks',
+    Running = 'running',
+    PostChecks = 'post-checks',
+    Renaming = 'renaming',
+    UpdateMetadata = 'update-metadata',
+    Finished = 'finished',
 }

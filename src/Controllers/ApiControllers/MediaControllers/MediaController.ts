@@ -1,7 +1,7 @@
 import { BaseTableController, RequestQuery } from "../../BaseTableController";
 import { Request, Response } from "restify";
 import { MediaRecord, ArtRecord, isPlayableRecord, PersonRecord } from "../../../MediaRecord";
-import { Route } from "../../BaseController";
+import { Route, ValidateBody } from "../../BaseController";
 import { MediaTrigger } from "../../../TriggerDb";
 import { AbstractMediaTable } from "../../../Database/Database";
 import { ResourceNotFoundError, InvalidArgumentError } from 'restify-errors';
@@ -9,6 +9,8 @@ import { MediaRecordQuerySemantics, QueryAst, QueryLang, QuerySemantics } from '
 import { Knex } from 'knex';
 import { PlayableMediaQualities } from './MoviesController';
 import { DistinctMultipleJsonColumns } from '../../../Database/Tables/BaseTable';
+import * as schema from '@gallant/schema';
+import {retry} from "../../../ES2017/Retry";
 
 export abstract class MediaTableController<R extends MediaRecord, T extends AbstractMediaTable<R> = AbstractMediaTable<R>> extends BaseTableController<R, T> {
     createCustomQuerySemantics ( req: Request, ast : QueryAst ) : QuerySemantics<R> {
@@ -315,7 +317,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
     }
 
     @Route( 'get', '/:id/probe' )
-    async probe ( req : Request, res : Response ) {
+    async getProbe ( req : Request, res : Response ) {
         const media = await this.table.tryGet( req.params.id );
 
         if ( !media ) {
@@ -325,6 +327,96 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
         const probe = await this.table.relations.probe.load( media );
 
         return probe;
+    }
+
+    @ValidateBody( schema.parse( `{
+        readCache?: boolean;
+        writeCache?: boolean;
+    }` ) )
+    @Route( 'post', '/:id/probe' )
+    async probe ( req : Request, res : Response ) {
+        const media = await this.table.tryGet( req.params.id );
+
+        // By default, read cache is false, as we assume requests made to this endpoint always want to probe the actual media
+        // However, we can set it to true if we just want to "recalculate" the metadata based on the cached probe
+        const readCache = !!(req.body.readCache ?? false);
+        // By default, write cache is set to true, as we assume requests made to this endpoint always want their results to
+        // persist. However, we can set it to false, if we just want to get the latest probe, but not store it.
+        // In those scenarios, we also do not update the metadata
+        const writeCache = !!(req.body.writeCache ?? true);
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( `Cannot probe metadata for media ${ media.id } of kind ${ media.kind } because it is not a playable media kind.` );
+        }
+
+        return await this.server.media.probe( media,
+            /* readCache: */ readCache,
+            /* writeCache: */ writeCache,
+            // Take the value of the parameter `writeCache` as a proxy to whether we want to update the record metadata
+            /* updateMetadata: */ writeCache );
+    }
+
+    @Route( 'get', '/:id/remux' )
+    async getRemuxStatus ( req : Request, res : Response ) {
+        const media = await this.table.tryGet( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( `Cannot get remux status for media ${ media.id } of kind ${ media.kind } because it is not a playable media kind.` );
+        }
+
+        return this.server.mediaTools.getRemuxJob( media );
+    }
+
+    @ValidateBody( schema.parse( `{
+        streams: {
+            index: number;
+            type: 'video' | 'audio' | 'subtitle';
+            language?: string;
+            title?: string;
+            original?: boolean;
+            default?: boolean;
+            forced?: boolean;
+            hearingImpaired?: boolean;
+        }[];
+        dryRun?: boolean;
+    }` ) )
+    @Route( 'post', '/:id/remux' )
+    async remux ( req : Request, res : Response ) {
+        const media = await this.table.tryGet( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( `Cannot remux media ${ media.id } of kind ${ media.kind } because it is not a playable media kind.` );
+        }
+
+        const streams = req.body.streams;
+        const dryRun = req.body.dryRun ?? false;
+
+        // Do not await on the result synchronously, since this spawns a background task
+        // And progress is tracked by querying the GET version of this endpoint
+        this.server.mediaTools.remux( media, streams, dryRun )
+            .catch( err => this.server.onError.notify( err ) );
+
+        return retry(async () => {
+            const remuxJob = await this.server.mediaTools.getRemuxJob( media );
+
+            if (remuxJob == null) {
+                throw new Error('Remux job could not be queued.');
+            }
+
+            return remuxJob;
+        })
     }
 
     @Route( 'post', '/:id/watch/:status' )
