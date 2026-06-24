@@ -24,7 +24,7 @@ export interface IVirtualRepository {
 // And thus with an interface we retain all the good static typing, and with the abstract class we get to implement any default behaviour
 export interface IMediaRepository {
     server : UnicastServer;
-    
+
     name : string;
 
     readonly indexable : boolean;
@@ -44,10 +44,12 @@ export interface IMediaRepository {
     scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, reporter ?: MediaSyncTask | LoggerInterface ) : AsyncIterable<T>;
 
     search<T extends MediaRecord> ( query : string ) : Promise<T[]>;
-    
+
     watch ? ( kind : MediaKind, id : string, watched ?: boolean ) : Promise<void>;
 
     isMediaReachable ( record : MediaRecord ) : Promise<boolean>;
+
+    getRepositoryPaths ( record : MediaRecord ) : string[];
 
     setPreferredMedia ( kind : MediaKind, matchedId : string, preferredId : string ) : void;
 
@@ -88,6 +90,8 @@ export abstract class MediaRepository implements IEntity, IMediaRepository {
     isMediaReachable ( record : MediaRecord ) : Promise<boolean> {
         return Promise.resolve( true );
     }
+
+    abstract getRepositoryPaths ( record : MediaRecord ) : string[];
 
     abstract scan<T extends MediaRecord> ( filterKind ?: MediaKind[], snapshot ?: MediaSyncSnapshot, refreshConditions ?: MediaRecordFilter[], cache ?: CacheOptions, reporter ?: MediaSyncTask | LoggerInterface ) : AsyncIterable<T>;
 
