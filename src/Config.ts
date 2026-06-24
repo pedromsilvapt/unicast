@@ -221,7 +221,7 @@ export class Config {
                 configKey = configKey.substring( 'NUMBER_'.length );
                 configValue = parseFloat( configValue as string );
             } else {
-                throw new Error( `Invalid environment config type: ${ configKeys }` );
+                console.warn(`"Skipping config ${envKey}, missing type suffix.`);
             }
 
             ObjectPath.set( data, configKey, configValue );
