@@ -112,6 +112,89 @@ docker-all:
           --platform=linux/arm64 \
           +docker
 
+serve:
+    WAIT
+        BUILD +docker
+    END
+
+    LOCALLY
+    RUN docker run --rm \
+        --name unicast-dev \
+        -v ./storage:/app/data \
+        -v ./config/local.yaml:/app/configs/local.yaml:ro \
+        -v /storage:/storage \
+        -e ACTUAL_URL=https://actual.pedro.home/ \
+        -p 3031:8080 \
+        gitea.home/silvas/unicast:dev
+
+major:
+    BUILD +bump --ACTION=major
+
+minor:
+    BUILD +bump --ACTION=minor
+
+patch:
+    BUILD +bump --ACTION=patch
+
+retag:
+    BUILD +bump --ACTION=retag
+
+bump:
+    ARG ACTION
+    ARG PUSH='1'
+    FROM node:14.17.3-alpine
+
+    # fig: config-file editor, used to read/set the version in the JSON files
+    ARG FIG_VERSION='v3.6.0'
+    ARG FIG_URL="https://github.com/diaryx-org/fig/releases/download/cli%2F${FIG_VERSION}/fig-linux-x86_64.tar.gz"
+    RUN wget -qO /tmp/fig.tar.gz "${FIG_URL}" \
+        && tar -xzf /tmp/fig.tar.gz -C /usr/local/bin \
+        && chmod +x /usr/local/bin/fig
+
+    COPY --if-exists package.json package-lock.json ./
+
+    WAIT
+        # Read the current version from package.json (no prerelease suffix assumed),
+        # bump the requested component (zeroing lower ones) unless ACTION is retag.
+        RUN set -e; \
+            cur=$(fig get package.json version | tr -d '"'); \
+            OIFS=$IFS; IFS=.; set -- $cur; IFS=$OIFS; \
+            major=${1:-0}; \
+            minor=${2:-0}; \
+            patch=${3:-0}; \
+            if [ "${ACTION}" != retag ]; then \
+                case "${ACTION}" in \
+                    major) major=$((major + 1)); minor=0; patch=0 ;; \
+                    minor) minor=$((minor + 1)); patch=0 ;; \
+                    patch) patch=$((patch + 1)) ;; \
+                    *) echo "ACTION must be major, minor, patch or retag" >&2; exit 1 ;; \
+                esac; \
+            fi; \
+            fig set package.json version "${major}.${minor}.${patch}"; \
+            if [ -f package-lock.json ]; then \
+                fig set package-lock.json version "${major}.${minor}.${patch}"; \
+            fi
+
+        SAVE ARTIFACT package.json AS LOCAL package.json
+        SAVE ARTIFACT package-lock.json AS LOCAL package-lock.json
+    END
+
+    LOCALLY
+    RUN new=$(node -p "require('./package.json').version") \
+        && if [ "${ACTION}" != retag ]; then \
+            git add package.json package-lock.json \
+            && git commit -m "chore: bump version to ${new}" -- package.json package-lock.json \
+            && git tag -a "v${new}" -m "Release v${new}" HEAD \
+            && (if [ "${PUSH}" = "1" ]; then \
+                git push && git push origin "v${new}"; \
+            fi) \
+        else \
+            git tag -f -a "v${new}" -m "Release v${new}" HEAD \
+            && (if [ "${PUSH}" = "1" ]; then \
+                git push --force-with-lease && git push -f origin "v${new}"; \
+            fi) \
+        fi
+
 all:
     BUILD +build
     BUILD +docker
