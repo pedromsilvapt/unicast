@@ -2,6 +2,7 @@ import { SubtitlesMediaStream } from "../../../../MediaProviders/MediaStreams/Su
 import { YoutubeMediaSource } from "../YoutubeMediaSource";
 import { MediaRange } from "../../../../MediaProviders/MediaStreams/MediaStream";
 import * as mime from 'mime';
+import * as path from 'path';
 import { YoutubeSubtitleResult } from "../SubtitlesDownloader";
 import * as got from 'got';
 import * as rangeStream from 'range-stream';
@@ -17,6 +18,23 @@ export class YoutubeSubtitlesMediaStream extends SubtitlesMediaStream {
     options : YoutubeSubtitleResult;
 
     contentCache ?: string = null;
+
+    get name () : string {
+        const title = this.source?.videoInfo?.player_response?.videoDetails?.title;
+
+        const lang = this.options?.language || this.options?.translation;
+
+        let base : string;
+
+        // TODO Improve the fallback naming, check if all the ?? || are really necessary
+        if ( title ) {
+            base = lang ? `${ title }.${ lang }` : title;
+        } else {
+            base = lang || this.file || this.id;
+        }
+
+        return path.basename( String( base ), path.extname( String( base ) ) );
+    }
 
     constructor ( file : string, source : YoutubeMediaSource, options : YoutubeSubtitleResult ) {
         super( file, source );
@@ -44,7 +62,7 @@ export class YoutubeSubtitlesMediaStream extends SubtitlesMediaStream {
 
     open ( range : MediaRange = {} ) : NodeJS.ReadableStream {
         const options : any = {};
-        
+
         if ( typeof range.start === 'number' ) {
             options.start = range.start;
         }

@@ -32,21 +32,23 @@ export class FileSystemMediaSource extends MediaSource {
             //     streams.push( new FileSystemEmbeddedSubtitleStream( this, `${file}?${track.index}`, this.source, track ) );
             // }
 
-            const folder = path.dirname( file );
+            if ( !this.details.single ) {
+                const folder = path.dirname( file );
 
-            const filePrefix = path.basename( file, path.extname( file ) );
+                const filePrefix = path.basename( file, path.extname( file ) );
 
-            const otherFiles = await fs.readdir( folder );
+                const otherFiles = await fs.readdir( folder );
 
-            const matchingFiles = otherFiles
-                .filter( file => file.startsWith( filePrefix ) )
-                .filter( file => isSubtitle( file ) );
+                const matchingFiles = otherFiles
+                    .filter( file => file.startsWith( filePrefix ) )
+                    .filter( file => isSubtitle( file ) );
 
-            const exactMatches = matchingFiles.filter( file => path.basename( file, path.extname( file ) ) === filePrefix );
-            const partialMatches = matchingFiles.filter( file => path.basename( file, path.extname( file ) ) !== filePrefix );
+                const exactMatches = matchingFiles.filter( file => path.basename( file, path.extname( file ) ) === filePrefix );
+                const partialMatches = matchingFiles.filter( file => path.basename( file, path.extname( file ) ) !== filePrefix );
 
-            for ( let file of [ ...exactMatches, ...partialMatches ] ) {
-                streams.push( new FileSystemSubtitlesMediaStream( path.join( folder, file ), this ) );
+                for ( let file of [ ...exactMatches, ...partialMatches ] ) {
+                    streams.push( new FileSystemSubtitlesMediaStream( path.join( folder, file ), this ) );
+                }
             }
         }
 

@@ -16,10 +16,14 @@ export class SubtitlesConvertMediaStream extends SubtitlesMediaStream {
     seekable : boolean = false;
 
     stream : SubtitlesMediaStream;
-    
+
     format : string = 'vtt';
-    
+
     mime : string = 'text/vtt';
+
+    get name () : string {
+        return this.stream.name;
+    }
 
     constructor ( stream : SubtitlesMediaStream ) {
         super( stream.id, stream.source );

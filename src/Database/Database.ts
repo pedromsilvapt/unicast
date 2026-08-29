@@ -70,6 +70,9 @@ import { SubtitlesTable, SubtitleRecord } from './Tables/SubtitlesTable';
 import { MediaProbesTable } from './Tables/MediaProbesTable';
 export { SubtitlesTable, SubtitleRecord };
 
+import { MediaSourcesCacheTable, MediaSourceCacheRecord, MediaSourceCacheState } from './Tables/MediaSourcesCacheTable';
+export { MediaSourcesCacheTable, MediaSourceCacheRecord, MediaSourceCacheState };
+
 export class DatabaseKnexLogger {
     protected logger : LoggerInterface;
 
@@ -271,6 +274,8 @@ export class DatabaseTables {
 
     storage : StorageTable;
 
+    mediaSourcesCache : MediaSourcesCacheTable;
+
     constructor ( database : Database ) {
         this.media = new MediaTable( database );
 
@@ -307,6 +312,8 @@ export class DatabaseTables {
         this.jobsQueue = new JobsQueueTable( database );
 
         this.storage = new StorageTable( database );
+
+        this.mediaSourcesCache = new MediaSourcesCacheTable( database );
     }
 
     async install () {
@@ -343,6 +350,8 @@ export class DatabaseTables {
         await this.jobsQueue.install();
 
         await this.storage.install();
+
+        await this.mediaSourcesCache.install();
     }
 
     tables ( includeHistory: boolean = false ): BaseTable<any>[] {
@@ -363,6 +372,7 @@ export class DatabaseTables {
             this.subtitles,
             this.jobsQueue,
             this.storage,
+            this.mediaSourcesCache,
         ].flatMap( table => {
             if ( includeHistory ) {
                 return [ table, table.changesHistory ];

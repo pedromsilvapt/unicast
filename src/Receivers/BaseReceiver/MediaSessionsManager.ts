@@ -182,7 +182,7 @@ export class MediaSessionsManager {
 
             const record = await this.mediaManager.get( history.mediaKind, history.mediaId ) as PlayableMediaRecord;
 
-            const originalStreams = await this.mediaManager.providers.streams( record.sources );
+            const originalStreams = await this.mediaManager.getStreams( record );
 
             const transcoding = this.receiver.transcoder ? await this.receiver.transcoder.transcode( history, record, originalStreams, history.transcoding || {}, cancel ) : null;
 

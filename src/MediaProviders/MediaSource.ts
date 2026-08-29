@@ -19,6 +19,10 @@ export interface MediaSourceDetails {
 
     scraper ?: string;
 
+    // When true, file-type providers only return the exact stream for the given id,
+    // skipping any sibling-file discovery (e.g. external subtitles next to a video).
+    single ?: boolean;
+
     [ property : string ] : any;
 }
 

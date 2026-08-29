@@ -6,16 +6,45 @@ import * as fs from 'mz/fs';
 import * as sharp from 'sharp';
 import { MediaKind } from "./MediaRecord";
 import * as path from 'path';
+import { CancelToken, CancelledError } from 'data-cancel-token';
 
 export interface ArtworkCacheOptions {
     width ?: number;
     readCache ?: boolean
 }
 
-export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.WritableStream | string ) : Promise<void> {
+export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.WritableStream | string, cancel ?: CancelToken ) : Promise<void> {
     return new Promise<void>( ( resolve, reject ) => {
         if ( typeof output === 'string' ) {
             output = fs.createWriteStream( output );
+        }
+
+        let cancelled = false;
+
+        const onCancel = () => {
+            if ( cancelled ) return;
+
+            cancelled = true;
+
+            if ( typeof ( input as any ).destroy === 'function' ) {
+                ( input as any ).destroy();
+            }
+
+            if ( typeof ( output as any ).destroy === 'function' ) {
+                ( output as any ).destroy();
+            }
+
+            reject( new CancelledError( cancel ) );
+        };
+
+        if ( cancel ) {
+            if ( cancel.cancellationRequested ) {
+                onCancel();
+
+                return;
+            }
+
+            cancel.cancellationPromise.then( onCancel );
         }
 
         input.pipe( output );

@@ -23,7 +23,7 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
     readonly isTranscoded = true;
 
     session : HistoryRecord;
-    
+
     inputStream : VideoMediaStream;
 
     storage : Storage;
@@ -41,6 +41,10 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
     size : number = null;
 
     mime : string = 'application/x-mpegurl';
+
+    get name () : string {
+        return String( this.session.id );
+    }
 
     get file () : string {
         return path.join( this.folder, 'index.m3u8' );
@@ -77,7 +81,7 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
 
     async refresh () {
         await this.task.segments.waitFor( 2 );
-        
+
         if ( !this.virtual ) {
             this.virtual = new HlsVirtualPlaylist( this.task );
 
@@ -98,7 +102,7 @@ export class HlsVideoMediaStream extends VideoMediaStream implements TranscodedM
     close ( stream ?: NodeJS.ReadableStream ) {
         if ( !stream ) {
             this.inputStream.close();
-            
+
             this.task.setStateCancel();
         }
     }
@@ -112,6 +116,12 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
     index : HlsVideoMediaStream;
 
     part : string;
+
+    get name () : string {
+        const partBase = path.basename( this.part, path.extname( this.part ) );
+
+        return `${ this.index.name }-${ partBase }`;
+    }
 
     get file () : string {
         return path.join( this.index.folder, this.index.task.segments.get( this.number ).id, this.part )
@@ -131,10 +141,10 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
         this.part = part;
     }
 
-    async init () : Promise<void> { 
+    async init () : Promise<void> {
         if ( !this.index.task.segments.has( this.number + 3 ) || !this.index.task.segments.has( this.number + 3 ) ) {
             this.index.task.scheduler.request( this.number );
-            
+
             await this.index.task.segments.waitFor( Math.min( this.number + 3, this.index.task.segments.totalCount - 1 ) );
             await this.index.task.segments.waitFor( this.number );
         }
@@ -180,10 +190,10 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
     }
 
     open ( range ?: MediaRange ) : NodeJS.ReadableStream {
-        const stream = new Readable( { 
+        const stream = new Readable( {
             read () {
                 return null;
-            } 
+            }
         } );
 
         this.openAsync( range, stream )
@@ -192,7 +202,7 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
         return stream;
         // console.log( 'open', this.index.task.segments.get( this.number ).id, this.number, this.index.task.getSegmentTime( this.number ), range );
         // const options : any = {};
-        
+
         // if ( typeof range.start === 'number' ) {
         //     options.start = range.start;
         // }
@@ -205,7 +215,7 @@ export class HlsSegmentVideoMediaStream extends VideoMediaStream {
 
         // return fs.createReadStream( this.file, range );
     }
-    
+
     toJSON () {
         return {
             ...super.toJSON(),

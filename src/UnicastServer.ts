@@ -1,7 +1,7 @@
-import { ProvidersManager, MediaSourceLike } from "./MediaProviders/ProvidersManager";
+import { ProvidersManager, MediaSourceLike, CacheOptions } from "./MediaProviders/ProvidersManager";
 import { RepositoriesManager } from "./MediaRepositories/RepositoriesManager";
 import { MediaKind, MediaRecord, CustomMediaRecord, TvEpisodeMediaRecord, TvSeasonMediaRecord, TvShowMediaRecord, MovieMediaRecord, PlayableMediaRecord, PersonRecord, isTvEpisodeRecord, isTvSeasonRecord, isMovieRecord, isTvShowRecord, isCustomRecord } from "./MediaRecord";
-import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable, AbstractMediaTable } from "./Database/Database";
+import { Database, BaseTable, CollectionRecord, MediaTable, UserRankRecord, UserRanksTable, AbstractMediaTable, MediaSourceCacheRecord } from "./Database/Database";
 import { Config } from "./Config";
 import * as restify from 'restify';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
@@ -26,6 +26,7 @@ import { serveMedia } from "./ES2017/HttpServeMedia";
 import { ScrapersManager } from "./MediaScrapers/ScrapersManager";
 import { SmartCollectionsManager } from './SmartCollections/SmartCollectionsManager';
 import { CustomActionsManager } from './CustomActions/CustomActionsManager';
+import { MediaSourceCacheManager } from './MediaSourcesCache/MediaSourceCacheManager';
 import { exec } from "mz/child_process";
 import { ToolsManager } from "./Tools/ToolsManager";
 import { ExtensionsManager } from "./ExtensionsManager";
@@ -47,6 +48,7 @@ import { queryParser } from './ES2017/QueryParser';
 import { MediaTools } from './MediaTools';
 import {MediaSourceDetails} from "./MediaProviders/MediaSource";
 import {Next, Request, Response} from "restify";
+import * as fs from 'mz/fs';
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -94,6 +96,8 @@ export class UnicastServer {
     readonly triggerdb : TriggerDb;
 
     readonly transcoding : TranscodingManager;
+
+    readonly mediaSourcesCache : MediaSourceCacheManager;
 
     readonly loggerBackend : FilterBackend;
 
@@ -162,6 +166,8 @@ export class UnicastServer {
         this.triggerdb = new TriggerDb( this );
 
         this.transcoding = new TranscodingManager( this );
+
+        this.mediaSourcesCache = new MediaSourceCacheManager( this );
 
         this.http = new MultiServer( [ restify.createServer( {
             ignoreTrailingSlash: true,
@@ -298,6 +304,8 @@ export class UnicastServer {
 
         await this.database.install();
 
+        this.mediaSourcesCache.start();
+
         await this.http.listen( [ port, sslPort ] );
 
         await this.onListen.notify();
@@ -334,6 +342,8 @@ export class UnicastServer {
 
     async close ( timeout : number = 0 ) {
         this.logger.info( 'unicast', 'Shutting down...' );
+
+        this.mediaSourcesCache.stop();
 
         await Promise.race( [
             this.onClose.notify(),
@@ -402,7 +412,7 @@ export class HttpRawMediaServer {
                 throw new Error( `Record does not have sources.` );
             }
 
-            const streams = await this.server.providers.streams( record.sources );
+            const streams = await this.server.media.getStreams( record );
 
             const stream = streams.find( stream => stream.id == req.params.stream );
 
@@ -852,6 +862,40 @@ export class MediaManager {
         const key = this.getOriginalSourcesKey( record );
 
         await this.server.dataStore.delete( key );
+    }
+
+    async getCachedSources ( record : PlayableMediaRecord ) : Promise<MediaSourceDetails[] | null> {
+        const row = await this.database.tables.mediaSourcesCache.findOne<MediaSourceCacheRecord>(
+            query => query.where( { mediaId: record.id, mediaKind: record.kind } )
+        );
+
+        if ( row == null || row.state !== 'ready' ) {
+            return null;
+        }
+
+        return row.sources;
+    }
+
+    async clearSourceCache ( record : PlayableMediaRecord ) : Promise<void> {
+        await this.database.tables.mediaSourcesCache.deleteMany(
+            query => query.where( { mediaId: record.id, mediaKind: record.kind } )
+        );
+    }
+
+    async getStreams ( record : PlayableMediaRecord, cacheOptions : CacheOptions = {} ) : Promise<import("./MediaProviders/MediaStreams/MediaStream").MediaStream[]> {
+        const cached = await this.getCachedSources( record );
+
+        if ( cached != null ) {
+            const allExist = await Promise.all( cached.map( s => fs.exists( s.id ) ) );
+
+            if ( allExist.every( Boolean ) ) {
+                return this.providers.streams( cached, cacheOptions );
+            }
+
+            await this.server.mediaSourcesCache.clearSourceCacheFiles( record );
+        }
+
+        return this.providers.streams( record.sources, cacheOptions );
     }
 
     async humanize ( record: MediaRecord ): Promise<string> {

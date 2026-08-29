@@ -12,6 +12,14 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
 
     file : string;
 
+    get name () : string {
+        return path.basename( this.file, path.extname( this.file ) );
+    }
+
+    get extension () : string {
+        return path.extname( this.file ).slice( 1 ) || null;
+    }
+
     constructor ( file : string, source : FileSystemMediaSource, metadata : any = null ) {
         super( file, source );
 

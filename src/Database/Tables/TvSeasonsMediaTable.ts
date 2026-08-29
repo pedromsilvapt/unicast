@@ -43,7 +43,7 @@ export class TvSeasonsMediaTable extends AbstractMediaTable<TvSeasonMediaRecord>
         collections: ManyToManyRelation<TvSeasonMediaRecord, CollectionRecord>,
         cast: ManyToManyRelation<TvSeasonMediaRecord, PersonRecord>,
         probe: HasOneRelation<TvSeasonMediaRecord, MediaProbeRecord>,
-        show: BelongsToOneRelation<TvSeasonMediaRecord, TvShowMediaRecord>,
+        show: BelongsToOneRelation<TvSeasonMediaRecord, TvShowMediaRecord, { tvShow: TvShowMediaRecord }>,
         episodes: HasManyRelation<TvSeasonMediaRecord, TvEpisodeMediaRecord>,
     };
 

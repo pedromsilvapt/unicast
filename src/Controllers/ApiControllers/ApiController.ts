@@ -16,8 +16,10 @@ import { PeopleController } from './MediaControllers/PeopleController';
 import { StorageController } from './MediaControllers/StorageController';
 import { RandomStream } from '../../ES2017/RandomStream';
 import { RepositoriesController } from './MediaControllers/RepositoriesController';
+import { MediaSourcesCacheController } from './MediaControllers/MediaSourcesCacheController';
 import { CustomActionsController } from './CustomActionsController';
 import { UserRanksController } from './UserRanksController';
+import { SearchController } from './SearchController';
 import * as sortBy from 'sort-by';
 import * as schema from '@gallant/schema';
 import { Request, Response } from "restify";
@@ -62,6 +64,9 @@ export class ApiController extends BaseController {
     @Controller( RepositoriesController, '/media/repositories' )
     repositories : RepositoriesController;
 
+    @Controller( MediaSourcesCacheController, '/media/sources-cache' )
+    mediaSourcesCache : MediaSourcesCacheController;
+
     @Controller( SessionsController, '/media/sessions' )
     sessions : SessionsController;
 
@@ -76,6 +81,9 @@ export class ApiController extends BaseController {
 
     @Controller( CustomActionsController, '/custom-actions' )
     customActionsController : CustomActionsController;
+
+    @Controller( SearchController, '/search' )
+    search : SearchController;
 
     @Route( 'get', '/ping' )
     ping ( req: Request ) {

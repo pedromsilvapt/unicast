@@ -136,7 +136,7 @@ export class SubtitlesController extends BaseController {
     }
 
     protected async synchronizeSubtitle ( req : Request, mode : 'local' | 'remote', media : PlayableMediaRecord, subtitleFile : ILocalSubtitle, additionalSubtitles: ILocalSubtitle[], command: string ) : Promise<string> {
-        const streams = await this.server.providers.streams( media.sources, { writeCache: false } );
+        const streams = await this.server.media.getStreams( media, { writeCache: false } );
 
         const video = streams.find( stream => stream.type === MediaStreamType.Video ) as FileSystemVideoMediaStream;
 
@@ -286,7 +286,7 @@ export class SubtitlesController extends BaseController {
      * @returns
      */
     protected async validateSubtitle ( media : PlayableMediaRecord, subtitleFile : string ) {
-        const streams = await this.server.providers.streams( media.sources, { writeCache: false } );
+        const streams = await this.server.media.getStreams( media, { writeCache: false } );
 
         const video = streams.find( stream => stream.type === MediaStreamType.Video ) as FileSystemVideoMediaStream;
 

@@ -37,7 +37,7 @@ export class PreviewTriggersTool extends Tool<PreviewTriggersOptions> {
             throw new Error( 'Media kind is not playable.' );
         }
 
-        const stream = MediaStreamSelectors.firstVideo( await this.server.providers.streams( media.sources ) );
+        const stream = MediaStreamSelectors.firstVideo( await this.server.media.getStreams( media ) );
 
         if ( !stream ) {
             throw new Error( 'The selected media does not provide a video stream.' );

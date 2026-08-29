@@ -9,6 +9,10 @@ export class YoutubeVideoMediaStream extends VideoMediaStream {
 
     source : YoutubeMediaSource;
 
+    get name () : string {
+        return this.source?.videoInfo?.player_response?.videoDetails?.videoId || this.id;
+    }
+
     constructor ( url : string, source : YoutubeMediaSource ) {
         super( url, source );
 
@@ -32,7 +36,7 @@ export class YoutubeVideoMediaStream extends VideoMediaStream {
 
     open ( range : MediaRange = {} ) : NodeJS.ReadableStream {
         const options : any = {};
-        
+
         if ( typeof range.start === 'number' ) {
             options.start = range.start;
         }

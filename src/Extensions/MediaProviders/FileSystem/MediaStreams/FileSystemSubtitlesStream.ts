@@ -10,6 +10,14 @@ export class FileSystemSubtitlesMediaStream extends SubtitlesMediaStream {
 
     file : string;
 
+    get name () : string {
+        return path.basename( this.file, path.extname( this.file ) );
+    }
+
+    get extension () : string {
+        return path.extname( this.file ).slice( 1 ) || null;
+    }
+
     constructor ( file : string, source : FileSystemMediaSource, metadata : any = null ) {
         super( file, source );
 
@@ -24,7 +32,7 @@ export class FileSystemSubtitlesMediaStream extends SubtitlesMediaStream {
 
     async init () : Promise<void> {
         const file = this.file;
-        
+
         this.size = ( await fs.stat( file ) ).size;
         this.mime = mime.getType( file );
         this.format = path.extname( file ).slice( 1 ).toLowerCase() || null;
@@ -32,7 +40,7 @@ export class FileSystemSubtitlesMediaStream extends SubtitlesMediaStream {
 
     open ( range : MediaRange = {} ) : NodeJS.ReadableStream {
         const options : any = {};
-        
+
         if ( typeof range.start === 'number' ) {
             options.start = range.start;
         }

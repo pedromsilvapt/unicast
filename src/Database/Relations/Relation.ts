@@ -39,14 +39,14 @@ export abstract class Relation<M extends TableRecord, R, E = {}> {
     constructor ( member : string ) {
         this.member = member;
     }
-    
+
     with ( ...subRelations: Relation<any, any>[] ) : Relation<M, R, E> {
         throw new NotImplementedError();
     }
 
     where ( query : ( query : Knex.QueryBuilder ) => Knex.QueryBuilder ) : this {
         this.queryClauses = query;
-        
+
         return this;
     }
 
@@ -72,7 +72,7 @@ export abstract class Relation<M extends TableRecord, R, E = {}> {
 
     async loadAll ( items : M[] ) : Promise<R[]> {
         let itemsToLoad = items;
-        
+
         if ( itemsToLoad.some( model => !model.id ) ) {
             itemsToLoad = itemsToLoad.filter( model => !!model.id );
         }

@@ -31,6 +31,12 @@ export abstract class MediaStream {
 
     isContainer : boolean = false;
 
+    get extension() : string | null {
+        return null;
+    }
+
+    abstract get name () : string;
+
     constructor ( id : string, source : MediaSource ) {
         this.id = id ? sha1( id ) as string : null;
         this.source = source;

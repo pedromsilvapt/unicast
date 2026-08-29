@@ -384,7 +384,7 @@ export class PlayerController extends BaseController {
                 throw new InvalidArgumentError( 'Media is not playable.' );
             }
 
-            const streams = await this.server.providers.streams( media.sources );
+            const streams = await this.server.media.getStreams( media );
 
             const video = MediaStreamSelectors.firstVideo( streams );
 

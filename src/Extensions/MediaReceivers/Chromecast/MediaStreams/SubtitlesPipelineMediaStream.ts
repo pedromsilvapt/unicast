@@ -24,6 +24,10 @@ export class SubtitlesPipelineMediaStream extends SubtitlesMediaStream {
 
     transform ?: SubtitlesStreamPipeline;
 
+    get name () : string {
+        return this.original.name;
+    }
+
     constructor ( original : SubtitlesMediaStream, transform ?: SubtitlesStreamPipeline ) {
         super( original.id, original.source );
 
