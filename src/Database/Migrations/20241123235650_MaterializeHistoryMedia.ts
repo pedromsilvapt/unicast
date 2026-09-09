@@ -31,17 +31,19 @@ export async function up(knex: Knex): Promise<void> {
         table.foreign(['mediaId', 'mediaKind']).references(['id', 'kind']).inTable('media').onDelete('SET NULL').onUpdate('CASCADE');
     });
 
-    const chunkSize = Math.floor(500 / (Object.keys(rows[0]).length));
+    if (rows.length > 0) {
+        const chunkSize = Math.floor(500 / (Object.keys(rows[0]).length));
 
-    for (const chunkRows of chunk(rows, chunkSize)) {
-        await knex.table('history').insert(chunkRows);
+        for (const chunkRows of chunk(rows, chunkSize)) {
+            await knex.table('history').insert(chunkRows);
+        }
+
+        await knex.schema.dropTableIfExists('history_old');
+
+        // Make the old foreign key references point to the new table
+        await knex.schema.renameTable('history', 'history_old');
+        await knex.schema.renameTable('history_old', 'history');
     }
-
-    await knex.schema.dropTableIfExists('history_old');
-
-    // Make the old foreign key references point to the new table
-    await knex.schema.renameTable('history', 'history_old');
-    await knex.schema.renameTable('history_old', 'history');
 }
 
 export async function down(knex: Knex): Promise<void> {

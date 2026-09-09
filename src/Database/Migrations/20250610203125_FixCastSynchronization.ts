@@ -10,12 +10,15 @@ import * as sortBy from 'sort-by';
 
 export async function migrateTable<T, T2>(knex: Knex, oldTableName: string, newTableName: string, transformer: (row: T) => T2) {
     let rows = await knex.table(oldTableName).select();
-    rows = rows.map(transformer);
 
-    const chunkSize = Math.floor(500 / (Object.keys(rows[0]).length));
+    if (rows.length > 0) {
+        rows = rows.map(transformer);
 
-    for (const chunkRows of chunk(rows, chunkSize)) {
-        await knex.table(newTableName).insert(chunkRows);
+        const chunkSize = Math.floor(500 / (Object.keys(rows[0]).length));
+
+        for (const chunkRows of chunk(rows, chunkSize)) {
+            await knex.table(newTableName).insert(chunkRows);
+        }
     }
 }
 
@@ -122,33 +125,34 @@ export async function up(knex: Knex): Promise<void> {
 
     const results: PersonCastResult[] = [];
 
-    for (const rowsGroup of peopleByInternalId.get('moviedb').values()) {
-        const oldest = rowsGroup.reduce((min, row) => min == null || row.createdAt < min.createdAt ? row : min, null);
-        const newest = rowsGroup.reduce((max, row) => max == null || row.updatedAt > max.updatedAt ? row : max, null);
+    if (peopleByInternalId.has('moviedb')) {
+        for (const rowsGroup of peopleByInternalId.get('moviedb').values()) {
+            const oldest = rowsGroup.reduce((min, row) => min == null || row.createdAt < min.createdAt ? row : min, null);
+            const newest = rowsGroup.reduce((max, row) => max == null || row.updatedAt > max.updatedAt ? row : max, null);
 
-        const person = {
-            id: oldest.id,
-            name: newest.name,
-            identifier: newest.identifier,
-            scraper: newest.scraper,
-            // There seems to have been some error with internalIds that had a ".0" appended to them
-            // so we will remove them here
-            internalId: oldest.internalId.split('.')[0],
-            external: newest.external,
-            art: newest.art,
-            biography: newest.biography,
-            birthday: newest.birthday,
-            deathday: newest.deathday,
-            naturalFrom: newest.naturalFrom,
-            createdAt: oldest.createdAt,
-            updatedAt: newest.updatedAt,
-        };
+            const person = {
+                id: oldest.id,
+                name: newest.name,
+                identifier: newest.identifier,
+                scraper: newest.scraper,
+                // There seems to have been some error with internalIds that had a ".0" appended to them
+                // so we will remove them here
+                internalId: oldest.internalId.split('.')[0],
+                external: newest.external,
+                art: newest.art,
+                biography: newest.biography,
+                birthday: newest.birthday,
+                deathday: newest.deathday,
+                naturalFrom: newest.naturalFrom,
+                createdAt: oldest.createdAt,
+                updatedAt: newest.updatedAt,
+            };
 
-        const mergedCastIds = collect(rowsGroup, filtering(row => row.id != person.id, mapping(row => row.castId, distinct<number>())));
-        const mergedPeopleIds = collect(rowsGroup, filtering(row => row.id != person.id, mapping(row => row.id, distinct<number>())));
+            const mergedCastIds = collect(rowsGroup, filtering(row => row.id != person.id, mapping(row => row.castId, distinct<number>())));
+            const mergedPeopleIds = collect(rowsGroup, filtering(row => row.id != person.id, mapping(row => row.id, distinct<number>())));
 
-        results.push({person, mergedCastIds, mergedPeopleIds});
-
+            results.push({person, mergedCastIds, mergedPeopleIds});
+        }
     }
 
     results.sort(sortBy('-mergedCastIds.length', '-mergedPeopleIds.length'));

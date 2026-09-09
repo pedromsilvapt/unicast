@@ -4,12 +4,15 @@ import { chunk } from '../Tables/BaseTable';
 
 export async function migrateTable<T, T2>(knex: Knex, oldTableName: string, newTableName: string, transformer: (row: T) => T2) {
     let rows = await knex.table(oldTableName).select();
-    rows = rows.map(transformer);
 
-    const chunkSize = Math.floor(500 / (Object.keys(rows[0]).length));
+    if (rows.length > 0) {
+        rows = rows.map(transformer);
 
-    for (const chunkRows of chunk(rows, chunkSize)) {
-        await knex.table(newTableName).insert(chunkRows);
+        const chunkSize = Math.floor(500 / (Object.keys(rows[0]).length));
+
+        for (const chunkRows of chunk(rows, chunkSize)) {
+            await knex.table(newTableName).insert(chunkRows);
+        }
     }
 }
 
