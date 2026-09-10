@@ -7,7 +7,7 @@ import * as restify from 'restify';
 import { ReceiversManager } from "./Receivers/ReceiversManager";
 import { routes } from 'unicast-interface';
 import * as internalIp from 'internal-ip';
-import * as corsMiddleware from 'restify-cors-middleware';
+import * as corsMiddleware from 'restify-cors-middleware2';
 import { ApiController } from "./Controllers/ApiControllers/ApiController";
 import * as sortBy from 'sort-by';
 import { BackgroundTasksManager } from "./BackgroundTask";
@@ -46,6 +46,7 @@ import { QueryOptions } from './Database/Tables/BaseTable';
 import { queryParser } from './ES2017/QueryParser';
 import { MediaTools } from './MediaTools';
 import {MediaSourceDetails} from "./MediaProviders/MediaSource";
+import {Next, Request, Response} from "restify";
 
 export class UnicastServer {
     readonly hooks : Hookable = new Hookable( 'error' );
@@ -164,8 +165,11 @@ export class UnicastServer {
 
         this.http = new MultiServer( [ restify.createServer( {
             ignoreTrailingSlash: true,
-            maxParamLength: 200
-            // handleUpgrades: true
+            maxParamLength: 200,
+            // handleUpgrades: true,
+            // Create logger with minimum level WARN to avoid custom log messages at the start for each registered route
+            // TODO Integrate this into clui-logger
+            log: restify.logger({ name: 'unicast', level: 'warn' })
         } as any ) ] );
 
         this.streams = new HttpRawMediaServer( this );
@@ -1882,43 +1886,69 @@ export class MultiServer extends EventEmitter {
         return createdRoute;
     }
 
+    protected wrapAsyncHandlers ( handlers: restify.RequestHandlerType[] ) {
+        return handlers.map( handler => {
+            if ( handler instanceof Array ) {
+                return this.wrapAsyncHandlers( handler );
+            }
+
+            return ( req : Request, res : Response, next : Next ) => {
+                Promise.resolve( handler( req, res, next ) ).catch( err => next( err ) );
+            }
+        } );
+    }
+
     del ( opts: string | RegExp | Route, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.del( opts, ...handlers ) );
 
         return this.addRoute( opts, 'del' );
     }
 
     get ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.get( opts, ...handlers ) );
 
         return this.addRoute( opts, 'get' );
     }
 
     head ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.head( opts, ...handlers ) );
 
         return this.addRoute( opts, 'head' );
     }
 
     opts ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.opts( opts, ...handlers ) );
 
         return this.addRoute( opts, 'opts' );
     }
 
     post ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.post( opts, ...handlers ) );
 
         return this.addRoute( opts, 'post' );
     }
 
     put ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.put( opts, ...handlers ) );
 
         return this.addRoute( opts, 'put' );
     }
 
     patch ( opts : string | RegExp | restify.RouteOptions, ...handlers : restify.RequestHandlerType[] ) {
+        handlers = this.wrapAsyncHandlers( handlers );
+
         this.servers.map( server => server.patch( opts, ...handlers ) );
 
         return this.addRoute( opts, 'patch' );
@@ -1927,14 +1957,6 @@ export class MultiServer extends EventEmitter {
     param ( name : string, fn : restify.RequestHandler ) : this {
         for ( let server of this.servers ) {
             server.param( name, fn );
-        }
-
-        return this;
-    }
-
-    versionedUse ( versions : string | string[], fn : restify.RequestHandler ) : this {
-        for ( let server of this.servers ) {
-            server.versionedUse( versions, fn );
         }
 
         return this;

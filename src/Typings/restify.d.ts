@@ -10,4 +10,6 @@ declare module "restify" {
         hfp ?: HttpRequestLoggerHFP;
         identity ?: AccessCard;
     }
+
+    export function logger ( opts : { name: string, level: string } );
 }

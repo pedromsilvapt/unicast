@@ -1,5 +1,5 @@
 VERSION 0.8
-FROM node:14.17.3-alpine
+FROM node:24-alpine
 
 WORKDIR /app/unicast
 
@@ -8,9 +8,9 @@ install-interface:
     ARG DEV
 
     IF [ "$ALPINE" == 1 ]
-        FROM node:14.17.3-alpine
+        FROM node:24-alpine
     ELSE
-        FROM node:14.17.3
+        FROM node:24
     END
 
     IF [ "$DEV" == 1 ]
@@ -30,14 +30,14 @@ install-interface:
 install:
     ARG ALPINE
     IF [ "$ALPINE" == 1 ]
-        FROM node:14.17.3-alpine
+        FROM node:24-alpine
         RUN apk add g++ make py3-pip
     ELSE
-        FROM node:14.17.3
+        FROM node:24
     END
 
     COPY --if-exists package.json package-lock.json ./
-    RUN npm install
+    RUN npm install --legacy-peer-deps
     COPY +install-interface/unicast-interface.tgz .
     RUN npm install unicast-interface.tgz
 
@@ -80,7 +80,7 @@ docker:
     ARG TAG='dev'
 
     # Install runtime dependencies on the image
-    RUN apk add ffmpeg
+    RUN apk add ffmpeg micro
 
     # Copy before setting the workdir to the application
     COPY (+artifacts/publish --ALPINE 1) bin
@@ -142,7 +142,7 @@ retag:
 bump:
     ARG ACTION
     ARG PUSH='1'
-    FROM node:14.17.3-alpine
+    FROM node:24-alpine
 
     # fig: config-file editor, used to read/set the version in the JSON files
     ARG FIG_VERSION='v3.6.0'
