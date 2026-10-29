@@ -26,7 +26,7 @@ export class MediaPreview {
     }
 
     generate () : Readable {
-        const url = this.server.getUrl( this.server.streams.getUrlFor( this.media.kind, this.media.id, this.stream.id ) );
+        const url = this.server.getUrl( this.server.streams.getUrlFor( this.media.kind, this.media.id, this.stream.id, this.stream.filename ) );
 
         const args = [
             '-ss', this.time.toString(),

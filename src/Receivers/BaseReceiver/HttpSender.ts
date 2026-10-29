@@ -13,7 +13,10 @@ export class HttpSender {
     constructor ( receiver : IMediaReceiver ) {
         this.receiver = receiver;
 
-        this.receiver.server.http.get( this.getUrlPattern(), this.serve.bind( this ) );
+        this.receiver.server.http.get(this.getUrlPattern(), this.serve.bind(this));
+        // And with the optional filename suffix (not used by us, is mostly for client
+        // applications to be able to display a human friendly name)
+        this.receiver.server.http.get( this.getUrlPattern( ':filename' ),this.serve.bind( this ) );
 
         this.logger = this.receiver.server.logger.service( `${ this.receiver.server.name }/sender/${ this.receiver.name }` );
     }
@@ -22,12 +25,26 @@ export class HttpSender {
         return this.receiver.server.getUrl();
     }
 
-    getUrlFor ( session : string, stream : string ) : string {
-        return `/media/send/${ encodeURIComponent( this.receiver.type ) }/${ encodeURIComponent( this.receiver.name ) }/session/${ session }/stream/${ stream }`;
+    getUrlFor ( session : string, stream : string, filename : string = null ) : string {
+        const url = `/media/send/${ encodeURIComponent( this.receiver.type ) }/${ encodeURIComponent( this.receiver.name ) }/session/${ session }/stream/${ stream }`;
+
+        return filename ? url + '/' + encodeURIComponent( filename ) : url;
     }
 
-    getUrlPattern () : string {
-        return this.getUrlFor( ':session', ':stream' );
+    getUrlForStream ( session : string, stream : MediaStream ) : string {
+        return this.getUrlFor( session, stream.id, this.getFilenameFor( stream ) );
+    }
+
+    getFilenameFor ( stream : MediaStream ) : string {
+        return stream.filename;
+    }
+
+    getUrlPattern ( filename : string = null ) : string {
+        const pattern = this.getUrlFor( ':session', ':stream' );
+
+        // The filename placeholder is appended directly, instead of passed to getUrlFor,
+        // since it would URI encode the colon (it does that for the filename parameter)
+        return filename ? pattern + '/' + filename : pattern;
     }
 
     async getStream ( streams : MediaStream[], id : string, options : any = null ) : Promise<MediaStream> {

@@ -131,7 +131,7 @@ export class SubtitlesController extends BaseController {
         const config = allConfigs.find( config => config.name === command );
 
         if ( config != null ) {
-            const videoUrl = this.server.streams.getUrlFor( media.kind, media.id, video.id );
+            const videoUrl = this.server.streams.getUrlFor( media.kind, media.id, video.id, video.filename );
 
             const context: Record<string, string | string[]> = {
                 basePath: this.server.getMatchingUrl( req, '/api' ),

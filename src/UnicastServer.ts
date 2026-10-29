@@ -371,17 +371,27 @@ export class HttpRawMediaServer {
         return this.server.getUrl();
     }
 
-    getUrlFor ( kind : string, id : string, stream : string ) : string {
-        return `/media/raw/${ kind }/${ id }/stream/${ stream }`;
+    getUrlFor ( kind : string, id : string, stream : string, filename : string = null ) : string {
+        const url = `/media/raw/${ kind }/${ id }/stream/${ stream }`;
+
+        return filename ? url + '/' + encodeURIComponent( filename ) : url;
     }
 
-    getUrlPattern () : string {
-        return this.getUrlFor( ':kind', ':id', ':stream' );
+    getUrlPattern ( filename : string = null ) : string {
+        const pattern = this.getUrlFor( ':kind', ':id', ':stream' );
+
+        // The filename placeholder is appended directly, instead of passed to getUrlFor,
+        // since it would URI encode the colon (it does that for the filename parameter)
+        return filename ? pattern + '/' + filename : pattern;
     }
 
     initialize () {
         this.server.http.get( '/api' + this.getUrlPattern(), this.serve.bind( this ) );
-        this.server.http.head( '/api' + this.getUrlPattern(), this.serve.bind( this ) );
+        this.server.http.head('/api' + this.getUrlPattern(), this.serve.bind(this));
+        // And with the optional filename suffix (not used by us, is mostly for client
+        // applications to be able to display a human friendly name)
+        this.server.http.get( '/api' + this.getUrlPattern( ':filename' ), this.serve.bind( this ) );
+        this.server.http.head( '/api' + this.getUrlPattern( ':filename' ), this.serve.bind( this ) );
     }
 
     async serve ( req : restify.Request, res : restify.Response, next : restify.Next ) : Promise<void> {

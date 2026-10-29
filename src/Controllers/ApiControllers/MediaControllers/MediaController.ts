@@ -286,7 +286,7 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
 
         return streams.map( s => ( {
             ...s.toJSON(),
-            path: this.server.streams.getUrlFor( media.kind, media.id, s.id )
+            path: this.server.streams.getUrlFor( media.kind, media.id, s.id, s.filename )
         } ) );
     }
 

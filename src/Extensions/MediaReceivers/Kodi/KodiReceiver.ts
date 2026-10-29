@@ -190,7 +190,7 @@ export class KodiReceiver extends BaseReceiver {
     }
 
     protected getStreamUrl ( session : string, stream : MediaStream ) : string {
-        return this.sender.host() + this.sender.getUrlFor( session, stream.id );
+        return this.sender.host() + this.sender.getUrlForStream( session, stream );
     }
 
     protected async getRecordTitle ( record : MediaRecord ) : Promise<string> {

@@ -142,7 +142,7 @@ export class MessagesFactory {
     }
 
     getStreamUrl ( session : string, stream : MediaStream ) : string {
-        return this.sender.host() + this.sender.getUrlFor( session, stream.id );
+        return this.sender.host() + this.sender.getUrlForStream( session, stream );
     }
 
     getSubtitlesLanguage ( query : string ) : Language {

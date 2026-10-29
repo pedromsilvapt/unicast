@@ -1,6 +1,6 @@
 import { HttpSender } from '../../../Receivers/BaseReceiver/HttpSender';
 import { MediaStream, MediaStreamType } from '../../../MediaProviders/MediaStreams/MediaStream';
-import { SubtitlesMediaStream } from "../../../MediaProviders/MediaStreams/SubtitlesStream";
+import { SubtitlesMediaStream, replaceExtension } from "../../../MediaProviders/MediaStreams/SubtitlesStream";
 import { SubtitlesPipelineMediaStream, SubtitlesStreamPipeline } from "../Chromecast/MediaStreams/SubtitlesPipelineMediaStream";
 import { Pipeline, FilterEmptyLinesPipeline, FilterPipeline, EditFormattingPipeline, OffsetPipeline } from "subbox";
 import { KodiReceiver } from './KodiReceiver';
@@ -41,6 +41,15 @@ export class KodiHttpSender extends HttpSender {
         }
 
         return pipeline as any;
+    }
+
+    getFilenameFor ( stream : MediaStream ) : string {
+        // SRT subtitles are converted to VTT when served (see `getStream`)
+        if ( SubtitlesMediaStream.is( stream ) && stream.format === 'srt' ) {
+            return replaceExtension( stream.filename, 'vtt' );
+        }
+
+        return super.getFilenameFor( stream );
     }
 
     async getStream ( streams : MediaStream[], id : string, options : any = null ) : Promise<MediaStream> {
