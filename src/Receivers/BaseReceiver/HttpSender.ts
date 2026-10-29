@@ -14,9 +14,11 @@ export class HttpSender {
         this.receiver = receiver;
 
         this.receiver.server.http.get(this.getUrlPattern(), this.serve.bind(this));
+        this.receiver.server.http.head( this.getUrlPattern(), this.serve.bind( this ) );
         // And with the optional filename suffix (not used by us, is mostly for client
         // applications to be able to display a human friendly name)
         this.receiver.server.http.get( this.getUrlPattern( ':filename' ),this.serve.bind( this ) );
+        this.receiver.server.http.head( this.getUrlPattern( ':filename' ), this.serve.bind( this ) );
 
         this.logger = this.receiver.server.logger.service( `${ this.receiver.server.name }/sender/${ this.receiver.name }` );
     }
@@ -80,16 +82,18 @@ export class HttpSender {
 
             let reader = serveMedia( req, res, mime, stream.size, stream.filename, ( range ) => stream.reader( range ) );
 
-            reader.on( 'error', err => {
-                this.logger.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stackTrace }`, err );
+            if ( reader ) {
+                reader.on( 'error', err => {
+                    this.logger.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stackTrace }`, err );
+
+                    if ( reader ) {
+                        stream.close( reader );
+                    }
+                } );
 
                 if ( reader ) {
-                    stream.close( reader );
+                    req.on( 'close', () => stream.close( reader ) );
                 }
-            } );
-
-            if ( reader ) {
-                req.on( 'close', () => stream.close( reader ) );
             }
 
             next();
