@@ -1,6 +1,17 @@
 import { MediaStream, MediaStreamType } from './MediaStream';
 import { SubsPipeline, Pipeline, StreamReader, ParserPipeline, ContextManager, DecoderPipeline, LazyPipeline } from 'subbox';
 import { detect } from 'jschardet';
+import * as path from 'path';
+
+export function replaceExtension ( filename : string, extension : string ) : string {
+    if ( !filename || !extension ) {
+        return filename;
+    }
+
+    const ext = path.extname( filename );
+
+    return filename.slice( 0, filename.length - ext.length ) + '.' + extension;
+}
 
 export abstract class SubtitlesMediaStream extends MediaStream {
     static is ( stream : MediaStream ) : stream is SubtitlesMediaStream {

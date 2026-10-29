@@ -1,4 +1,4 @@
-import { SubtitlesMediaStream } from "../../../../MediaProviders/MediaStreams/SubtitlesStream";
+import { SubtitlesMediaStream, replaceExtension } from "../../../../MediaProviders/MediaStreams/SubtitlesStream";
 import { MediaRange } from "../../../../MediaProviders/MediaStreams/MediaStream";
 import { SubboxPipeline, SubsMessageProtocol, CompilerPipeline, EncoderPipeline, StreamDuplex, StdContext, SubsPipeline } from "subbox";
 import * as rangeStream from 'range-stream';
@@ -29,6 +29,10 @@ export class SubtitlesPipelineMediaStream extends SubtitlesMediaStream {
 
         this.original = original;
         this.transform = transform;
+    }
+
+    get filename () : string {
+        return replaceExtension( this.original.filename, this.format );
     }
 
     async init ( mediaTools : MediaTools ) : Promise<void> {

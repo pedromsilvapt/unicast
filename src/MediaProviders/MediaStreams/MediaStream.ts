@@ -36,6 +36,13 @@ export abstract class MediaStream {
         this.source = source;
     }
 
+    /**
+     * Original file name of this stream (if any), used to name the stream when served over HTTP
+     */
+    get filename () : string {
+        return null;
+    }
+
     getInputForDriver<I = any> ( driver : string ) : I {
         return null;
     }
@@ -84,7 +91,8 @@ export abstract class MediaStream {
         const mime = this.mime;
         const size = this.size;
         const provider = this.source.provider.type;
+        const filename = this.filename;
 
-        return { id, provider, type, mime, size };
+        return { id, provider, type, mime, size, filename };
     }
 }

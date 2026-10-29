@@ -400,7 +400,7 @@ export class HttpRawMediaServer {
                 ? stream.mime + ';charset=utf-8'
                 : stream.mime;
 
-            let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
+            let reader = serveMedia( req, res, mime, stream.size, stream.filename, ( range ) => stream.reader( range ) );
 
             if ( reader ) {
                 reader.on( 'error', () => {

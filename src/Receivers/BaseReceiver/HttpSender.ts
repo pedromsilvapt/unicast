@@ -61,7 +61,7 @@ export class HttpSender {
                 ? stream.mime + ';charset=' + stream.encoding
                 : stream.mime;
 
-            let reader = serveMedia( req, res, mime, stream.size, ( range ) => stream.reader( range ) );
+            let reader = serveMedia( req, res, mime, stream.size, stream.filename, ( range ) => stream.reader( range ) );
 
             reader.on( 'error', err => {
                 this.logger.error( `Serving stream type ${ stream.type.toUpperCase() } "${ stream.id }": ${ err.message + err.stackTrace }`, err );

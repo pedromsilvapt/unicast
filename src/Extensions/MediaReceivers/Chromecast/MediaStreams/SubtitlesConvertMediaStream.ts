@@ -1,4 +1,4 @@
-import { SubtitlesMediaStream } from "../../../../MediaProviders/MediaStreams/SubtitlesStream";
+import { SubtitlesMediaStream, replaceExtension } from "../../../../MediaProviders/MediaStreams/SubtitlesStream";
 import * as srt2vtt from 'srt-to-vtt';
 import * as pump from 'pump';
 
@@ -27,6 +27,10 @@ export class SubtitlesConvertMediaStream extends SubtitlesMediaStream {
         this.id = stream.id;
 
         this.stream = stream;
+    }
+
+    get filename () : string {
+        return replaceExtension( this.stream.filename, this.format );
     }
 
     async init () {

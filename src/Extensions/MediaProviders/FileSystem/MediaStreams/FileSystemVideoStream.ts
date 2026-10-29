@@ -3,6 +3,7 @@ import { FileSystemMediaSource } from "../FileSystemMediaSource";
 import { MediaRange } from "../../../../MediaProviders/MediaStreams/MediaStream";
 import * as mime from 'mime';
 import * as fs from 'mz/fs';
+import * as path from 'path';
 import { MediaTools } from "../../../../MediaTools";
 import { ResilientReadStream } from "../../../../ES2017/ResilientStream";
 
@@ -17,6 +18,10 @@ export class FileSystemVideoMediaStream extends VideoMediaStream {
         this.metadata = metadata;
 
         this.file = file;
+    }
+
+    get filename () : string {
+        return path.basename( this.file );
     }
 
     async init ? ( mediaTools : MediaTools ) : Promise<void> {

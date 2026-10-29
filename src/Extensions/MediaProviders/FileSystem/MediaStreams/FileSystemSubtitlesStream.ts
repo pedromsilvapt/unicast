@@ -18,6 +18,10 @@ export class FileSystemSubtitlesMediaStream extends SubtitlesMediaStream {
         this.file = file;
     }
 
+    get filename () : string {
+        return path.basename( this.file );
+    }
+
     async init () : Promise<void> {
         const file = this.file;
         
