@@ -33,7 +33,11 @@ export class ExternalSynchronize {
     }
 }
 
+// TODO Extract this interface out of here, and begin removing the dead code in this folder
 export interface ExternalSynchronizeCommand {
     name: string;
     uri: string;
+    label?: string;
+    icon?: string;
+    primary?: boolean;
 }

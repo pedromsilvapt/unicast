@@ -210,7 +210,15 @@ export function BinaryResponse ( controller : { server : UnicastServer, logger :
 
                 ( res as any ).writeHead( 200 );
 
-                if ( Buffer.isBuffer( file.data ) ) {
+                if ( req.method.toLowerCase() === 'head' ) {
+                    // Ideally, handlers serving HEAD requests should return a null/empty `data` and avoid
+                    // opening/reading the file at all. For now we just discard (and close) whatever they return.
+                    if ( !Buffer.isBuffer( file.data ) ) {
+                        ( file.data as any ).destroy?.();
+                    }
+
+                    res.end();
+                } else if ( Buffer.isBuffer( file.data ) ) {
                     res.write( file.data );
                     res.end();
                 } else {

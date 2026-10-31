@@ -28,6 +28,20 @@ export class SubtitlesController extends BaseController {
         return langs;
     }
 
+    protected getRequestAdditional ( req : Request ) : string[] {
+        let additional = req.query.additional;
+
+        if ( typeof additional === 'string' ) {
+            return [ additional ];
+        }
+
+        if ( additional instanceof Array ) {
+            return additional;
+        }
+
+        return [];
+    }
+
     protected getRequestOptions ( req : Request ) : ManagerSearchOptions {
         const options: ManagerSearchOptions = {
             langs: this.getRequestLanguages( req ),
@@ -133,11 +147,16 @@ export class SubtitlesController extends BaseController {
         if ( config != null ) {
             const videoUrl = this.server.streams.getUrlFor( media.kind, media.id, video.id, video.filename );
 
+            // The trailing filename segment is display-only, and is ignored by the download routes.
+            // Local subtitles store the format with a leading dot (from `path.extname`), remote ones don't
+            const subtitleUrl = ( mode : string, sub : ILocalSubtitle ) =>
+                `/media/subtitles/${media.kind}/${media.id}/${mode}/${sub.id}/${encodeURIComponent( `${sub.releaseName}.${sub.format.replace( /^\./, '' )}` )}`;
+
             const context: Record<string, string | string[]> = {
                 basePath: this.server.getMatchingUrl( req, '/api' ),
                 video: videoUrl,
-                subtitle: `/media/subtitles/${media.kind}/${media.id}/${mode}/${subtitleFile.id}`,
-                additionalSubtitles: additionalSubtitles.map( subtitle => `/media/subtitles/${media.kind}/${media.id}/local/${subtitle.id}` ),
+                subtitle: subtitleUrl( mode, subtitleFile ),
+                additionalSubtitles: additionalSubtitles.map( subtitle => subtitleUrl( 'local', subtitle ) ),
             };
 
             let uri = config.uri;
@@ -163,6 +182,50 @@ export class SubtitlesController extends BaseController {
         }
     }
 
+    @Route( 'get', '/synchronize' )
+    async listSynchronizeActions ( req : Request, res : Response ) : Promise<ISynchronizeAction[]> {
+        const allConfigs = this.server.config.get<ExternalSynchronizeCommand[]>( 'subtitles.synchronize', [] );
+
+        return allConfigs.map( config => {
+            let additionalSubtitlesCount = 0;
+
+            for ( const match of ( config.uri ?? '' ).matchAll( /\{additionalSubtitles\[(\d+)\]\}/g ) ) {
+                additionalSubtitlesCount = Math.max( additionalSubtitlesCount, +match[ 1 ] + 1 );
+            }
+
+            return {
+                name: config.name,
+                label: config.label ?? config.name,
+                icon: config.icon ?? 'clock-o',
+                primary: config.primary ?? false,
+                additionalSubtitlesCount,
+            };
+        } );
+    }
+
+    /**
+     * Returns the list of additional subtitles to use as references when synchronizing. If the request
+     * specifies them (through the `additional` query parameter), those are used in the order given.
+     * Otherwise, all local subtitles except the one being synchronized are returned.
+     */
+    protected async resolveAdditionalSubtitles ( req : Request, media : PlayableMediaRecord, subtitleId : string ) : Promise<ILocalSubtitle[]> {
+        const additionalIds = this.getRequestAdditional( req );
+
+        const additionalSubtitles: ILocalSubtitle[] = [];
+
+        for ( const id of additionalIds ) {
+            const additionalSub = await this.server.subtitles.get( media, id );
+
+            if ( !additionalSub ) {
+                throw new NotFoundError( `Requested additional subtitle "${ id }" was not found.` );
+            }
+
+            additionalSubtitles.push( additionalSub );
+        }
+
+        return additionalSubtitles;
+    }
+
     @Route( 'get', '/:kind/:id/local/:sub/synchronize/:command' )
     async synchronizeLocal ( req : Request, res : Response ) {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
@@ -175,8 +238,7 @@ export class SubtitlesController extends BaseController {
             throw new NotFoundError( 'Requested subtitle was not found.' );
         }
 
-        const additionalSubtitles = ( await this.server.subtitles.list( media ) )
-            .filter( additionalSub => additionalSub.id != subtitle.id );
+        const additionalSubtitles = await this.resolveAdditionalSubtitles( req, media, subtitle.id );
 
         const uri = await this.synchronizeSubtitle( req, 'local', media, subtitle, additionalSubtitles, command );
 
@@ -201,8 +263,7 @@ export class SubtitlesController extends BaseController {
             throw new NotFoundError( 'Requested subtitle was not found.' );
         }
 
-        const additionalSubtitles = ( await this.server.subtitles.list( media ) )
-            .filter( additionalSub => additionalSub.id != subtitle.id );
+        const additionalSubtitles = await this.resolveAdditionalSubtitles( req, media, subtitle.id );
 
         const uri = await this.synchronizeSubtitle( req, 'remote', media, subtitle, additionalSubtitles, command );
 
@@ -309,7 +370,8 @@ export class SubtitlesController extends BaseController {
         }
     }
 
-    @Route( 'get', '/:kind/:id/local/:sub', BinaryResponse )
+    @Route( [ 'get', 'head' ], '/:kind/:id/local/:sub', BinaryResponse )
+    @Route( [ 'get', 'head' ], '/:kind/:id/local/:sub/:filename', BinaryResponse )
     async downloadLocal ( req : Request ) : Promise<FileInfo> {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
 
@@ -342,6 +404,7 @@ export class SubtitlesController extends BaseController {
     }
 
     @Route( 'get', '/:kind/:id/remote/:sub', BinaryResponse )
+    @Route( 'get', '/:kind/:id/remote/:sub/:filename', BinaryResponse )
     async downloadRemote ( req : Request ) : Promise<FileInfo> {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
 
@@ -459,6 +522,14 @@ export class SubtitlesController extends BaseController {
             return details.episode + episodeOffset;
         }
     }
+}
+
+export interface ISynchronizeAction {
+    name : string;
+    label : string;
+    icon : string;
+    primary : boolean;
+    additionalSubtitlesCount : number;
 }
 
 export interface IGroupedLocalSubtitle {
