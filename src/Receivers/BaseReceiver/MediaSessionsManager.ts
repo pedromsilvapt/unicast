@@ -73,7 +73,27 @@ export class MediaSessionsManager {
     }
 
     getSessionPercentage ( history : HistoryRecord, status : ReceiverStatus ) : number {
-        return history.positionHistory.map( seg => seg.end - seg.start ).reduce( ( a, b ) => a + b, 0 ) / status.media.time.duration * 100;
+        // Merge overlapping segments so that rewatched parts are only counted once
+        const segments = [ ...history.positionHistory ].sort( ( a, b ) => a.start - b.start );
+
+        let total = 0;
+        let start : number = null;
+        let end : number = null;
+
+        for ( const seg of segments ) {
+            if ( start === null || seg.start > end ) {
+                if ( start !== null ) total += end - start;
+
+                start = seg.start;
+                end = seg.end;
+            } else {
+                end = Math.max( end, seg.end );
+            }
+        }
+
+        if ( start !== null ) total += end - start;
+
+        return total / status.media.time.duration * 100;
     }
 
     async updateStatus ( status : ReceiverStatus ) {
@@ -83,22 +103,23 @@ export class MediaSessionsManager {
             const history = await this.mediaManager.database.tables.history.get( id );
 
             if ( history ) {
-                let lastIndex = history.positionHistory.length - 1;
+                const current = status.media.time.current;
 
-                let last = history.positionHistory[ lastIndex ];
+                const isActive = status.state == ReceiverStatusState.Playing
+                    || status.state == ReceiverStatusState.Paused;
 
-                if ( Math.abs( history.position - last.end ) <= 60 ) {
-                    history.positionHistory[ lastIndex ].end = history.position;
-                } else {
-                    history.positionHistory.push( { start: history.position, end: history.position } );
+                // Ignore readings while the receiver is idle/stopped/buffering, or reporting
+                // a bogus zero position, so they don't corrupt the resume position
+                if ( isActive && current > 0 ) {
+                    const last = history.positionHistory[ history.positionHistory.length - 1 ];
 
-                    lastIndex += 1;
+                    if ( Math.abs( current - last.end ) <= 60 ) {
+                        last.end = Math.max( last.end, current );
+                    } else {
+                        history.positionHistory.push( { start: current, end: current } );
+                    }
 
-                    last = history.positionHistory[ lastIndex ];
-                }
-
-                if ( history.positionHistory.length <= 1 || last.end - last.start > 20 ) {
-                    history.position = status.media.time.current;
+                    history.position = current;
                 }
 
                 if ( !history.watched && this.getSessionPercentage( history, status ) >= 85 ) {
