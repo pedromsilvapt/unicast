@@ -1251,9 +1251,15 @@ export class Remuxer {
 
         const newSourceFileName = MediaTools.getRemuxOriginalPath( this.sourceFilePath, uid() );
 
+        // Keep the original timestamps on the remuxed file, since the scanner
+        // uses the file's mtime as the media's `addedAt` date
+        const originalStats = await fs.stat( this.sourceFilePath );
+
         await fs.rename( this.sourceFilePath, newSourceFileName );
 
         await fs.rename( this.temporaryFilePath, this.sourceFilePath );
+
+        await fs.utimes( this.sourceFilePath, originalStats.atime, originalStats.mtime );
 
         await this.updateJob( {
             stage: RemuxJobStage.Renaming,
