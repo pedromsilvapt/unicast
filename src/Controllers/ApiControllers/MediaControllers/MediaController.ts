@@ -10,7 +10,6 @@ import { Knex } from 'knex';
 import { PlayableMediaQualities } from './MoviesController';
 import { DistinctMultipleJsonColumns } from '../../../Database/Tables/BaseTable';
 import * as schema from '@gallant/schema';
-import {retry} from "../../../ES2017/Retry";
 
 export abstract class MediaTableController<R extends MediaRecord, T extends AbstractMediaTable<R> = AbstractMediaTable<R>> extends BaseTableController<R, T> {
     createCustomQuerySemantics ( req: Request, ast : QueryAst ) : QuerySemantics<R> {
@@ -428,20 +427,9 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
         const streams = req.body.streams;
         const dryRun = req.body.dryRun ?? false;
 
-        // Do not await on the result synchronously, since this spawns a background task
-        // And progress is tracked by querying the GET version of this endpoint
-        this.server.mediaTools.remux( media, streams, dryRun )
-            .catch( err => this.server.onError.notify( err ) );
-
-        return retry(async () => {
-            const remuxJob = await this.server.mediaTools.getRemuxJob( media );
-
-            if (remuxJob == null) {
-                throw new Error('Remux job could not be queued.');
-            }
-
-            return remuxJob;
-        })
+        // Resolves once the job is queued; it is then processed in the background,
+        // and progress is tracked by querying the GET version of this endpoint
+        return this.server.mediaTools.startRemux( media, streams, dryRun );
     }
 
     @Route( 'post', '/:id/watch/:status' )

@@ -684,18 +684,22 @@ export class MediaTools {
 
         const originals = await Promise.all( files
             .filter( file => file.startsWith( prefix ) && file.endsWith( suffix ) && file.length > prefix.length + suffix.length )
-            .sort()
-            .map( async ( name ) : Promise<RemuxOriginal | null> => {
+            .map( async ( name ) : Promise<{ original: RemuxOriginal, mtime: number } | null> => {
                 try {
                     const stats = await fs.stat( path.join( folder, name ) );
 
-                    return { uid: name.slice( prefix.length, -suffix.length ), name, size: stats.size };
+                    return { original: { uid: name.slice( prefix.length, -suffix.length ), name, size: stats.size }, mtime: stats.mtimeMs };
                 } catch {
                     return null;
                 }
             } ) );
 
-        return originals.filter( original => original != null );
+        // Sort oldest first: renaming preserves the modification time, so the true
+        // original comes first, followed by the outputs of each subsequent remux
+        return originals
+            .filter( entry => entry != null )
+            .sort( ( a, b ) => a.mtime - b.mtime || a.original.name.localeCompare( b.original.name ) )
+            .map( entry => entry.original );
     }
 
     /**
@@ -724,10 +728,32 @@ export class MediaTools {
         return true;
     }
 
+    /**
+     * Queues a remux job for this media and waits for it to finish processing.
+     * Rejects if the job fails. Use `startRemux` to process it in the background instead.
+     */
     async remux( media : PlayableMediaRecord, streams : TrackMediaProbe[], dryRun : boolean = false ) : Promise<void> {
         const remux = new Remuxer( this.server, media, streams, dryRun );
 
-        await remux.run();
+        await remux.queue();
+
+        await remux.process();
+    }
+
+    /**
+     * Queues a remux job for this media and starts processing it in the background.
+     * Resolves only once the job is registered in the database, with its queued status.
+     */
+    async startRemux( media : PlayableMediaRecord, streams : TrackMediaProbe[], dryRun : boolean = false ) : Promise<RemuxJob> {
+        const remux = new Remuxer( this.server, media, streams, dryRun );
+
+        await remux.queue();
+
+        // Do not await on purpose: progress is tracked by querying the job status
+        remux.process()
+            .catch( err => this.server.onError.notify( err ) );
+
+        return this.getRemuxJob( media );
     }
 }
 
@@ -996,7 +1022,7 @@ export class Remuxer {
     }
 
     protected stopHeartbeat() {
-        if (this.heartbeatTimer == null) {
+        if (this.heartbeatTimer != null) {
             clearTimeout(this.heartbeatTimer);
 
             this.heartbeatTimer = null;
@@ -1291,12 +1317,24 @@ export class Remuxer {
         });
     }
 
-    public async run() : Promise<void> {
+    /**
+     * Registers the job in the database with the queued status. Must be called
+     * (and awaited) before `process()`.
+     */
+    public async queue() : Promise<void> {
         this.startHeartbeat();
 
         try {
             await this.stageQueue();
+        } catch ( err ) {
+            this.stopHeartbeat();
 
+            throw err;
+        }
+    }
+
+    public async process() : Promise<void> {
+        try {
             await this.stagePreChecks();
 
             if ( !this.dryRun ) {
