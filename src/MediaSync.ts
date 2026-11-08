@@ -13,6 +13,7 @@ import { collect, groupingBy, first, mapping, distinct, filtering } from 'data-c
 import { AsyncStream } from 'data-async-iterators';
 import { SemaphorePool } from 'data-semaphore';
 import { MediaTools } from './MediaTools';
+import { min as minDate } from './ES2017/Date';
 
 export interface MediaSyncOptions {
     repositories : string[];
@@ -183,6 +184,14 @@ export class MediaSync {
         const table = this.media.getTable( newRecord.kind );
 
         newRecord = { ...newRecord };
+
+        // Keep the earliest `addedAt` date: refetching an existing record (refetchExisting, refresh
+        // conditions, or a moved file) must not make the media look newly added
+        if ( 'addedAt' in newRecord ) {
+            const record = newRecord as MediaRecord & { addedAt : Date | null };
+
+            record.addedAt = minDate( ( oldRecord as Partial<typeof record> ).addedAt, record.addedAt );
+        }
 
         for ( let property of Object.keys( table.foreignMediaKeys ) ) {
             delete newRecord[ property ];

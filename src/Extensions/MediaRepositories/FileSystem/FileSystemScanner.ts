@@ -429,9 +429,8 @@ export class FileSystemScanner {
                     // And the id for the repository is now the hash of the show name
                     show.id = id;
                     // Also, since this show is new, we should update the addedAt property
-                    // TODO: Since this might happen when the show is NOT new, but refetchExisting is true, we need
-                    // to check further down the line, when updating the record, that this new value doesn't overwrite the
-                    // original addedAt
+                    // When the show is NOT new (refetchExisting is true, or a refresh condition matched), MediaSync.updateRecord
+                    // keeps the earliest addedAt, so this value doesn't overwrite the original one
                     show.addedAt = showStats.mtime;
                 }
             }
