@@ -643,7 +643,85 @@ export class MediaTools {
     async getRemuxJob ( media : PlayableMediaRecord ) : Promise<RemuxJob> {
         const jobRecord = await this.server.dataStore.get( `mediaTools.remuxes.${media.kind}.${media.id}`);
 
-        return jobRecord?.value;
+        const job : RemuxJob = jobRecord?.value;
+
+        if ( job == null ) {
+            return job;
+        }
+
+        return { ...job, originals: await this.getRemuxOriginals( media ) };
+    }
+
+    /**
+     * Path of the original file kept by a remux job: `<basename><ext>.<uid>.remux_original`,
+     * next to the source file.
+     */
+    static getRemuxOriginalPath ( sourceFilePath : string, uid : string ) : string {
+        return path.join( path.dirname( sourceFilePath ), path.basename( sourceFilePath ) + '.' + uid + '.remux_original' );
+    }
+
+    /**
+     * Lists the original files kept by previous remux jobs for this media.
+     */
+    async getRemuxOriginals ( media : PlayableMediaRecord ) : Promise<RemuxOriginal[]> {
+        const filePath = media.sources?.[ 0 ]?.id;
+
+        if ( filePath == null ) {
+            return [];
+        }
+
+        const folder = path.dirname( filePath );
+        const prefix = path.basename( filePath ) + '.';
+        const suffix = '.remux_original';
+
+        let files : string[];
+
+        try {
+            files = await fs.readdir( folder );
+        } catch {
+            return [];
+        }
+
+        const originals = await Promise.all( files
+            .filter( file => file.startsWith( prefix ) && file.endsWith( suffix ) && file.length > prefix.length + suffix.length )
+            .sort()
+            .map( async ( name ) : Promise<RemuxOriginal | null> => {
+                try {
+                    const stats = await fs.stat( path.join( folder, name ) );
+
+                    return { uid: name.slice( prefix.length, -suffix.length ), name, size: stats.size };
+                } catch {
+                    return null;
+                }
+            } ) );
+
+        return originals.filter( original => original != null );
+    }
+
+    /**
+     * Deletes the original file kept by a remux job, identified by its uid.
+     * Returns false if no such file exists.
+     */
+    async deleteRemuxOriginal ( media : PlayableMediaRecord, uid : string ) : Promise<boolean> {
+        if ( !/^[a-z0-9]+$/i.test( uid ) ) {
+            throw new Error( `Invalid remux original uid "${uid}".` );
+        }
+
+        const filePath = media.sources?.[ 0 ]?.id;
+
+        if ( filePath == null ) {
+            return false;
+        }
+
+        const originalPath = MediaTools.getRemuxOriginalPath( filePath, uid );
+
+        if ( !await fs.access( originalPath ).then( () => true, () => false ) ) {
+            return false;
+        }
+
+        await fs.unlink( originalPath );
+
+        return true;
     }
 
     async remux( media : PlayableMediaRecord, streams : TrackMediaProbe[], dryRun : boolean = false ) : Promise<void> {
@@ -1170,7 +1248,7 @@ export class Remuxer {
             stageProgress: 0,
         } );
 
-        const newSourceFileName = path.join( this.folder, this.basename + ".ORIGINAL." + uid() + this.ext );
+        const newSourceFileName = MediaTools.getRemuxOriginalPath( this.sourceFilePath, uid() );
 
         await fs.rename( this.sourceFilePath, newSourceFileName );
 
@@ -1250,6 +1328,16 @@ export interface RemuxJob {
     errorMessage ?: string;
     lastHeartbeat ?: number;
     nextHeartbeat : number;
+
+    // Original files kept by remux jobs (only filled in when reading the job)
+    originals ?: RemuxOriginal[];
+}
+
+export interface RemuxOriginal {
+    uid : string;
+    // File name (inside the same folder as the media file)
+    name : string;
+    size : number;
 }
 
 export enum RemuxJobStage {

@@ -375,6 +375,31 @@ export abstract class MediaTableController<R extends MediaRecord, T extends Abst
         return this.server.mediaTools.getRemuxJob( media );
     }
 
+    @Route( 'del', '/:id/remux/originals/:uid' )
+    async deleteRemuxOriginal ( req : Request, res : Response ) {
+        const media = await this.table.tryGet( req.params.id );
+
+        if ( !media ) {
+            throw new ResourceNotFoundError( `Could not find resource with id "${ req.params.id }".` );
+        }
+
+        if ( !isPlayableRecord( media ) ) {
+            throw new InvalidArgumentError( `Cannot delete remux original for media ${ media.id } of kind ${ media.kind } because it is not a playable media kind.` );
+        }
+
+        const uid = req.params.uid;
+
+        if ( !/^[a-z0-9]+$/i.test( uid ) ) {
+            throw new InvalidArgumentError( `Invalid remux original uid "${ uid }".` );
+        }
+
+        if ( !await this.server.mediaTools.deleteRemuxOriginal( media, uid ) ) {
+            throw new ResourceNotFoundError( `Could not find remux original "${ uid }" for media ${ media.id }.` );
+        }
+
+        return this.server.mediaTools.getRemuxJob( media );
+    }
+
     @ValidateBody( schema.parse( `{
         streams: {
             index: number;
