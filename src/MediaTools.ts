@@ -960,6 +960,9 @@ export class Remuxer {
 
     protected ext : string | null = null;
 
+    /* Duration (in seconds) of the source file's container, as reported by the probe */
+    protected sourceDuration : number | null = null;
+
     public constructor ( server : UnicastServer, media : PlayableMediaRecord, streams : TrackMediaProbe[], dryRun : boolean ) {
         this.server = server;
         this.media = media;
@@ -1081,6 +1084,8 @@ export class Remuxer {
 
         this.sourceFilePath = filePath;
 
+        this.sourceDuration = latestProbe.files[ 0 ]?.format?.duration ?? null;
+
         this.folder = path.dirname( this.sourceFilePath );
 
         if ( !await fs.access( this.folder ).then( () => true, () => false ) ) {
@@ -1177,7 +1182,7 @@ export class Remuxer {
             }
         } );
 
-        const duration = Math.max(0, ...this.streams.map(s => s.duration).filter( d => d != null && d > 0 ) );
+        const duration = Math.max( 0, ...this.streams.map( s => s.duration ).concat( [ this.sourceDuration ] ).filter( d => d != null && d > 0 ) );
 
         process.run( duration );
 
