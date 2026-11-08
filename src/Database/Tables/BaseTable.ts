@@ -399,6 +399,11 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     }
 
     async update ( id : string, record : Knex.QueryCallback | any, options : Partial<QueryOptions> = {} ) : Promise<R> {
+        // Knex compiles `.where( 'id', null )` into `WHERE id IS NULL`, which would update every row without an id
+        if ( id == null ) {
+            throw new Error( `Cannot update a record of table "${ this.tableName }" without an id.` );
+        }
+
         if ( record[ "id" ] != void 0 && id != record[ "id" ] ) {
             this.database.server.logger.error( 'database/' + this.tableName, 'TRYING TO CHANGE ID FFS OF RECORD ' + JSON.stringify( { ...record, id } ) + ' TO ' + record[ "id" ] );
 
@@ -489,6 +494,11 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     }
 
     async delete ( id : string, options : QueryOptions = {} ) : Promise<boolean> {
+        // Knex compiles `.where( 'id', null )` into `WHERE id IS NULL`, which would delete every row without an id
+        if ( id == null ) {
+            throw new Error( `Cannot delete a record of table "${ this.tableName }" without an id.` );
+        }
+
         let record : R = null;
 
         if ( this.onDelete.isSubscribed() ) {
