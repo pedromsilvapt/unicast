@@ -886,7 +886,7 @@ Probes the media for metadata with optional cache control.
 
 ### `GET /api/media/custom/:id/remux`
 
-Gets the current remux job status.
+Gets the current remux job status. Includes `originals: { uid, name, size }[]`, the original files kept by previous remux jobs.
 
 |               | Type               |
 | ------------- | ------------------ |
@@ -903,6 +903,16 @@ Starts a remux job with specified stream selections.
 | **Query**     | None                                                                                                                                                                                                                                                            |
 | **Body**      | `{ streams: Array<{ index: number; type: "video" \| "audio" \| "subtitle"; language?: string; title?: string; original?: boolean; default?: boolean; forced?: boolean; hearingImpaired?: boolean }>; dryRun?: boolean }` |
 | **Response**  | `RemuxJob`                                                                                                                                                                                                                                                      |
+
+### `DELETE /api/media/custom/:id/remux/originals/:uid`
+
+Deletes an original file kept by a previous remux job (`<file>.<uid>.remux_original`), and returns the updated remux job.
+
+|               | Type       |
+| ------------- | ---------- |
+| **Query**     | None       |
+| **Body**      | None       |
+| **Response**  | `RemuxJob` |
 
 ### `POST /api/media/custom/:id/watch/:status`
 
@@ -1014,7 +1024,7 @@ Probes a playable media item for its technical metadata.
 
 ### `GET /:id/remux`
 
-Returns the current remux job status, or null.
+Returns the current remux job status, or null. Includes `originals: { uid, name, size }[]`, the original files kept by previous remux jobs.
 
 |               | Type               |
 | ------------- | ------------------ |
@@ -1031,6 +1041,16 @@ Starts a remux operation with the given stream selections.
 | **Query**     | None                                                                                                                                                                                                                                                            |
 | **Body**      | `{ streams: Array<{ index: number; type: "video" \| "audio" \| "subtitle"; language?: string; title?: string; original?: boolean; default?: boolean; forced?: boolean; hearingImpaired?: boolean }>; dryRun?: boolean }` |
 | **Response**  | `RemuxJob`                                                                                                                                                                                                                                                      |
+
+### `DELETE /:id/remux/originals/:uid`
+
+Deletes an original file kept by a previous remux job (`<file>.<uid>.remux_original`), and returns the updated remux job.
+
+|               | Type       |
+| ------------- | ---------- |
+| **Query**     | None       |
+| **Body**      | None       |
+| **Response**  | `RemuxJob` |
 
 ### `POST /:id/watch/:status`
 
@@ -1210,7 +1230,7 @@ Probes a movie for its metadata.
 
 ### `GET /api/media/movie/:id/remux`
 
-Returns the current remux job status for a movie.
+Returns the current remux job status for a movie. Includes `originals: { uid, name, size }[]`, the original files kept by previous remux jobs.
 
 |               | Type               |
 | ------------- | ------------------ |
@@ -1227,6 +1247,16 @@ Starts a remux job for a movie.
 | **Query**     | None                                                                                                                                                                                                                                                            |
 | **Body**      | `{ streams: Array<{ index: number; type: "video" \| "audio" \| "subtitle"; language?: string; title?: string; original?: boolean; default?: boolean; forced?: boolean; hearingImpaired?: boolean }>; dryRun?: boolean }` |
 | **Response**  | `RemuxJob`                                                                                                                                                                                                                                                      |
+
+### `DELETE /api/media/movie/:id/remux/originals/:uid`
+
+Deletes an original file kept by a previous remux job (`<file>.<uid>.remux_original`), and returns the updated remux job.
+
+|               | Type       |
+| ------------- | ---------- |
+| **Query**     | None       |
+| **Body**      | None       |
+| **Response**  | `RemuxJob` |
 
 ### `POST /api/media/movie/:id/watch/:status`
 
@@ -1884,7 +1914,7 @@ Probes a TV episode for metadata with optional cache control.
 
 ### `GET /api/media/episode/:id/remux`
 
-Gets the current remux job status for a TV episode.
+Gets the current remux job status for a TV episode. Includes `originals: { uid, name, size }[]`, the original files kept by previous remux jobs.
 
 |               | Type               |
 | ------------- | ------------------ |
@@ -1901,6 +1931,16 @@ Starts a remux job for a TV episode.
 | **Query**     | None                                                                                                                                                                                                                                                            |
 | **Body**      | `{ streams: Array<{ index: number; type: "video" \| "audio" \| "subtitle"; language?: string; title?: string; original?: boolean; default?: boolean; forced?: boolean; hearingImpaired?: boolean }>; dryRun?: boolean }` |
 | **Response**  | `RemuxJob`                                                                                                                                                                                                                                                      |
+
+### `DELETE /api/media/episode/:id/remux/originals/:uid`
+
+Deletes an original file kept by a previous remux job (`<file>.<uid>.remux_original`), and returns the updated remux job.
+
+|               | Type       |
+| ------------- | ---------- |
+| **Query**     | None       |
+| **Body**      | None       |
+| **Response**  | `RemuxJob` |
 
 ### `POST /api/media/episode/:id/watch/:status`
 
@@ -2070,7 +2110,7 @@ Probes a TV season for metadata with optional cache control.
 
 ### `GET /api/media/season/:id/remux`
 
-Gets the current remux job status for a TV season.
+Gets the current remux job status for a TV season. Includes `originals: { uid, name, size }[]`, the original files kept by previous remux jobs.
 
 |               | Type               |
 | ------------- | ------------------ |
@@ -2087,6 +2127,16 @@ Starts a remux job for a TV season.
 | **Query**     | None                                                                                                                                                                                                                                                            |
 | **Body**      | `{ streams: Array<{ index: number; type: "video" \| "audio" \| "subtitle"; language?: string; title?: string; original?: boolean; default?: boolean; forced?: boolean; hearingImpaired?: boolean }>; dryRun?: boolean }` |
 | **Response**  | `RemuxJob`                                                                                                                                                                                                                                                      |
+
+### `DELETE /api/media/season/:id/remux/originals/:uid`
+
+Deletes an original file kept by a previous remux job (`<file>.<uid>.remux_original`), and returns the updated remux job.
+
+|               | Type       |
+| ------------- | ---------- |
+| **Query**     | None       |
+| **Body**      | None       |
+| **Response**  | `RemuxJob` |
 
 ### `POST /api/media/season/:id/watch/:status`
 
@@ -2283,7 +2333,7 @@ Probes a TV show for metadata with optional cache control.
 
 ### `GET /api/media/show/:id/remux`
 
-Returns the current remux job status for a TV show.
+Returns the current remux job status for a TV show. Includes `originals: { uid, name, size }[]`, the original files kept by previous remux jobs.
 
 |               | Type               |
 | ------------- | ------------------ |
@@ -2300,6 +2350,16 @@ Starts a remux job for a TV show.
 | **Query**     | None                                                                                                                                                                                                                                                            |
 | **Body**      | `{ streams: Array<{ index: number; type: "video" \| "audio" \| "subtitle"; language?: string; title?: string; original?: boolean; default?: boolean; forced?: boolean; hearingImpaired?: boolean }>; dryRun?: boolean }` |
 | **Response**  | `RemuxJob`                                                                                                                                                                                                                                                      |
+
+### `DELETE /api/media/show/:id/remux/originals/:uid`
+
+Deletes an original file kept by a previous remux job (`<file>.<uid>.remux_original`), and returns the updated remux job.
+
+|               | Type       |
+| ------------- | ---------- |
+| **Query**     | None       |
+| **Body**      | None       |
+| **Response**  | `RemuxJob` |
 
 ### `POST /api/media/show/:id/watch/:status`
 
