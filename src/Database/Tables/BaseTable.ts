@@ -45,7 +45,11 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
     }
 
     query ( options: QueryOptions | null = null ) : Knex.QueryBuilder {
-        let query = this.connection.queryBuilder().table( this.tableName );
+        return this.queryTable( this.tableName, options );
+    }
+
+    protected queryTable ( tableName : string, options : QueryOptions | null = null ) : Knex.QueryBuilder {
+        let query = this.connection.queryBuilder().table( tableName );
 
         if (options?.transaction != null) {
             query = query.transacting( options.transaction );
@@ -539,10 +543,10 @@ export abstract class BaseTable<R extends BaseRecord> implements Relatable<R> {
             const records : R[] = this.deserializeMany( await table );
 
             const primaryKeys : any[] = column == primaryKey
-                ? keys
-                : records.map( r => r[ primaryKey ] )
+                ? keysSerialized
+                : records.map( r => ( this.fieldConverters as any )[ primaryKey ]?.serialize( r[ primaryKey ] ) ?? r[ primaryKey ] );
 
-            deletedCount = await this.query( options ).where( primaryKey, primaryKeys ).delete();
+            deletedCount = await this.query( options ).whereIn( primaryKey, primaryKeys ).delete();
 
             Promise.resolve( records ).then( async records => {
                 for ( let record of records ) {

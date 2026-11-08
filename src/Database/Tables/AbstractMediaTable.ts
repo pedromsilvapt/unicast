@@ -1,6 +1,7 @@
 import { collect, first, groupingBy } from 'data-collectors';
 import { ManyToManyRelation } from '../Relations/ManyToManyRelation';
-import { BaseTable, EntityRecord, EntityRecordSql, QueryOptions } from './BaseTable';
+import { BaseTable, chunk, DeleteKeysQueryOptions, EntityRecord, EntityRecordSql, QueryOptions } from './BaseTable';
+import type { Knex } from 'knex';
 import type { DatabaseTables } from '../Database';
 import type { CollectionRecord } from './CollectionsTable';
 import type { PersonRecord } from './PeopleTable';
@@ -31,45 +32,144 @@ export abstract class AbstractMediaTable<R extends MediaRecord> extends BaseTabl
     }
 
     protected async createUniqueMediaIds ( kinds : MediaKind[], options : QueryOptions = {} ) : Promise<number[]> {
-        const rows = kinds.map( kind => ( { kind } ) );
-
-        let query = this.connection.table( 'media' );
-
-        if ( options.transaction != null ) {
-            query = query.transacting( options.transaction );
-        }
-
-        const ids = await query.insert( rows, [ 'id' ] );
+        const ids = await this.queryTable( 'media', options ).insert( kinds.map( kind => ( { kind } ) ), [ 'id' ] );
 
         return ids.map( s => s.id );
     }
 
     async create ( record : R, options : QueryOptions = {} ) : Promise<R> {
-        // TODO Transaction
-        if ( record.id == null ) {
-            const id = ( await this.createUniqueMediaIds( [ this.kind ], options ) )[ 0 ];
+        // Creating the `media` row and the per-kind row must be atomic, otherwise a failure on the second insert
+        // leaves behind a phantom row in `media`
+        return await this.withTransaction( options, async options => {
+            if ( record.id == null ) {
+                const id = ( await this.createUniqueMediaIds( [ this.kind ], options ) )[ 0 ];
 
-            record.id = '' + id;
-        }
+                record.id = '' + id;
+            }
 
-        return super.create( record, options );
+            return await super.create( record, options );
+        } );
     }
 
     async createMany ( recordsIter : Iterable<R>, options : QueryOptions = {} ) : Promise<R[]> {
-        const recordsWithNoId = Array.from( recordsIter ).filter( rec => rec.id == null );
+        const records = Array.from( recordsIter );
 
-        if ( recordsWithNoId.length > 0 ) {
-            // TODO Transaction
-            const ids = await this.createUniqueMediaIds( recordsWithNoId.map( _ => this.kind ), options );
+        return await this.withTransaction( options, async options => {
+            const recordsWithNoId = records.filter( rec => rec.id == null );
 
-            let index = 0;
+            if ( recordsWithNoId.length > 0 ) {
+                const ids = await this.createUniqueMediaIds( recordsWithNoId.map( _ => this.kind ), options );
 
-            for ( const record of recordsWithNoId ) {
-                record.id = '' + ids[ index++ ];
+                recordsWithNoId.forEach( ( record, index ) => record.id = '' + ids[ index ] );
             }
+
+            return await super.createMany( records, options );
+        } );
+    }
+
+    /**
+     * Runs the callback inside the transaction given in the options, or inside a new one when none is given.
+     */
+    protected async withTransaction<T> ( options : QueryOptions | null, callback : ( options : QueryOptions ) => Promise<T> ) : Promise<T> {
+        if ( options?.transaction != null ) {
+            return await callback( options );
         }
 
-        return super.createMany( recordsIter, options );
+        return await this.connection.transaction( trx => callback( { ...( options ?? {} ), transaction: trx } ) );
+    }
+
+    /**
+     * Deletes the rows from the parent `media` table. Every table that references media records does so through a
+     * foreign key to `media(id, kind)` with `ON DELETE CASCADE`, so this is what removes the dependent rows (probes,
+     * cast, collections, etc...). Deleting only the row from the per-kind table would leave them behind until a repair.
+     */
+    protected async deleteMediaRows ( ids : string[], options : QueryOptions | null ) : Promise<void> {
+        if ( ids.length === 0 ) {
+            return;
+        }
+
+        for ( const idsChunk of chunk( ids, 500 ) ) {
+            let query = this.connection.table( 'media' )
+                .whereIn( 'id', idsChunk.map( id => +id ) )
+                .where( 'kind', this.kind );
+
+            if ( options?.transaction != null ) {
+                query = query.transacting( options.transaction );
+            }
+
+            await query.delete();
+        }
+    }
+
+    async delete ( id : string, options : QueryOptions = {} ) : Promise<boolean> {
+        if ( id == null ) {
+            // Let the base implementation throw the appropriate error
+            return await super.delete( id, options );
+        }
+
+        return await this.withTransaction( options, async options => {
+            const deleted = await super.delete( id, options );
+
+            await this.deleteMediaRows( [ id ], options );
+
+            return deleted;
+        } );
+    }
+
+    async deleteKeys ( keys : any[], options : DeleteKeysQueryOptions = {} ) : Promise<number> {
+        if ( keys.length === 0 ) {
+            return 0;
+        }
+
+        return await this.withTransaction( options, async ( { transaction } ) => {
+            const column = options.index || 'id';
+
+            const converter = this.fieldConverters[ column ];
+
+            let query = this.query( { transaction } )
+                .select( 'id' )
+                .whereIn( column, converter != null ? keys.map( key => converter.serialize( key ) ) : keys );
+
+            if ( options.query ) {
+                query = options.query( query );
+            }
+
+            const ids = await this.selectIds( query );
+
+            const deletedCount = await super.deleteKeys( ids, { transaction } );
+
+            await this.deleteMediaRows( ids, { transaction } );
+
+            return deletedCount;
+        } );
+    }
+
+    async deleteMany ( predicate ?: ( query : Knex.QueryBuilder ) => Knex.QueryBuilder, limit : number = Infinity, options : QueryOptions = {} ) : Promise<number> {
+        return await this.withTransaction( options, async options => {
+            let query = this.query( options ).select( 'id' );
+
+            if ( predicate != null ) {
+                query = predicate( query );
+            }
+
+            if ( limit && limit < Infinity ) {
+                query = query.limit( limit );
+            }
+
+            const ids = await this.selectIds( query );
+
+            const deletedCount = await super.deleteKeys( ids, options );
+
+            await this.deleteMediaRows( ids, options );
+
+            return deletedCount;
+        } );
+    }
+
+    protected async selectIds ( query : Knex.QueryBuilder ) : Promise<string[]> {
+        const rows : { id : number }[] = await query;
+
+        return rows.map( row => '' + row.id );
     }
 
     async repair ( records : string[] = null ) {
