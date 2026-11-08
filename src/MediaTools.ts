@@ -15,6 +15,7 @@ import { FFmpegProcess } from './Transcoding/FFmpegDriver/FFmpegProcess';
 import * as uid from 'uid';
 import { CommandRunner, findRemoteMount, LocalRunner, RemoteMount, SshRunner, SshOptions } from './RemoteCommands';
 import { FileSystemRepository } from './Extensions/MediaRepositories/FileSystem/FileSystemRepository';
+import type { MediaProbeRecord } from './Database/Tables/MediaProbesTable';
 
 export class MediaTools {
     public server : UnicastServer;
@@ -139,44 +140,49 @@ export class MediaTools {
         }
     }
 
-    async probeMedia ( media : PlayableMediaRecord, readCache : boolean = true, writeCache : boolean = true ) : Promise<MediaProbe> {
+    async probeMedia ( media : PlayableMediaRecord, readCache : boolean = true, writeCache : boolean = true ) : Promise<MediaProbeRecord> {
         const release = await this.semaphoreMediaProbes.acquire( media.id );
 
         try {
-            // We need to query to see if a probe already exists if:
+            const probes = this.server.database.tables.probes;
+
+            // We need to query to see if a probe already exists if either:
             //   - `readCache` is true, because that means we want to use the cached value if possible
-            //   - `readCache` is false and `writeCache` is true, because that means, even though we don't want to use the cached value,
-            //     we still want to save the new updated value. And to know whether that means creating a new row, or updating an existing one,
-            //     we need to know if the row for this media record already exists
+            //   - `writeCache` is true, because even though we might not want to use the cached value, we still want to
+            //     know its `id` and `createdAt`, so that we replace that row instead of creating a new one
             // When they are both false, we can simply skip the query, and save some performance
-            let probe = readCache || writeCache
-                ? await this.server.database.tables.probes.findOne( query => query.where( 'mediaId', media.id ) )
+            const existing = readCache || writeCache
+                ? await probes.findOne( query => query.where( 'mediaId', media.id ) )
                 : null;
 
-            if ( probe == null || readCache == false ) {
-                const track = media.sources[ 0 ].id;
-
-                const rawMetadata = await new FFProbe( this.server.config, track ).run();
-
-                const metadata = this.probeNormalize( rawMetadata, track );
-
-                const now = new Date();
-
-                probe = {
-                    mediaId: media.id,
-                    mediaKind: media.kind,
-                    metadata: metadata,
-                    raw: rawMetadata,
-                    createdAt: now,
-                    updatedAt: now,
-                };
-
-                if ( writeCache ) {
-                    await this.server.database.tables.probes.create( probe );
-                }
+            if ( readCache && existing != null ) {
+                return existing;
             }
 
-            return probe.metadata;
+            const track = media.sources[ 0 ].id;
+
+            const raw = await new FFProbe( this.server.config, track ).run();
+
+            const now = new Date();
+
+            // When a row already exists, its `id` and `createdAt` are kept
+            const probe : MediaProbeRecord = {
+                createdAt: now,
+                ...existing,
+                mediaId: media.id,
+                mediaKind: media.kind,
+                metadata: this.probeNormalize( raw, track ),
+                raw: raw,
+                updatedAt: now,
+            };
+
+            if ( writeCache ) {
+                probe.id != null
+                    ? await probes.update( probe.id, { metadata: probe.metadata, raw: probe.raw, updatedAt: probe.updatedAt } )
+                    : await probes.create( probe );
+            }
+
+            return probe;
         } finally {
             release();
         }
@@ -191,7 +197,7 @@ export class MediaTools {
     async getMetadata ( media : PlayableMediaRecord, readCache : boolean = true, writeCache : boolean = true ) : Promise<MediaMetadata> {
         const probe = await this.probeMedia( media, readCache, writeCache );
 
-        return await this.convertToMetadata( probe );
+        return await this.convertToMetadata( probe.metadata );
     }
 
     protected getDefaultTrack ( tracks : TrackMediaProbe[] ) : TrackMediaProbe | undefined {

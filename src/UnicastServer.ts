@@ -916,7 +916,7 @@ export class MediaManager {
             /* writeCache: */ writeCache );
 
         if ( updateMetadata ) {
-            const metadata = await this.server.mediaTools.convertToMetadata( probe );
+            const metadata = await this.server.mediaTools.convertToMetadata( probe.metadata );
 
             const table = this.getTable( media.kind );
 
