@@ -5,7 +5,6 @@ import {MediaTools, TrackMediaProbe} from '../../../MediaTools';
 import { UnicastServer } from '../../../UnicastServer';
 import { ISubtitlesProvider, ISubtitle, SearchOptions } from '../../../Subtitles/Providers/ISubtitlesProvider';
 import { fs } from 'mz';
-import { spawn } from 'child_process';
 import { waitForProcess } from '../../../ES2017/ChildProcess';
 import { Stopwatch } from '../../../BackgroundTask';
 import * as path from 'path';
@@ -111,30 +110,67 @@ export class EmbeddedSubtitlesProvider implements ISubtitlesProvider<IEmbeddedSu
 
         const subtitleExtension = subtitle.format;
 
-        const tempFile = `${ path.basename( subtitle.filePath, path.extname( subtitle.filePath ) ) }.${ subtitleExtension }`;
+        const tempFile = path.join( tempFolder, `${ path.basename( subtitle.filePath, path.extname( subtitle.filePath ) ) }.${ subtitleExtension }` );
 
-        const processArgs = [
-            '-i',
-            subtitle.filePath,
-            '-map',
-            `0:${ subtitle.trackIndex }`,
-            path.join( tempFolder, tempFile ),
-        ];
+        await this.extract( subtitle, tempFile );
 
-        this.logger.info( 'Extracting: ' + subtitle.filePath );
-
-        const command = this.server.mediaTools.getCommandPath( "ffmpeg" );
-
-        const cp = spawn( command, processArgs, {
-            stdio: this.config.showExtractionOutput ? 'inherit' : 'ignore'
-        } );
-
-        await waitForProcess( cp );
-
-        this.logger.info( 'Extracted to ' + path.relative( this.server.storage.getPath(), tempFile ) );
+        this.logger.info( 'Extracted to ' + this.server.storage.getRelativePath( tempFile ) );
 
         process.stdout.write('\x07');
 
-        return fs.createReadStream( path.join( tempFolder, tempFile ) );
+        return fs.createReadStream( tempFile );
+    }
+
+    /**
+     * Extracts the subtitle track into a local file. ffmpeg writes the subtitles to stdout, so the
+     * same code works whether the command runs locally or remotely (where the local file is not reachable).
+     */
+    protected async extract ( subtitle : IEmbeddedSubtitlesResult, outputFile : string ) : Promise<void> {
+        const runner = this.server.mediaTools.resolveRunner( subtitle.filePath );
+
+        this.logger.info( `Extracting${ runner.remote ? ` via ${ runner.name }` : '' }: ${ subtitle.filePath }` );
+
+        const args = [
+            '-nostdin',
+            // When the output is not shown, only errors are needed (to build the error message)
+            ...( this.config.showExtractionOutput ? [] : [ '-loglevel', 'error' ] ),
+            '-i', runner.mapPath( subtitle.filePath ),
+            '-map', `0:${ subtitle.trackIndex }`,
+            '-f', subtitle.format,
+            'pipe:1',
+        ];
+
+        const cp = runner.spawn( runner.getCommandPath( 'ffmpeg' ), args, {
+            // stdout receives the subtitles, stderr is kept for error messages.
+            // stdin is never read by ffmpeg (the ssh runner overrides it with its own pipe)
+            stdio: [ 'ignore', 'pipe', 'pipe' ]
+        } );
+
+        let stderr = '';
+
+        cp.stderr.on( 'data', ( chunk : Buffer ) => {
+            if ( this.config.showExtractionOutput ) {
+                process.stderr.write( chunk );
+            }
+
+            if ( stderr.length < 10000 ) {
+                stderr += chunk.toString();
+            }
+        } );
+
+        const output = fs.createWriteStream( outputFile );
+
+        const written = new Promise<void>( ( resolve, reject ) => {
+            output.on( 'finish', resolve );
+            output.on( 'error', reject );
+        } );
+
+        cp.stdout.pipe( output );
+
+        const [ exitCode ] = await Promise.all( [ waitForProcess( cp ), written ] );
+
+        if ( exitCode !== 0 ) {
+            throw new Error( `ffmpeg (${ runner.name }) exited with code ${ exitCode }: ${ stderr.trim() }` );
+        }
     }
 }

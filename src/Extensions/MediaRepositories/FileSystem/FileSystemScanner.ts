@@ -17,6 +17,7 @@ import { LoggerInterface } from 'clui-logger';
 import * as yaml from 'js-yaml'
 import { isSameFile, MovieLocalSettings, TvEpisodeLocalSettings, TvShowLocalSettings } from './LocalSettings';
 import { MediaTools, ParsePathMode } from '../../../MediaTools';
+import { RemoteCommandConfig } from '../../../RemoteCommands';
 
 function unwrap<T extends MediaRecord> ( obj : T ) : T {
     if ( obj == null ) {
@@ -65,6 +66,7 @@ export interface FileSystemMountConfig {
     name: string;
     path: string;
     displayName?: string;
+    remote?: RemoteCommandConfig;
 }
 
 export interface FileSystemScannerConfigBase<M> {

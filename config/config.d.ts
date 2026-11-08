@@ -43,6 +43,16 @@ export default interface Config {
 
     ffmpeg: {
         path: string;
+        externalFilterScripts?: boolean;
+        /** SSH options used when running commands on remote mounts (see `remote` on file system mounts) */
+        remote?: {
+            /** Seconds, defaults to 10 */
+            connectTimeout?: number;
+            /** Seconds to keep the shared ssh connection open (0 disables multiplexing), defaults to 60 */
+            controlPersist?: number;
+            /** Folder for the ssh control sockets, defaults to <tmpdir>/unicast-ssh */
+            controlPath?: string;
+        };
     };
 
     mpv: {

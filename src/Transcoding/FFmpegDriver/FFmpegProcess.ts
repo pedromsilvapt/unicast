@@ -1,9 +1,10 @@
-import { ChildProcess, spawn } from "child_process";
+import { ChildProcess } from "child_process";
 import { FFmpegProgress } from './FFmpegProgress';
 import { Future } from '@pedromsilva/data-future';
 import { Hook } from '../../Hookable';
 import * as byline from 'byline';
 import { Duration } from '../../ES2017/Units';
+import { CommandRunner, LocalRunner } from '../../RemoteCommands';
 
 export enum FFmpegErrorDetector {
     VerboseError = 0,
@@ -19,7 +20,7 @@ export class FFmpegProcess {
     command : string;
 
     onProgress : Hook<FFmpegProgress> = new Hook( 'onProgress' );
-    
+
     onOutputLine : Hook<string> = new Hook( 'onOutputLine' );
 
     killed : boolean = false;
@@ -30,9 +31,12 @@ export class FFmpegProcess {
 
     protected errorMessages : string[] = [];
 
-    constructor ( command : string, args : string[] ) {
+    runner : CommandRunner;
+
+    constructor ( command : string, args : string[], runner : CommandRunner = new LocalRunner() ) {
         this.command = command;
         this.args = args;
+        this.runner = runner;
     }
 
     run ( duration ?: number | string | Duration ) {
@@ -40,15 +44,15 @@ export class FFmpegProcess {
             return this;
         }
 
-        this.process = spawn( this.command, this.args );
+        this.process = this.runner.spawn( this.command, this.args );
 
         this.process.on( 'error', error => this.completedFuture.reject( error ) );
-        
+
         const progress = new FFmpegProgress( duration );
-        
+
         byline.createStream( this.process.stderr ).on( 'data', buffer => {
             const line : string = buffer.toString();
-            
+
             this.onOutputLine.notify( line );
 
             if ( progress.update( line ) ) {
@@ -56,7 +60,7 @@ export class FFmpegProcess {
             } else {
                 if ( this.errorMessages.length < 20 ) {
                     let isError = false;
-                    
+
                     if ( this.errorDetector === FFmpegErrorDetector.VerboseError ) {
                         isError = true;
                     } else if ( this.errorDetector === FFmpegErrorDetector.Fuzzy ) {
@@ -64,14 +68,14 @@ export class FFmpegProcess {
                             isError = true;
                         }
                     }
-    
+
                     if ( isError ) {
                         this.errorMessages.push( line );
                     }
                 }
             }
         } );
-        
+
         this.process.stderr.on( 'end', () => {
             if ( this.errorMessages.length > 0 ) {
                 this.completedFuture.reject( new Error( `Encoding error: ` + this.errorMessages.join( '\n' ) ) );
@@ -82,14 +86,27 @@ export class FFmpegProcess {
     }
 
     pause () {
+        this.assertSignalsSupported( 'paused' );
+
         if ( this.process ) {
             this.process.kill( 'SIGSTOP' );
         }
     }
 
     resume () {
+        this.assertSignalsSupported( 'resumed' );
+
         if ( this.process ) {
             this.process.kill( 'SIGCONT' );
+        }
+    }
+
+    /**
+     * Signals sent to a remote runner's process only reach the local ssh client, not the remote command
+     */
+    protected assertSignalsSupported ( action : string ) {
+        if ( this.runner.remote ) {
+            throw new Error( `FFmpeg processes running remotely (via ${ this.runner.name }) cannot be ${ action }.` );
         }
     }
 
@@ -97,7 +114,7 @@ export class FFmpegProcess {
         this.killed = true;
 
         if ( this.process ) {
-            this.process.kill( 'SIGINT' );
+            this.runner.kill( this.process );
         }
     }
 

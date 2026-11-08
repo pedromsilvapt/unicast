@@ -13,6 +13,8 @@ import * as equals from 'fast-deep-equal';
 import { Logger, pp } from 'clui-logger';
 import { FFmpegProcess } from './Transcoding/FFmpegDriver/FFmpegProcess';
 import * as uid from 'uid';
+import { CommandRunner, findRemoteMount, LocalRunner, RemoteMount, SshRunner, SshOptions } from './RemoteCommands';
+import { FileSystemRepository } from './Extensions/MediaRepositories/FileSystem/FileSystemRepository';
 
 export class MediaTools {
     public server : UnicastServer;
@@ -365,6 +367,26 @@ export class MediaTools {
         }
 
         return command;
+    }
+
+    resolveRunner ( file : string ) : CommandRunner {
+        for ( const repository of this.server.repositories ) {
+            if ( !( repository instanceof FileSystemRepository ) ) {
+                continue;
+            }
+
+            var remoteMounts = repository.getRemoteMounts();
+
+            const mount = findRemoteMount( file, remoteMounts );
+
+            if ( mount != null ) {
+                const options : SshOptions = this.server.config.get( 'ffmpeg.remote', {} ) ?? {};
+
+                return new SshRunner( mount.path, mount.remote, options );
+            }
+        }
+
+        return new LocalRunner( command => this.getCommandPath( command ) );
     }
 
     static parseName ( names: string | Iterable<string> ): Partial<ParsedName> {
@@ -1004,8 +1026,10 @@ export class Remuxer {
             stageProgress: 0,
         } );
 
+        const runner = this.server.mediaTools.resolveRunner( this.sourceFilePath );
+
         const args: string[] = [
-            '-i', this.sourceFilePath
+            '-i', runner.mapPath( this.sourceFilePath )
         ];
 
         if ( this.streams.some( stream => stream.type === 'video' ) ) {
@@ -1039,16 +1063,18 @@ export class Remuxer {
         args.push( '-stats' );
 
         // Finally, push the output file name
-        args.push( this.temporaryFilePath );
+        args.push( runner.mapPath( this.temporaryFilePath ) );
+
+        const via = runner.remote ? ` via ${ runner.name }` : '';
 
         if ( this.dryRun ) {
-            this.logger.info(pp!`Dry running command "ffmpeg ${ args.join( ' ' ) }"`);
+            this.logger.info(pp!`Dry running command "ffmpeg ${ args.join( ' ' ) }"${ via }`);
             return;
         }
 
-        this.logger.info(pp!`Running command "ffmpeg ${ args.join( ' ' ) }"`);
+        this.logger.info(pp!`Running command "ffmpeg ${ args.join( ' ' ) }"${ via }`);
 
-        const process = new FFmpegProcess( this.server.mediaTools.getCommandPath(), args );
+        const process = new FFmpegProcess( runner.getCommandPath( 'ffmpeg' ), args, runner );
 
         let lastProgressTime : number | null = null;
 

@@ -155,6 +155,10 @@ export class FileSystemRepository extends MediaRepository {
         return null;
     }
 
+    getRemoteMounts () : FileSystemMountConfig[] {
+        return this.config.mounts?.filter( mount => mount.remote?.host ) ?? [];
+    }
+
     isMountReachable ( mount : FileSystemMountConfig ) : Promise<boolean> {
         return fs.stat( mount.path ).then( () => true, () => false );
     }
