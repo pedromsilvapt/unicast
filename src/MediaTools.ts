@@ -1121,13 +1121,9 @@ export class Remuxer {
             '-i', runner.mapPath( this.sourceFilePath )
         ];
 
-        if ( this.streams.some( stream => stream.type === 'video' ) ) {
-            args.push( '-c:v', 'copy' );
-        }
-
-        if ( this.streams.some( stream => stream.type === 'audio' ) ) {
-            args.push( '-c:a', 'copy' );
-        }
+        // Remuxing never re-encodes: copy every mapped stream (video, audio,
+        // subtitles, attachments, data) as-is
+        args.push( '-c', 'copy' );
 
         let index = 0;
         for ( const stream of this.streams ) {
