@@ -389,6 +389,7 @@ export class SubtitlesController extends BaseController {
     }
 
     @Route( 'put', '/:kind/:id/local/:sub' )
+    @Route( 'put', '/:kind/:id/local/:sub/:filename' )
     async uploadLocal ( req : Request ) : Promise<void> {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
 
@@ -422,6 +423,7 @@ export class SubtitlesController extends BaseController {
     }
 
     @Route( 'put', '/:kind/:id/remote/:sub', EmptyResponse )
+    @Route( 'put', '/:kind/:id/remote/:sub/:filename', EmptyResponse )
     async uploadRemote ( req : Request, res : Response ) : Promise<void> {
         const media = await this.server.media.get( req.params.kind, req.params.id ) as PlayableMediaRecord;
 
@@ -444,6 +446,7 @@ export class SubtitlesController extends BaseController {
     }
 
     @Route( 'del', '/:kind/:id/local/:sub' )
+    @Route( 'del', '/:kind/:id/local/:sub/:filename' )
     async delete ( req : Request ) : Promise<ILocalSubtitle[]> {
         const media = await this.server.media.get<PlayableMediaRecord>( req.params.kind, req.params.id );
 
