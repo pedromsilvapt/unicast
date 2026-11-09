@@ -1,5 +1,5 @@
 import { Semaphore } from "data-semaphore";
-import * as superagent from 'superagent';
+import { Readable } from 'stream';
 import { UnicastServer } from "./UnicastServer";
 import { Singleton } from "./ES2017/Singleton";
 import * as fs from 'mz/fs';
@@ -176,9 +176,15 @@ export class ArtworkCache {
         this.cache.set( this.getCacheKey( url, options ), this.getRelativeCachedPath( file ) );
     }
 
-    getReadableStream ( url : string ) : NodeJS.ReadableStream {
+    async getReadableStream ( url : string ) : Promise<NodeJS.ReadableStream> {
         if ( url.startsWith( 'http://' ) || url.startsWith( 'https://' ) ) {
-            return superagent.get( url ) as any;
+            const response = await fetch( url );
+
+            if ( !response.ok || response.body == null ) {
+                throw new Error( `Could not download "${ url }": HTTP ${ response.status }` );
+            }
+
+            return Readable.fromWeb( response.body as any );
         } else {
             return fs.createReadStream( url );
         }
@@ -205,7 +211,7 @@ export class ArtworkCache {
 
             this.server.logger.debug( 'artwork', `Fetching ${url}, saving to ${relativeCachePath}.`, { type: 'fetch' } );
 
-            await saveStreamTo( this.getReadableStream( url ), cachePath );
+            await saveStreamTo( await this.getReadableStream( url ), cachePath );
 
             this.setCached( url, cachePath );
         } catch ( err ) {
