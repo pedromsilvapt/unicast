@@ -1,5 +1,6 @@
 import { Semaphore } from "data-semaphore";
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import { UnicastServer } from "./UnicastServer";
 import { Singleton } from "./ES2017/Singleton";
 import * as fs from 'mz/fs';
@@ -13,58 +14,32 @@ export interface ArtworkCacheOptions {
     readCache ?: boolean
 }
 
-export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.WritableStream | string, cancel ?: CancelToken ) : Promise<void> {
-    return new Promise<void>( ( resolve, reject ) => {
-        if ( typeof output === 'string' ) {
-            output = fs.createWriteStream( output );
+export async function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.WritableStream | string, cancel ?: CancelToken ) : Promise<void> {
+    // Don't create the output file if we are already cancelled
+    if ( cancel?.cancellationRequested ) {
+        throw new CancelledError( cancel );
+    }
+
+    if ( typeof output === 'string' ) {
+        output = fs.createWriteStream( output );
+    }
+
+    const abort = new AbortController();
+
+    // The cancellation promise rejects (rather than resolves) when the token is cancelled
+    cancel?.cancellationPromise.catch( () => abort.abort() );
+
+    // `pipeline` destroys both streams on error, abort or premature close, and only settles once they are closed,
+    // so callers can safely delete the output file afterwards without leaking an open file descriptor
+    try {
+        await pipeline( input, output, { signal: abort.signal } );
+    } catch ( error ) {
+        if ( cancel?.cancellationRequested ) {
+            throw new CancelledError( cancel );
         }
 
-        let settled = false;
-
-        // `pipe` does not close the other end when one of the streams errors, which would leak the open file
-        // descriptor (and, for an unlinked partial file, its disk space) until the process exits
-        const fail = ( error : any ) => {
-            if ( settled ) return;
-
-            settled = true;
-
-            if ( typeof ( input as any ).destroy === 'function' ) {
-                ( input as any ).destroy();
-            }
-
-            if ( typeof ( output as any ).destroy === 'function' ) {
-                ( output as any ).destroy();
-            }
-
-            reject( error );
-        };
-
-        const onCancel = () => fail( new CancelledError( cancel ) );
-
-        if ( cancel ) {
-            if ( cancel.cancellationRequested ) {
-                onCancel();
-
-                return;
-            }
-
-            cancel.cancellationPromise.then( onCancel );
-        }
-
-        input.pipe( output );
-
-        input.on( 'error', fail );
-
-        output.on( 'finish', () => {
-            if ( settled ) return;
-
-            settled = true;
-
-            resolve();
-        } );
-
-        output.on( 'error', fail );
-    } );
+        throw error;
+    }
 }
 
 export class ArtworkCache {
