@@ -4,6 +4,7 @@ import { CancelToken, CancelledError } from 'data-cancel-token';
 import { MediaSourceDetails } from '../MediaProviders/MediaSource';
 import { MediaSourceCacheRecord, MediaSourceCacheState } from '../Database/Database';
 import * as fs from 'mz/fs';
+import { promises as fsp } from 'fs';
 import * as path from 'path';
 import * as mime from 'mime';
 import * as mkdirp from 'mkdirp';
@@ -28,6 +29,9 @@ export class MediaSourceCacheManager {
 
     /** Id of the cache row whose copy `currentCancel` belongs to */
     currentRowId : string | null = null;
+
+    /** Settles once the in-flight copy has finished, including closing its files and cleaning up after a cancel */
+    currentCopy : Promise<void> | null = null;
 
     afterCurrentCancel : CancelToken | null = null;
 
@@ -68,7 +72,8 @@ export class MediaSourceCacheManager {
         const row = await this.findRow( { kind: record.kind, id: record.id } );
 
         if ( row != null ) {
-            this.cancelIfCurrent( row.id );
+            // Wait for the copy to release its files before deleting the folder
+            await this.cancelIfCurrent( row.id );
         }
 
         // Delete the folder even without a row: the FK cascade may have already removed it
@@ -78,7 +83,7 @@ export class MediaSourceCacheManager {
     protected async pruneOrphanFolders () {
         const root = this.server.storage.getPath( 'cache', 'media' );
 
-        const kinds = await fs.readdir( root ).catch( error => {
+        const kinds = await this.readSubFolders( root ).catch( error => {
             if ( error?.code === 'ENOENT' ) return [] as string[];
 
             throw error;
@@ -86,10 +91,12 @@ export class MediaSourceCacheManager {
 
         if ( kinds.length === 0 ) return;
 
+        // Rows of deleted media records are gone from this list: the table's FK to `media` is `ON DELETE CASCADE`,
+        // and better-sqlite3 is compiled with `foreign_keys` enabled by default
         const known = new Set( ( await this.list() ).map( row => `${ row.mediaKind }/${ row.mediaId }` ) );
 
         for ( const kind of kinds ) {
-            for ( const id of await fs.readdir( path.join( root, kind ) ) ) {
+            for ( const id of await this.readSubFolders( path.join( root, kind ) ) ) {
                 if ( !known.has( `${ kind }/${ id }` ) ) {
                     this.logger.info( `Deleting orphan cache folder ${ kind }/${ id }` );
 
@@ -97,6 +104,13 @@ export class MediaSourceCacheManager {
                 }
             }
         }
+    }
+
+    /** Names of the directories inside `folder`, skipping stray files (e.g. `.DS_Store`) */
+    protected async readSubFolders ( folder : string ) : Promise<string[]> {
+        const entries = await fsp.readdir( folder, { withFileTypes: true } );
+
+        return entries.filter( entry => entry.isDirectory() ).map( entry => entry.name );
     }
 
     start () {
@@ -185,7 +199,17 @@ export class MediaSourceCacheManager {
         );
     }
 
-    protected async copy ( row : MediaSourceCacheRecord, record : PlayableMediaRecord ) {
+    protected copy ( row : MediaSourceCacheRecord, record : PlayableMediaRecord ) : Promise<void> {
+        const copy = this.currentCopy = this.doCopy( row, record ).finally( () => {
+            if ( this.currentCopy === copy ) {
+                this.currentCopy = null;
+            }
+        } );
+
+        return copy;
+    }
+
+    protected async doCopy ( row : MediaSourceCacheRecord, record : PlayableMediaRecord ) {
         await this.table.update( String( row.id ), {
             state: 'copying',
             lastAttemptAt: new Date(),
@@ -242,10 +266,17 @@ export class MediaSourceCacheManager {
     /**
      * Cancels the in-flight copy only if it belongs to the given row. Cancelling unconditionally would abort
      * an unrelated copy and leave its row stuck in the `copying` state.
+     *
+     * Resolves once the cancelled copy has settled (its streams closed and its own cleanup done), so callers
+     * can safely delete the cache folder afterwards. Never rejects: `copy` reports its own errors.
      */
-    protected cancelIfCurrent ( rowId : string ) {
+    protected async cancelIfCurrent ( rowId : string ) : Promise<void> {
         if ( this.currentRowId != null && this.currentRowId === String( rowId ) ) {
+            const copy = this.currentCopy;
+
             this.currentCancel?.cancel();
+
+            await copy?.catch( () => {} );
         }
     }
 
@@ -475,8 +506,9 @@ export class MediaSourceCacheManager {
         } );
 
         // If a copy of a force-requeued record is in-flight, cancel it so the requeue takes effect
+        // No need to wait for it to settle: nothing is deleted here
         for ( const id of toForce ) {
-            this.cancelIfCurrent( id );
+            void this.cancelIfCurrent( id );
         }
 
         // Only wake the worker if at least one row is actually queued.
@@ -526,8 +558,8 @@ export class MediaSourceCacheManager {
         for ( const existing of rows ) {
             await this.table.delete( String( existing.id ) );
 
-            // Stop writing into the folder before deleting it
-            this.cancelIfCurrent( existing.id );
+            // Stop writing into the folder (and wait for the files to be closed) before deleting it
+            await this.cancelIfCurrent( existing.id );
 
             if ( existing.record != null ) {
                 await this.deleteCacheFolder( existing.record );
