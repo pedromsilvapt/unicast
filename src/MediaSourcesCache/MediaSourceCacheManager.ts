@@ -40,9 +40,11 @@ export class MediaSourceCacheManager {
     }
 
     start () {
-        if ( this.running ) return;
-
+        // Clear any pending stop request even if the worker is still running: a graceful stop followed by
+        // start/enqueue while the current copy is in flight must keep the worker going afterwards.
         this.afterCurrentCancel = null;
+
+        if ( this.running ) return;
 
         this.resetInterruptedCopying().then( () => this.run() );
     }
@@ -136,6 +138,14 @@ export class MediaSourceCacheManager {
                     state: 'failed',
                     error: String( e?.message ?? e )
                 } as any );
+            } else {
+                // Whoever cancelled may have already moved the row on (force requeue → queued, remove → deleted).
+                // Otherwise (e.g. stop) put it back in the queue, like resetInterruptedCopying does on start,
+                // so it does not stay in 'copying' if the worker keeps running.
+                await this.table.updateMany(
+                    query => query.where( { id: row.id, state: 'copying' } ),
+                    { state: 'queued' as MediaSourceCacheState } as any
+                );
             }
         } finally {
             this.currentCancel = null;
