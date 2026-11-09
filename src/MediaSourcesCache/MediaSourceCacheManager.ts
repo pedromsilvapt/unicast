@@ -46,7 +46,9 @@ export class MediaSourceCacheManager {
 
         if ( this.running ) return;
 
-        this.resetInterruptedCopying().then( () => this.run() );
+        this.resetInterruptedCopying()
+            .then( () => this.run() )
+            .catch( error => this.server.logger.error( `media-cache`, `Media cache worker stopped unexpectedly`, error ) );
     }
 
     stop ( onlyAfterCurrent : boolean = false ) {
@@ -68,29 +70,51 @@ export class MediaSourceCacheManager {
 
                 if ( !row ) break;
 
-                const record = await this.server.media.get( row.mediaKind, row.mediaId ) as PlayableMediaRecord;
+                try {
+                    await this.process( row );
+                } catch ( error ) {
+                    // Any error must take the row out of the 'queued' state: otherwise, being the oldest queued row,
+                    // it would be picked (and fail) again forever, blocking every row behind it.
+                    // If even this update fails, let the error stop the worker instead of spinning on the same row.
+                    this.server.logger.error( `media-cache`, `Could not process cache row ${ row.id }`, error );
 
-                const repoName = record.repository;
-
-                if ( repoName ) {
-                    const repo = this.server.repositories.get( repoName );
-
-                    if ( repo && !( await repo.isMediaReachable( record ) ) ) {
-                        await this.table.update( String( row.id ), {
-                            state: 'paused',
-                            lastAttemptAt: new Date(),
-                            error: 'Repository offline'
-                        } as any );
-
-                        continue;
-                    }
+                    await this.table.update( String( row.id ), {
+                        state: 'failed',
+                        lastAttemptAt: new Date(),
+                        error: String( error?.message ?? error )
+                    } as any );
                 }
-
-                await this.copy( row, record );
             }
         } finally {
             this.running = false;
         }
+    }
+
+    protected async process ( row : MediaSourceCacheRecord ) {
+        // `media.get` resolves to null (instead of throwing) when the record does not exist
+        const record = await this.server.media.get( row.mediaKind, row.mediaId ) as PlayableMediaRecord | null;
+
+        if ( record == null ) {
+            throw new Error( `Media record ${ row.mediaKind } ${ row.mediaId } not found` );
+        }
+
+        const repoName = record.repository;
+
+        if ( repoName ) {
+            const repo = this.server.repositories.get( repoName );
+
+            if ( repo && !( await repo.isMediaReachable( record ) ) ) {
+                await this.table.update( String( row.id ), {
+                    state: 'paused',
+                    lastAttemptAt: new Date(),
+                    error: 'Repository offline'
+                } as any );
+
+                return;
+            }
+        }
+
+        await this.copy( row, record );
     }
 
     protected async pickNextQueued () : Promise<MediaSourceCacheRecord | null> {
