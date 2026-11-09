@@ -25,6 +25,9 @@ export class MediaSourceCacheManager {
 
     currentCancel : CancelToken | null = null;
 
+    /** Id of the cache row whose copy `currentCancel` belongs to */
+    currentRowId : string | null = null;
+
     afterCurrentCancel : CancelToken | null = null;
 
     constructor ( server : UnicastServer ) {
@@ -103,6 +106,8 @@ export class MediaSourceCacheManager {
 
         const cancel = this.currentCancel = new CancelToken();
 
+        this.currentRowId = String( row.id );
+
         try {
             const sources = await this.populateSourceCache( record, cancel );
 
@@ -134,6 +139,17 @@ export class MediaSourceCacheManager {
             }
         } finally {
             this.currentCancel = null;
+            this.currentRowId = null;
+        }
+    }
+
+    /**
+     * Cancels the in-flight copy only if it belongs to the given row. Cancelling unconditionally would abort
+     * an unrelated copy and leave its row stuck in the `copying` state.
+     */
+    protected cancelIfCurrent ( rowId : string ) {
+        if ( this.currentRowId != null && this.currentRowId === String( rowId ) ) {
+            this.currentCancel?.cancel();
         }
     }
 
@@ -329,7 +345,7 @@ export class MediaSourceCacheManager {
                     } as any );
 
                     // If a copy of this record is in-flight, cancel it so the requeue takes effect
-                    this.currentCancel?.cancel();
+                    this.cancelIfCurrent( existing.id );
 
                     producedQueued = true;
                 }
@@ -389,12 +405,13 @@ export class MediaSourceCacheManager {
         for ( const existing of rows ) {
             await this.table.delete( String( existing.id ) );
 
+            // Stop writing into the folder before deleting it
+            this.cancelIfCurrent( existing.id );
+
             if ( existing.record != null ) {
                 await this.deleteCacheFolder( existing.record );
             }
         }
-
-        this.currentCancel?.cancel();
 
         return this.list();
     }
