@@ -290,7 +290,7 @@ export class MediaSessionsManager {
  * @extends {EventEmitter}
  */
 export class PriorityPoller extends EventEmitter {
-    protected intervalTimer : NodeJS.Timer = null;
+    protected intervalTimer : NodeJS.Timeout = null;
 
     priorities : number[];
 

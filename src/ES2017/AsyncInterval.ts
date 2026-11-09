@@ -5,7 +5,7 @@ export class AsyncInterval {
 
     protected ms : number;
 
-    protected timeout ?: NodeJS.Timer;
+    protected timeout ?: NodeJS.Timeout;
 
     protected timestamp ?: Date;
 

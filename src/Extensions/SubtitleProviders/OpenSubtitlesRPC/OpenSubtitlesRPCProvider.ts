@@ -29,7 +29,7 @@ export class OpenSubtitlesRPCProvider implements ISubtitlesProvider<IOpenSubtitl
 
     protected token : any = null;
 
-    protected tokenTimeout : NodeJS.Timer = null;
+    protected tokenTimeout : NodeJS.Timeout = null;
 
     protected api : any = subtitler.api;
 

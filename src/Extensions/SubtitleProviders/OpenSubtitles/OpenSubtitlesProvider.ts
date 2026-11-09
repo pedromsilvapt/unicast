@@ -32,7 +32,7 @@ export class OpenSubtitlesProvider implements ISubtitlesProvider<IOpenSubtitlesR
 
     protected token : string | null = null;
 
-    protected tokenTimeout : NodeJS.Timer | null = null;
+    protected tokenTimeout : NodeJS.Timeout | null = null;
 
     protected tokenSemaphore : Semaphore = new Semaphore(1);
 

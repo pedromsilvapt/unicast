@@ -30,7 +30,7 @@ export class Cache<T> {
     
     autoSaveDelay : number = 0;
 
-    protected autoSaveTimeout : NodeJS.Timer = null;
+    protected autoSaveTimeout : NodeJS.Timeout = null;
 
     clone<T> ( value : T ) : T {
         if ( value instanceof Promise ) {

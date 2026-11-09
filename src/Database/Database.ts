@@ -468,7 +468,7 @@ export class Debounce {
 
     protected delay : number;
 
-    protected timeout : NodeJS.Timer;
+    protected timeout : NodeJS.Timeout;
 
     constructor ( action : Function, delay : number = 0 ) {
         this.action = action;

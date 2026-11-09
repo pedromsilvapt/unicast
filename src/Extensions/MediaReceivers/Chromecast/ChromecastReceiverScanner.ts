@@ -14,11 +14,11 @@ export interface ChromecastReceiverIdentification {
 export abstract class ChromecastReceiverScanner {
     interval : number;
 
-    intervalToken : NodeJS.Timer = null;
+    intervalToken : NodeJS.Timeout = null;
     
     timeout : number;
 
-    timeoutToken : NodeJS.Timer = null;
+    timeoutToken : NodeJS.Timeout = null;
 
     missedConnectionsThreshold : number = 0;
 
