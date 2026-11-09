@@ -30,6 +30,9 @@ export class MediaSourceCacheManager {
 
     afterCurrentCancel : CancelToken | null = null;
 
+    /** Shared so that concurrent starts all wait for the orphan sweep before copying anything */
+    protected initialization : Promise<void> | null = null;
+
     constructor ( server : UnicastServer ) {
         this.server = server;
         this.logger = this.server.logger.service( "media-cache" );
@@ -39,6 +42,62 @@ export class MediaSourceCacheManager {
         return this.server.database.tables.mediaSourcesCache;
     }
 
+    /**
+     * Runs once, on the first start: removes the cached files of media records as they get deleted, and sweeps
+     * any cache folders already orphaned (e.g. episodes removed through the `ON DELETE CASCADE` of their show,
+     * which bypasses the per-table delete hooks).
+     */
+    protected initialize () : Promise<void> {
+        return this.initialization ??= this.doInitialize();
+    }
+
+    protected doInitialize () : Promise<void> {
+        const tables = this.server.database.tables;
+
+        for ( const table of [ tables.movies, tables.episodes, tables.custom ] ) {
+            table.onDelete.subscribe( record => this.onMediaDeleted( record as PlayableMediaRecord ) );
+        }
+
+        return this.pruneOrphanFolders().catch( error => {
+            this.server.logger.error( `media-cache`, `Could not prune orphan cache folders`, error );
+        } );
+    }
+
+    protected async onMediaDeleted ( record : PlayableMediaRecord ) {
+        const row = await this.findRow( { kind: record.kind, id: record.id } );
+
+        if ( row != null ) {
+            this.cancelIfCurrent( row.id );
+        }
+
+        // Delete the folder even without a row: the FK cascade may have already removed it
+        await this.clearSourceCacheFiles( record );
+    }
+
+    protected async pruneOrphanFolders () {
+        const root = this.server.storage.getPath( 'cache', 'media' );
+
+        const kinds = await fs.readdir( root ).catch( error => {
+            if ( error?.code === 'ENOENT' ) return [] as string[];
+
+            throw error;
+        } );
+
+        if ( kinds.length === 0 ) return;
+
+        const known = new Set( ( await this.list() ).map( row => `${ row.mediaKind }/${ row.mediaId }` ) );
+
+        for ( const kind of kinds ) {
+            for ( const id of await fs.readdir( path.join( root, kind ) ) ) {
+                if ( !known.has( `${ kind }/${ id }` ) ) {
+                    this.logger.info( `Deleting orphan cache folder ${ kind }/${ id }` );
+
+                    await this.deleteFolder( path.join( root, kind, id ) );
+                }
+            }
+        }
+    }
+
     start () {
         // Clear any pending stop request even if the worker is still running: a graceful stop followed by
         // start/enqueue while the current copy is in flight must keep the worker going afterwards.
@@ -46,7 +105,8 @@ export class MediaSourceCacheManager {
 
         if ( this.running ) return;
 
-        this.resetInterruptedCopying()
+        this.initialize()
+            .then( () => this.resetInterruptedCopying() )
             .then( () => this.run() )
             .catch( error => this.server.logger.error( `media-cache`, `Media cache worker stopped unexpectedly`, error ) );
     }
@@ -256,9 +316,11 @@ export class MediaSourceCacheManager {
         return this.server.storage.getPath( 'cache', 'media', record.kind, String( record.id ) );
     }
 
-    protected async deleteCacheFolder ( record : PlayableMediaRecord ) : Promise<void> {
-        const folder = this.getCacheFolder( record );
+    protected deleteCacheFolder ( record : PlayableMediaRecord ) : Promise<void> {
+        return this.deleteFolder( this.getCacheFolder( record ) );
+    }
 
+    protected async deleteFolder ( folder : string ) : Promise<void> {
         let entries : string[];
         try {
             entries = await fs.readdir( folder );
