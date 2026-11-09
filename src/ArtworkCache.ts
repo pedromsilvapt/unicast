@@ -19,12 +19,14 @@ export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.Wr
             output = fs.createWriteStream( output );
         }
 
-        let cancelled = false;
+        let settled = false;
 
-        const onCancel = () => {
-            if ( cancelled ) return;
+        // `pipe` does not close the other end when one of the streams errors, which would leak the open file
+        // descriptor (and, for an unlinked partial file, its disk space) until the process exits
+        const fail = ( error : any ) => {
+            if ( settled ) return;
 
-            cancelled = true;
+            settled = true;
 
             if ( typeof ( input as any ).destroy === 'function' ) {
                 ( input as any ).destroy();
@@ -34,8 +36,10 @@ export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.Wr
                 ( output as any ).destroy();
             }
 
-            reject( new CancelledError( cancel ) );
+            reject( error );
         };
+
+        const onCancel = () => fail( new CancelledError( cancel ) );
 
         if ( cancel ) {
             if ( cancel.cancellationRequested ) {
@@ -49,11 +53,17 @@ export function saveStreamTo ( input : NodeJS.ReadableStream, output : NodeJS.Wr
 
         input.pipe( output );
 
-        input.on( 'error', reject );
+        input.on( 'error', fail );
 
-        output.on( 'finish', () => resolve() );
+        output.on( 'finish', () => {
+            if ( settled ) return;
 
-        output.on( 'error', reject );
+            settled = true;
+
+            resolve();
+        } );
+
+        output.on( 'error', fail );
     } );
 }
 
