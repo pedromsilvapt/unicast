@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as mime from 'mime';
 import * as mkdirp from 'mkdirp';
 import { saveStreamTo } from '../ArtworkCache';
+import { chunk } from '../Database/Tables/BaseTable';
 import {collect, groupingBy, mapping} from "data-collectors";
 import {LoggerInterface} from "clui-logger";
 
@@ -179,7 +180,8 @@ export class MediaSourceCacheManager {
 
     protected async pickNextQueued () : Promise<MediaSourceCacheRecord | null> {
         return this.table.findOne(
-            query => query.where( { state: 'queued' } ).orderBy( 'createdAt', 'asc' )
+            // Rows created in the same batch share their `createdAt`, so tie-break by id to keep insertion order
+            query => query.where( { state: 'queued' } ).orderBy( 'createdAt', 'asc' ).orderBy( 'id', 'asc' )
         );
     }
 
@@ -414,52 +416,75 @@ export class MediaSourceCacheManager {
         const force = options?.force ?? false;
         const targetState = options?.state ?? 'queued';
 
-        let producedQueued = false;
+        // Load every existing row up front (chunked to stay below the SQL variables limit) instead of
+        // issuing one query per ref: a single show can expand into hundreds of episodes
+        const existingByKey : Map<string, MediaSourceCacheRecord> = new Map();
+
+        for ( const refsChunk of chunk( refs, 500 ) ) {
+            for ( const row of await this.findRows( refsChunk ) ) {
+                existingByKey.set( `${ row.mediaKind }:${ row.mediaId }`, row );
+            }
+        }
+
+        const toCreate : Partial<MediaSourceCacheRecord>[] = [];
+        const toForce : string[] = [];
+        const toReactivate : string[] = [];
 
         for ( const ref of refs ) {
-            const existing = await this.findRow( ref );
+            const existing = existingByKey.get( `${ ref.kind }:${ ref.id }` );
 
             if ( existing == null ) {
-                await this.table.create( {
+                toCreate.push( {
                     mediaId: ref.id,
                     mediaKind: ref.kind,
                     state: targetState,
                     sources: null,
                     error: null,
                     lastAttemptAt: null
-                } as any );
-
-                if ( targetState === 'queued' ) {
-                    producedQueued = true;
-                }
+                } );
             } else if ( existing.state === 'ready' || existing.state === 'queued' || existing.state === 'copying' ) {
-                if ( force ) {
-                    await this.table.update( String( existing.id ), {
-                        state: 'queued',
-                        error: null,
-                        sources: null
-                    } as any );
-
-                    // If a copy of this record is in-flight, cancel it so the requeue takes effect
-                    this.cancelIfCurrent( existing.id );
-
-                    producedQueued = true;
-                }
                 // Else leave ready/queued/copying rows untouched
+                if ( force ) {
+                    toForce.push( String( existing.id ) );
+                }
             } else {
                 // failed/paused → queued (enqueue always reactivates, regardless of targetState,
                 // since an explicit enqueue is a user intent to cache the media)
-                await this.table.update( String( existing.id ), {
-                    state: 'queued',
-                    error: null
-                } as any );
-
-                producedQueued = true;
+                toReactivate.push( String( existing.id ) );
             }
+        }
+
+        await this.server.database.connection.transaction( async transaction => {
+            await this.table.createMany( toCreate as MediaSourceCacheRecord[], { transaction } );
+
+            for ( const ids of chunk( toForce, 500 ) ) {
+                await this.table.updateMany(
+                    query => query.whereIn( 'id', ids ),
+                    { state: 'queued' as MediaSourceCacheState, error: null, sources: null } as any,
+                    Infinity, { transaction }
+                );
+            }
+
+            for ( const ids of chunk( toReactivate, 500 ) ) {
+                await this.table.updateMany(
+                    query => query.whereIn( 'id', ids ).whereIn( 'state', [ 'failed', 'paused' ] as MediaSourceCacheState[] ),
+                    { state: 'queued' as MediaSourceCacheState, error: null } as any,
+                    Infinity, { transaction }
+                );
+            }
+        } );
+
+        // If a copy of a force-requeued record is in-flight, cancel it so the requeue takes effect
+        for ( const id of toForce ) {
+            this.cancelIfCurrent( id );
         }
 
         // Only wake the worker if at least one row is actually queued.
         // If only paused rows were added, the worker would skip them anyway (see pickNextQueued).
+        const producedQueued = toForce.length > 0
+            || toReactivate.length > 0
+            || ( toCreate.length > 0 && targetState === 'queued' );
+
         if ( producedQueued ) {
             this.start();
         }
