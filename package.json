@@ -66,7 +66,7 @@
     "config": "^1.26.2",
     "data-async-iterators": "^1.4.6",
     "data-balanced-tree": "^0.1.0",
-    "data-cancel-token": "^1.0.0",
+    "data-cancel-token": "^1.1.0",
     "data-collectors": "^1.0.5",
     "data-optional": "0.0.2",
     "data-semaphore": "^0.3.2",
