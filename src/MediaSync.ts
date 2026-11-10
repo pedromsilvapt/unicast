@@ -608,7 +608,17 @@ export class MediaSync {
             const refs = options.refreshRecords.map( ( { kind, id } ) => [ kind, id ] as const );
 
             // Convert the array of tuples into an array of MediaRecords, by fetching them from the database
-            const records = await this.media.getAll( refs );
+            const records = ( await this.media.getAll( refs ) ).filter( record => record != null );
+
+            // Refreshing a show or a season also refreshes everything below it
+            for ( const record of [ ...records ] ) {
+                if ( isTvShowRecord( record ) ) {
+                    records.push( ...await this.media.getSeasons( record.id ) );
+                    records.push( ...await this.media.getEpisodes( record.id ) );
+                } else if ( isTvSeasonRecord( record ) ) {
+                    records.push( ...await this.media.getSeasonEpisodes( record.id ) );
+                }
+            }
 
             // Finally create a MediaRecordFilter from the list of records
             globalConditions.push( await MediaSetFilter.list( records, this.media ) );

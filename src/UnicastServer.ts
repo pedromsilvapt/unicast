@@ -195,7 +195,7 @@ export class UnicastServer {
         this.http.pre( cors.preflight );
         this.http.use( cors.actual );
 
-        this.http.use( queryParser( { allowSparse: true } ) );
+        this.http.use( queryParser( { allowSparse: true, arrayLimit: 1000 } ) );
         this.http.use( restify.plugins.bodyParser() );
         this.http.use( ( req: restify.Request, res: restify.Response, next: restify.Next ) => {
             try {
