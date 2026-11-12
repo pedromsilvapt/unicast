@@ -42,7 +42,10 @@ export class HttpSender {
     }
 
     getUrlPattern ( filename : string = null ) : string {
-        const pattern = this.getUrlFor( ':session', ':stream' );
+        // The router (find-my-way) decodes the request path before matching static segments,
+        // so the pattern must use the raw (non URI encoded) receiver type and name. Otherwise
+        // receivers with names like "RaspberryPi Room" would never match their routes
+        const pattern = `/media/send/${ this.receiver.type }/${ this.receiver.name }/session/:session/stream/:stream`;
 
         // The filename placeholder is appended directly, instead of passed to getUrlFor,
         // since it would URI encode the colon (it does that for the filename parameter)
