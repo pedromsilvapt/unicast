@@ -247,7 +247,7 @@ export class KodiReceiver extends BaseReceiver {
         this.checkOrThrow( predicate, error )
     }
 
-    async createPlaySession ( kind : MediaKind, id : string, timeout : number = 60000 ) {
+    async createPlaySession ( kind : MediaKind, id : string, playlistId ?: string, playlistPosition ?: string | number, timeout : number = 60000 ) {
         const record = await this.server.media.get( kind, id );
 
         if ( record == null ) {
@@ -258,7 +258,15 @@ export class KodiReceiver extends BaseReceiver {
             throw new InvalidPlayableMedia( record.kind );
         }
 
-        const session = await this.sessions.register( record );
+        // Sessions started by Kodi itself (from the addon) can belong to a playlist too
+        const options : MediaPlayOptions = {};
+
+        if ( playlistId != null && playlistId !== '' && playlistPosition != null && !isNaN( +playlistPosition ) ) {
+            options.playlistId = playlistId;
+            options.playlistPosition = +playlistPosition;
+        }
+
+        const session = await this.sessions.register( record, options );
 
         if ( this.sessions.current != null ) {
             await this.sessions.release( this.sessions.current );
